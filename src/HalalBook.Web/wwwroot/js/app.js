@@ -75,6 +75,33 @@ window.halalbook = {
         v.src = url;
     }))),
 
+    // Still frames (small JPEGs, base64) from across a picked video, so the server can check what's in it.
+    videoFrames: (input, index, count) => new Promise((resolve) => {
+        const f = input?.files?.[index];
+        if (!f || !f.type.startsWith('video')) return resolve([]);
+        const v = document.createElement('video');
+        const url = URL.createObjectURL(f);
+        const frames = [];
+        v.muted = true; v.preload = 'auto'; v.playsInline = true;
+        const done = () => { URL.revokeObjectURL(url); resolve(frames); };
+        v.onerror = done;
+        v.onloadedmetadata = async () => {
+            const canvas = document.createElement('canvas');
+            const scale = Math.min(1, 384 / Math.max(v.videoWidth || 384, v.videoHeight || 384));
+            canvas.width = Math.max(1, Math.round((v.videoWidth || 384) * scale));
+            canvas.height = Math.max(1, Math.round((v.videoHeight || 384) * scale));
+            const ctx = canvas.getContext('2d');
+            const d = isFinite(v.duration) && v.duration > 0 ? v.duration : 1;
+            for (let i = 0; i < count; i++) {
+                const t = d * (i + 0.5) / count;
+                await new Promise((r) => { v.onseeked = r; v.currentTime = Math.min(t, Math.max(0, d - 0.05)); setTimeout(r, 3000); });
+                try { ctx.drawImage(v, 0, 0, canvas.width, canvas.height); frames.push(canvas.toDataURL('image/jpeg', 0.6).split(',')[1]); } catch { }
+            }
+            done();
+        };
+        v.src = url;
+    }),
+
     toggleTheme: () => {
         const root = document.documentElement;
         const dark = root.dataset.theme === 'dark' || (!root.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);

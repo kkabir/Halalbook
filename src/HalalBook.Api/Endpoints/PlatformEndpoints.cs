@@ -32,6 +32,27 @@ public static class PlatformEndpoints
               || Starts(0x1A, 0x45, 0xDF, 0xA3);                                    // WebM / Matroska
     }
 
+    private const int AutoHideReports = 3;
+    private const int StrikesBeforeSuspension = 3;
+
+    /// <summary>After 3 removed posts in 30 days an account is suspended (admins and moderators excepted).</summary>
+    private static async Task ApplyStrikeAsync(AppDbContext db, Notifier notifier, Guid userId)
+    {
+        var since = DateTime.UtcNow.AddDays(-30);
+        var strikes = await db.Posts.CountAsync(p => p.AuthorId == userId && p.Moderation == ModerationStatus.Removed && p.CreatedAt > since);
+        if (strikes >= StrikesBeforeSuspension)
+        {
+            await db.Users.Where(u => u.Id == userId && u.Role == UserRole.User).ExecuteUpdateAsync(s => s.SetProperty(u => u.IsSuspended, true));
+            await notifier.SendAsync(userId, null, NotificationType.Moderation,
+                "Your account has been suspended for repeatedly breaking the community guidelines. Contact support@halalbook.app to appeal.", null);
+        }
+        else
+        {
+            await notifier.SendAsync(userId, null, NotificationType.Moderation,
+                $"Your content was removed for breaking the community guidelines (warning {strikes} of {StrikesBeforeSuspension}).", null);
+        }
+    }
+
     public static void MapPlatformEndpoints(this IEndpointRouteBuilder app)
     {
         // ---------- Search ----------
@@ -59,7 +80,7 @@ public static class PlatformEndpoints
 
         // ---------- Media upload ----------
         // purpose: post (default), reel, story, comment, message, profile or cover. Each has its own size and length limits.
-        app.MapPost("/api/media", async (IFormFile file, string? purpose, HttpRequest request, IWebHostEnvironment env, IConfiguration config, MediaPolicy policy, AiService ai, CancellationToken ct) =>
+        app.MapPost("/api/media", async (IFormFile file, string? purpose, HttpRequest request, IWebHostEnvironment env, IConfiguration config, MediaPolicy policy, MediaScreening screening, CancellationToken ct) =>
         {
             var ext = Path.GetExtension(file.FileName);
             if (!AllowedMedia.TryGetValue(ext, out var type)) return Results.Problem("Only images (jpg, png, gif, webp) and videos (mp4, webm, mov) are supported.", statusCode: 415);
@@ -75,23 +96,19 @@ public static class PlatformEndpoints
             await using (var stream = File.Create(path))
                 await file.CopyToAsync(stream, ct);
 
-            // AI vision: alt text for screen readers and a modesty check. Blocked photos are deleted;
-            // borderline ones get a ".review" marker so posts using them wait for a moderator.
-            string? alt = null;
-            var needsReview = false;
-            if (type == MediaType.Image && ai.IsEnabled)
+            // Screening: AI vision checks photos and frames from videos (sent by the browser as "frames").
+            // Blocked files are deleted; files that need a person get a ".review" marker, so posts using them wait for a moderator.
+            var frames = request.HasFormContentType ? request.Form.Files.GetFiles("frames") : [];
+            var verdict = await screening.ScreenAsync(path, type, ext, use, frames, ct);
+            if (!verdict.Allowed)
             {
-                var mediaType = ext.ToLowerInvariant() switch { ".png" => "image/png", ".gif" => "image/gif", ".webp" => "image/webp", _ => "image/jpeg" };
-                var insight = await ai.AnalyzeImageAsync(await File.ReadAllBytesAsync(path, ct), mediaType, ct);
-                if (!insight.Allowed)
-                {
-                    File.Delete(path);
-                    return Results.Problem("This photo doesn't meet HalalBook's community guidelines." +
-                        (insight.Reasons.Count > 0 ? " " + string.Join(" ", insight.Reasons) : ""), statusCode: 422, title: "Photo not allowed");
-                }
-                alt = insight.AltText;
-                if (insight.NeedsReview) { needsReview = true; await File.WriteAllTextAsync(path + ".review", string.Join(" ", insight.Reasons), ct); }
+                File.Delete(path);
+                return Results.Problem($"This {(type == MediaType.Video ? "video" : "photo")} doesn't meet HalalBook's community guidelines (no nudity, sexual or adult content, gore or haram promotion)."
+                    + (string.IsNullOrWhiteSpace(verdict.Reason) ? "" : " " + verdict.Reason), statusCode: 422, title: "Not allowed");
             }
+            if (verdict.NeedsReview) await File.WriteAllTextAsync(path + ".review", verdict.Reason ?? "", ct);
+            var alt = verdict.AltText;
+            var needsReview = verdict.NeedsReview;
 
             var baseUrl = config["PublicBaseUrl"]?.TrimEnd('/') ?? $"{request.Scheme}://{request.Host}";
             return Results.Ok(new UploadResult($"{baseUrl}/uploads/{folder.Replace('\\', '/')}/{name}", type, alt, needsReview));
@@ -157,8 +174,25 @@ public static class PlatformEndpoints
         app.MapPost("/api/reports", async (ReportRequest req, ClaimsPrincipal cp, AppDbContext db) =>
         {
             if (string.IsNullOrWhiteSpace(req.Reason)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["reason"] = ["Tell us what's wrong."] });
-            db.Reports.Add(new Report { ReporterId = cp.UserId(), TargetType = req.TargetType, TargetId = req.TargetId, Reason = req.Reason.Trim() });
-            await db.SaveChangesAsync();
+            var me = cp.UserId();
+            if (!await db.Reports.AnyAsync(r => r.ReporterId == me && r.TargetId == req.TargetId && r.Status == ReportStatus.Open))
+            {
+                db.Reports.Add(new Report { ReporterId = me, TargetType = req.TargetType, TargetId = req.TargetId, Reason = req.Reason.Trim() });
+                await db.SaveChangesAsync();
+            }
+            // Community safety net: content reported by 3 different people is hidden until a moderator decides.
+            var reporters = await db.Reports.Where(r => r.TargetId == req.TargetId && r.Status == ReportStatus.Open).Select(r => r.ReporterId).Distinct().CountAsync();
+            if (reporters >= AutoHideReports)
+            {
+                if (req.TargetType == ReportTarget.Post)
+                    await db.Posts.Where(p => p.Id == req.TargetId && p.Moderation == ModerationStatus.Approved)
+                        .ExecuteUpdateAsync(s => s.SetProperty(p => p.Moderation, ModerationStatus.PendingReview));
+                else if (req.TargetType == ReportTarget.Comment)
+                    await db.Comments.Where(c => c.Id == req.TargetId && c.Moderation == ModerationStatus.Approved)
+                        .ExecuteUpdateAsync(s => s.SetProperty(c => c.Moderation, ModerationStatus.PendingReview));
+                else if (req.TargetType == ReportTarget.Story)
+                    await db.Stories.Where(s => s.Id == req.TargetId).ExecuteUpdateAsync(s => s.SetProperty(x => x.ExpiresAt, DateTime.UtcNow));
+            }
             return Results.Ok();
         }).WithTags("Moderation").RequireAuthorization();
 
@@ -173,6 +207,7 @@ public static class PlatformEndpoints
             if (post is null) return Results.NotFound();
             post.Moderation = decision == "approve" ? ModerationStatus.Approved : ModerationStatus.Removed;
             await db.SaveChangesAsync();
+            if (decision != "approve") await ApplyStrikeAsync(db, notifier, post.AuthorId);
             await notifier.SendAsync(post.AuthorId, null, NotificationType.Moderation,
                 decision == "approve" ? "Your post was reviewed and is now visible." : "Your post was removed for breaking the community guidelines.",
                 $"/post/{id}");
@@ -200,7 +235,7 @@ public static class PlatformEndpoints
         });
 
         // decision: "remove" takes the reported content down; "dismiss" closes the report.
-        mod.MapPost("/reports/{id:guid}/{decision}", async (Guid id, string decision, ClaimsPrincipal cp, AppDbContext db) =>
+        mod.MapPost("/reports/{id:guid}/{decision}", async (Guid id, string decision, ClaimsPrincipal cp, AppDbContext db, Notifier notifier) =>
         {
             var r = await db.Reports.FindAsync(id);
             if (r is null) return Results.NotFound();
@@ -209,7 +244,10 @@ public static class PlatformEndpoints
                 switch (r.TargetType)
                 {
                     case ReportTarget.Post:
-                        await db.Posts.Where(p => p.Id == r.TargetId).ExecuteUpdateAsync(s => s.SetProperty(p => p.Moderation, ModerationStatus.Removed)); break;
+                        await db.Posts.Where(p => p.Id == r.TargetId).ExecuteUpdateAsync(s => s.SetProperty(p => p.Moderation, ModerationStatus.Removed));
+                        if (await db.Posts.Where(p => p.Id == r.TargetId).Select(p => (Guid?)p.AuthorId).FirstOrDefaultAsync() is Guid author)
+                            await ApplyStrikeAsync(db, notifier, author);
+                        break;
                     case ReportTarget.Comment:
                         await db.Comments.Where(c => c.Id == r.TargetId).ExecuteUpdateAsync(s => s.SetProperty(c => c.Moderation, ModerationStatus.Removed)); break;
                     case ReportTarget.Story:

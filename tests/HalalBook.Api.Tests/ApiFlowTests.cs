@@ -331,4 +331,46 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var post = (await (await c.PostAsJsonAsync("/api/posts", new CreatePostRequest("The best of you are those who learn the Quran and teach it."), Json)).Content.ReadFromJsonAsync<PostDto>(Json))!;
         Assert.Equal(HttpStatusCode.OK, (await c.GetAsync($"/api/ai/check-sources/{post.Id}")).StatusCode);
     }
+
+    [Theory]
+    [InlineData("free p0rn here")]
+    [InlineData("check out n.u.d.e.s")]
+    [InlineData("visit www.xnxx.com now")]
+    [InlineData("watch on pornhub")]
+    public async Task DisguisedAdultContent_IsBlocked(string text)
+    {
+        var (c, _) = await SignUpWithId("zaid");
+        var res = await c.PostAsJsonAsync("/api/posts", new CreatePostRequest(text), Json);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task UncheckedMedia_WaitsForAModerator()
+    {
+        // No AI key in tests, so photo posts go to the review queue instead of going live unchecked.
+        var (c, _) = await SignUpWithId("bushra");
+        var png = new byte[2000];
+        new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }.CopyTo(png, 0);
+        using var form = new MultipartFormDataContent { { new ByteArrayContent(png), "file", "photo.png" } };
+        var upload = (await (await c.PostAsync("/api/media?purpose=post", form)).Content.ReadFromJsonAsync<UploadResult>(Json))!;
+        Assert.True(upload.NeedsReview);
+        var post = (await (await c.PostAsJsonAsync("/api/posts", new CreatePostRequest("My photo", Media: [new MediaDto(upload.Url, MediaType.Image)]), Json))
+            .Content.ReadFromJsonAsync<PostDto>(Json))!;
+        Assert.Equal(ModerationStatus.PendingReview, post.Moderation);
+    }
+
+    [Fact]
+    public async Task ThreeReports_HideAPost()
+    {
+        var (author, _) = await SignUpWithId("author");
+        var post = (await (await author.PostAsJsonAsync("/api/posts", new CreatePostRequest("Ordinary words"), Json)).Content.ReadFromJsonAsync<PostDto>(Json))!;
+        var viewer = await SignUpWithId("viewer");
+        Assert.Equal(HttpStatusCode.OK, (await viewer.Client.GetAsync($"/api/posts/{post.Id}")).StatusCode);
+        for (int i = 0; i < 3; i++)
+        {
+            var (r, _) = await SignUpWithId("reporter" + i);
+            (await r.PostAsJsonAsync("/api/reports", new ReportRequest(ReportTarget.Post, post.Id, "Inappropriate"), Json)).EnsureSuccessStatusCode();
+        }
+        Assert.Equal(HttpStatusCode.NotFound, (await viewer.Client.GetAsync($"/api/posts/{post.Id}")).StatusCode);
+    }
 }

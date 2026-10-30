@@ -95,3 +95,13 @@ public class VideoDurationTests
         Assert.Equal(125, MediaPolicy.Mp4Duration(bytes));
     }
 }
+
+public class NormalizationTests
+{
+    [Theory]
+    [InlineData("p0rn", "porn")]
+    [InlineData("s e x", "sex")]
+    [InlineData("N.U.D.E", "nude")]
+    [InlineData("Jumu'ah Mubarak", "jumu'ah mubarak")]
+    public void UndoesFilterDodges(string input, string expected) => Assert.Equal(expected, ContentModerator.Normalize(input));
+}

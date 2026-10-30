@@ -200,7 +200,7 @@ public static class PostEndpoints
             return comments.Where(c => c.ParentId == null).Select(Map).ToList();
         });
 
-        posts.MapPost("/{id:guid}/comments", async (Guid id, CreateCommentRequest req, ClaimsPrincipal cp, AppDbContext db, AiService ai, Notifier notifier, CancellationToken ct) =>
+        posts.MapPost("/{id:guid}/comments", async (Guid id, CreateCommentRequest req, ClaimsPrincipal cp, AppDbContext db, AiService ai, Notifier notifier, IWebHostEnvironment env, CancellationToken ct) =>
         {
             var me = cp.UserId();
             var post = await db.Posts.FindAsync(id);
@@ -215,7 +215,7 @@ public static class PostEndpoints
             var comment = new Comment
             {
                 PostId = id, AuthorId = me, ParentId = req.ParentId, Content = content, MediaUrl = media,
-                Moderation = moderation.NeedsReview ? ModerationStatus.PendingReview : ModerationStatus.Approved,
+                Moderation = moderation.NeedsReview || (media is not null && MediaNeedsReview(env, media)) ? ModerationStatus.PendingReview : ModerationStatus.Approved,
             };
             db.Comments.Add(comment);
             await db.SaveChangesAsync();
@@ -326,8 +326,10 @@ public static class PostEndpoints
             .OrderByDescending(r => r.Author.Id == me).ThenBy(r => r.AllSeen).ThenByDescending(r => r.Stories.Max(s => s.CreatedAt)).ToList();
         });
 
-        stories.MapPost("/", async (CreateStoryRequest req, ClaimsPrincipal cp, AppDbContext db, AiService ai, CancellationToken ct) =>
+        stories.MapPost("/", async (CreateStoryRequest req, ClaimsPrincipal cp, AppDbContext db, AiService ai, IWebHostEnvironment env, CancellationToken ct) =>
         {
+            if (req.MediaUrl is { } storyMedia && MediaNeedsReview(env, storyMedia))
+                return Results.Problem("This photo or video can't be used in a story.", statusCode: 422, title: "Content not allowed");
             if (string.IsNullOrWhiteSpace(req.MediaUrl) && string.IsNullOrWhiteSpace(req.Text))
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["text"] = ["Add a photo, video or text."] });
             var moderation = await ai.ModerateAsync(req.Text ?? "", ct);

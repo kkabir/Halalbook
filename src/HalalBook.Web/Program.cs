@@ -4,7 +4,9 @@ using HalalBook.Web.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents()
+    // Video safety frames come back from the browser through the circuit; allow messages up to 2 MB.
+    .AddHubOptions(o => o.MaximumReceiveMessageSize = 2 * 1024 * 1024);
 
 var apiBase = builder.Configuration["Api:BaseUrl"] ?? "https://api.halalbook.app/";
 builder.Services.AddHttpClient("api", c => c.BaseAddress = new Uri(apiBase.TrimEnd('/') + "/"));

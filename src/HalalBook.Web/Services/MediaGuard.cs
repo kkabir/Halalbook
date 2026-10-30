@@ -46,7 +46,13 @@ public class MediaGuard(ApiClient api, IJSRuntime js, Toasts toasts)
                 toasts.Show($"{f.Name} is {Format((int)durations[i])} long. Videos here can be up to {Format(maxSeconds)}.", true);
                 continue;
             }
-            try { results.Add(await api.UploadAsync(f, (long)(maxMb * 1_000_000) + 1, purpose)); }
+            List<byte[]>? frames = null;
+            if (isVideo && input is { } el2)
+            {
+                try { frames = (await js.InvokeAsync<string[]>("halalbook.videoFrames", el2, i, 5)).Select(Convert.FromBase64String).ToList(); }
+                catch (JSException) { }
+            }
+            try { results.Add(await api.UploadAsync(f, (long)(maxMb * 1_000_000) + 1, purpose, frames)); }
             catch (Exception ex) { toasts.Error(ex); }
         }
         return results;

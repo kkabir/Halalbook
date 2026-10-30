@@ -79,12 +79,19 @@ public class ApiClient(HttpClient http, AuthSession session)
         using var _ = await SendAsync(Build(HttpMethod.Delete, url));
     }
 
-    public async Task<UploadResult> UploadAsync(IBrowserFile file, long maxBytes = 60_000_001, string purpose = "post")
+    /// <param name="frames">For videos: JPEG stills from across the video, used by the server's content check.</param>
+    public async Task<UploadResult> UploadAsync(IBrowserFile file, long maxBytes = 60_000_001, string purpose = "post", IReadOnlyList<byte[]>? frames = null)
     {
         using var content = new MultipartFormDataContent();
         var stream = new StreamContent(file.OpenReadStream(maxBytes));
         stream.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrEmpty(file.ContentType) ? "application/octet-stream" : file.ContentType);
         content.Add(stream, "file", file.Name);
+        for (int i = 0; i < (frames?.Count ?? 0); i++)
+        {
+            var frame = new ByteArrayContent(frames![i]);
+            frame.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
+            content.Add(frame, "frames", $"frame{i}.jpg");
+        }
         var req = Build(HttpMethod.Post, $"api/media?purpose={Uri.EscapeDataString(purpose)}");
         req.Content = content;
         using var res = await SendAsync(req);

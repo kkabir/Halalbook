@@ -47,6 +47,7 @@ builder.Services.AddSingleton<PresenceTracker>();
 var mediaOptions = config.GetSection("Media").Get<MediaOptions>() ?? new MediaOptions();
 builder.Services.AddSingleton(mediaOptions);
 builder.Services.AddSingleton<MediaPolicy>();
+builder.Services.AddScoped<MediaScreening>();
 builder.Services.AddSingleton<HalalBook.Api.Hubs.LiveRoomTracker>();
 builder.Services.AddSingleton(config.GetSection("Live").Get<LiveOptions>() ?? new LiveOptions());
 builder.Services.AddScoped<Mailer>();
