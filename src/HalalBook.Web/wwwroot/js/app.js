@@ -128,6 +128,17 @@ window.halalbook = {
         window.__hbRing = setInterval(play, 2200);
     },
 
+    // Interface language: saved choice first, then the phone or browser language.
+    getLanguage: () => {
+        try { const s = localStorage.getItem('hb.lang'); if (s) return s; } catch { }
+        return (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
+    },
+    setLanguage: (code, rtl, persist) => {
+        document.documentElement.lang = code;
+        document.documentElement.dir = rtl ? 'rtl' : 'ltr';
+        if (persist) { try { localStorage.setItem('hb.lang', code); } catch { } }
+    },
+
     toggleTheme: () => {
         const root = document.documentElement;
         const dark = root.dataset.theme === 'dark' || (!root.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);

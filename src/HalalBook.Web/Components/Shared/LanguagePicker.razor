@@ -1,0 +1,29 @@
+@* Language switcher: native names, saved on this device and (when signed in) on the account. *@
+@inject AuthSession Session
+@inject ApiClient Api
+
+<select class="input lang-picker @(Compact ? "compact" : "")" value="@I18n.Language" @onchange="Change" aria-label="Language">
+    @foreach (var l in Languages.All)
+    {
+        <option value="@l.Code">@l.NativeName</option>
+    }
+</select>
+
+@code {
+    [Parameter] public bool Compact { get; set; }
+
+    private async Task Change(ChangeEventArgs e)
+    {
+        var code = e.Value?.ToString() ?? "en";
+        await I18n.SetLanguageAsync(code);
+        if (Session.IsAuthenticated)
+        {
+            try
+            {
+                var u = await Api.PutAsync<UserDto>("api/users/me/language", new LanguageSettingsRequest(code, Session.User?.AutoTranslate ?? true));
+                await Session.UpdateUserAsync(u);
+            }
+            catch (Exception) { }
+        }
+    }
+}

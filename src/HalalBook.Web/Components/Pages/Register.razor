@@ -20,16 +20,16 @@ else
 <div class="card">
     <div class="center" style="margin-bottom:1.25rem">
         <div class="arabic" style="font-size:1.6rem;color:var(--gold-600)">أَهْلًا وَسَهْلًا</div>
-        <h1 style="font-family:var(--font-display);font-weight:700">Join HalalBook</h1>
+        <h1 style="font-family:var(--font-display);font-weight:700">@T("Join HalalBook")</h1>
         <p class="muted">It's free, and always will be.</p>
     </div>
     <form class="stack" @onsubmit="Submit">
-        <label class="field">Your name<input class="input" @bind="name" required /></label>
-        <label class="field">Username<input class="input" @bind="userName" autocomplete="username" required placeholder="letters, numbers, dots or _" /></label>
-        <label class="field">Email<input class="input" type="email" @bind="email" autocomplete="email" required /></label>
-        <label class="field">Password<input class="input" type="password" @bind="password" autocomplete="new-password" required minlength="8" /></label>
+        <label class="field">@T("Your name")<input class="input" @bind="name" required /></label>
+        <label class="field">@T("Username")<input class="input" @bind="userName" autocomplete="username" required placeholder="letters, numbers, dots or _" /></label>
+        <label class="field">@T("Email")<input class="input" type="email" @bind="email" autocomplete="email" required /></label>
+        <label class="field">@T("Password")<input class="input" type="password" @bind="password" autocomplete="new-password" required minlength="8" /></label>
         @if (error is not null) { <div class="error">@error</div> }
-        <button class="btn btn-gold btn-block" type="submit">Continue</button>
+        <button class="btn btn-gold btn-block" type="submit">@T("Continue")</button>
         <p class="subtle center" style="margin:0">Next, you'll read and accept the Community Agreement.</p>
     </form>
     <hr class="ornament" style="margin:1.25rem 0" />

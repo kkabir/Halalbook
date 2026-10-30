@@ -25,6 +25,9 @@ public class User
     public DateTime? LastSeenAt { get; set; }
     public ProfilePostPermission WhoCanPost { get; set; }
     public PrivacyAudience WhoCanMessage { get; set; } = PrivacyAudience.Everyone;
+    /// <summary>Interface language (see <see cref="Languages"/>) and whether posts are shown translated into it.</summary>
+    public string Language { get; set; } = "en";
+    public bool AutoTranslate { get; set; } = true;
     /// <summary>The post shown first on this person's profile.</summary>
     public Guid? PinnedPostId { get; set; }
     public PrivacyAudience WhoCanSendFriendRequests { get; set; } = PrivacyAudience.Everyone;
@@ -82,6 +85,9 @@ public class Post
     public Page? Page { get; set; }
     public Guid? SharedPostId { get; set; }
     public Post? SharedPost { get; set; }
+    /// <summary>Detected language of the post, and translations by language code (JSON).</summary>
+    public string? Language { get; set; }
+    public string? Translations { get; set; }
     /// <summary>A life event (see <see cref="LifeEvents"/>), shown as a special card on the timeline.</summary>
     public string? LifeEvent { get; set; }
     public DateOnly? LifeEventDate { get; set; }
@@ -423,4 +429,14 @@ public class Call
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? AnsweredAt { get; set; }
     public DateTime? EndedAt { get; set; }
+}
+
+/// <summary>A cached translation of an interface string, shared by everyone using that language.</summary>
+public class UiTranslation
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Language { get; set; } = "";
+    public string Key { get; set; } = "";
+    public string Source { get; set; } = "";
+    public string Text { get; set; } = "";
 }

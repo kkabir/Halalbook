@@ -48,7 +48,7 @@ public record UserDto(
     string? Location, string? Website, UserRole Role, bool IsVerified, DateTime JoinedAt,
     double? Latitude, double? Longitude, string PrayerMethod, string AsrSchool, bool EmailConfirmed = false, bool TwoFactorEnabled = false, bool ShowOnlineStatus = true,
     ProfilePostPermission WhoCanPost = ProfilePostPermission.Friends, string? AcceptedTermsVersion = null,
-    PrivacySettingsDto? Privacy = null);
+    PrivacySettingsDto? Privacy = null, string Language = "en", bool AutoTranslate = true);
 
 public record ProfileDto(
     UserSummaryDto User, string? Bio, string? CoverUrl, string? Location, string? Website, DateTime JoinedAt,
@@ -71,7 +71,7 @@ public record CreatePostRequest(
     Guid? GroupId = null, Guid? PageId = null, Guid? SharedPostId = null, PostKind Kind = PostKind.Standard,
     string? Feeling = null, string? Location = null, Guid? TargetUserId = null,
     List<Guid>? AudienceUserIds = null, List<Guid>? GroupIds = null, bool AlsoOnProfile = false, Guid? FriendListId = null,
-    string? LifeEvent = null, DateOnly? LifeEventDate = null);
+    string? LifeEvent = null, DateOnly? LifeEventDate = null, bool TranslateForUmmah = false);
 
 public record UpdatePostRequest(string Content, Visibility Visibility, List<Guid>? AudienceUserIds = null);
 
@@ -81,7 +81,8 @@ public record PostDto(
     Dictionary<ReactionType, int> Reactions, ReactionType? MyReaction, bool IsBookmarked,
     ModerationStatus Moderation, string? Feeling, string? Location,
     GroupSummaryDto? Group, PageSummaryDto? Page, PostDto? SharedPost, UserSummaryDto? TargetUser = null, List<UserSummaryDto>? Audience = null, string? FriendListName = null,
-    string? LifeEvent = null, DateOnly? LifeEventDate = null, bool IsPinned = false)
+    string? LifeEvent = null, DateOnly? LifeEventDate = null, bool IsPinned = false,
+    string? OriginalLanguage = null, string? TranslatedContent = null, string? TranslatedTo = null)
 {
     public int TotalReactions => Reactions.Values.Sum();
 }
@@ -244,3 +245,5 @@ public static class LifeEvents
 
     public static LifeEventKind? Find(string? key) => All.FirstOrDefault(e => e.Key == key);
 }
+
+public record LanguageSettingsRequest(string Language, bool AutoTranslate);

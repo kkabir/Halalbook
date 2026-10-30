@@ -1,4 +1,4 @@
-@inherits LayoutComponentBase
+@inherits LocalizedLayout
 @implements IDisposable
 @inject AuthSession Session
 @inject Realtime Realtime
@@ -17,7 +17,7 @@ else
         <Logo />
         <form class="topbar-search" @onsubmit="Search">
             <span class="icon">🔍</span>
-            <input placeholder="Search people, posts, groups, #hashtags" @bind="query" aria-label="Search" />
+            <input placeholder="@T("Search people, posts, groups, #hashtags")" @bind="query" aria-label="Search" />
         </form>
         <nav class="topbar-actions">
             <a class="icon-btn hide-sm @Active("")" href="/" title="Home">🏠</a>
@@ -33,14 +33,14 @@ else
                 @if (menuOpen)
                 {
                     <div class="menu-pop" @onclick="() => menuOpen = false">
-                        <a href="/u/@Session.User?.UserName">👤 My profile</a>
-                        <a href="/settings">⚙️ Settings & location</a>
+                        <a href="/u/@Session.User?.UserName">👤 @T("My profile")</a>
+                        <a href="/settings">⚙️ @T("Settings & privacy")</a>
                         <a href="/bookmarks">🔖 Saved</a>
                         @if (Session.IsModerator) { <a href="/moderation">🛡️ Moderation</a> }
                         @if (Session.User?.Role == UserRole.Admin) { <a href="/admin">🧭 Admin console</a> }
-                        <a href="/feedback">💬 Help & feedback</a>
+                        <a href="/feedback">💬 @T("Help & feedback")</a>
                         <button @onclick='() => JS.InvokeVoidAsync("halalbook.toggleTheme").AsTask()'>🌓 Toggle dark mode</button>
-                        <button @onclick="Session.SignOutAsync">🚪 Sign out</button>
+                        <button @onclick="Session.SignOutAsync">🚪 @T("Sign out")</button>
                     </div>
                 }
             </div>
@@ -51,29 +51,29 @@ else
         <aside class="sidebar">
             <ul class="nav-list">
                 <li><a href="/u/@Session.User?.UserName" class="@Active("u")"><span class="avatar" style="--size:34px">@if (Session.User?.AvatarUrl is { } sideAvatar) { <img src="@sideAvatar" alt="" /> } else { @Ui.Initials(Session.User?.DisplayName ?? "?") }</span>@Session.User?.DisplayName</a></li>
-                <li><a href="/" class="@Active("")"><span class="nav-ico">🏠</span>Home</a></li>
-                <li><a href="/friends" class="@Active("friends")"><span class="nav-ico">🤝</span>Friends</a></li>
-                <li><a href="/groups" class="@Active("groups")"><span class="nav-ico">🕌</span>Groups</a></li>
-                <li><a href="/pages" class="@Active("pages")"><span class="nav-ico">📜</span>Pages</a></li>
-                <li><a href="/events" class="@Active("events")"><span class="nav-ico">📅</span>Events</a></li>
-                <li><a href="/reels" class="@Active("reels")"><span class="nav-ico">🎬</span>Reels</a></li>
-                <li><a href="/live" class="@Active("live")"><span class="nav-ico">🔴</span>Live</a></li>
-                <li><a href="/messages" class="@Active("messages")"><span class="nav-ico">💬</span>Messages</a></li>
-                <li><a href="/bookmarks" class="@Active("bookmarks")"><span class="nav-ico">🔖</span>Saved</a></li>
+                <li><a href="/" class="@Active("")"><span class="nav-ico">🏠</span>@T("Home")</a></li>
+                <li><a href="/friends" class="@Active("friends")"><span class="nav-ico">🤝</span>@T("Friends")</a></li>
+                <li><a href="/groups" class="@Active("groups")"><span class="nav-ico">🕌</span>@T("Groups")</a></li>
+                <li><a href="/pages" class="@Active("pages")"><span class="nav-ico">📜</span>@T("Pages")</a></li>
+                <li><a href="/events" class="@Active("events")"><span class="nav-ico">📅</span>@T("Events")</a></li>
+                <li><a href="/reels" class="@Active("reels")"><span class="nav-ico">🎬</span>@T("Reels")</a></li>
+                <li><a href="/live" class="@Active("live")"><span class="nav-ico">🔴</span>@T("Live")</a></li>
+                <li><a href="/messages" class="@Active("messages")"><span class="nav-ico">💬</span>@T("Messages")</a></li>
+                <li><a href="/bookmarks" class="@Active("bookmarks")"><span class="nav-ico">🔖</span>@T("Saved")</a></li>
             </ul>
-            <div class="nav-section">Deen</div>
+            <div class="nav-section">@T("Deen")</div>
             <ul class="nav-list">
-                <li><a href="/prayer" class="@Active("prayer")"><span class="nav-ico">🕋</span>Prayer times</a></li>
-                <li><a href="/qibla" class="@Active("qibla")"><span class="nav-ico">🧭</span>Qibla finder</a></li>
-                <li><a href="/calendar" class="@Active("calendar")"><span class="nav-ico">🌙</span>Hijri calendar</a></li>
-                <li><a href="/noor" class="@Active("noor")"><span class="nav-ico">✨</span>Ask Noor AI</a></li>
+                <li><a href="/prayer" class="@Active("prayer")"><span class="nav-ico">🕋</span>@T("Prayer times")</a></li>
+                <li><a href="/qibla" class="@Active("qibla")"><span class="nav-ico">🧭</span>@T("Qibla finder")</a></li>
+                <li><a href="/calendar" class="@Active("calendar")"><span class="nav-ico">🌙</span>@T("Hijri calendar")</a></li>
+                <li><a href="/noor" class="@Active("noor")"><span class="nav-ico">✨</span>@T("Ask Noor AI")</a></li>
             </ul>
             @if (Session.IsModerator)
             {
                 <div class="nav-section">Community</div>
                 <ul class="nav-list">
-                    <li><a href="/moderation" class="@Active("moderation")"><span class="nav-ico">🛡️</span>Moderation</a></li>
-                    @if (Session.User?.Role == UserRole.Admin) { <li><a href="/admin" class="@Active("admin")"><span class="nav-ico">🧭</span>Admin console</a></li> }
+                    <li><a href="/moderation" class="@Active("moderation")"><span class="nav-ico">🛡️</span>@T("Moderation")</a></li>
+                    @if (Session.User?.Role == UserRole.Admin) { <li><a href="/admin" class="@Active("admin")"><span class="nav-ico">🧭</span>@T("Admin console")</a></li> }
                 </ul>
             }
             <hr class="ornament" style="margin-top:1rem" />
@@ -81,7 +81,7 @@ else
         </aside>
 
         <main class="main">
-            @Body
+            <CascadingValue Name="i18nRev" Value="I18n.Revision">@Body</CascadingValue>
         </main>
 
         @if (ShowRail)
@@ -89,7 +89,7 @@ else
             <aside class="rail">
                 <PrayerWidget />
                 <div class="card online-list">
-                    <div class="card-title">Online now <span class="subtle" style="margin-left:auto">@Realtime.OnlineUsers.Count</span></div>
+                    <div class="card-title">@T("Online now") <span class="subtle" style="margin-left:auto">@Realtime.OnlineUsers.Count</span></div>
                     @if (Session.User?.ShowOnlineStatus == false)
                     {
                         <p class="subtle">Your active status is off, so you can't see who's online. <a href="/settings">Turn it on</a></p>
@@ -108,7 +108,7 @@ else
                     }
                 </div>
                 <div class="card">
-                    <div class="card-title">Trending</div>
+                    <div class="card-title">@T("Trending")</div>
                     @if (trending.Count == 0) { <p class="subtle">No trends yet. Start one with a #hashtag!</p> }
                     @foreach (var t in trending)
                     {
@@ -116,7 +116,7 @@ else
                     }
                 </div>
                 <div class="card">
-                    <div class="card-title">People you may know</div>
+                    <div class="card-title">@T("People you may know")</div>
                     @foreach (var p in suggestions.Take(5))
                     {
                         <div class="list-item">
@@ -132,12 +132,12 @@ else
     </div>
 
     <nav class="bottom-nav">
-        <a href="/" class="@Active("")"><span>🏠</span>Home</a>
-        <a href="/reels" class="@Active("reels")"><span>🎬</span>Reels</a>
-        <a href="/live" class="@Active("live")"><span>🔴</span>Live</a>
-        <a href="/prayer" class="@Active("prayer")"><span>🕋</span>Prayer</a>
-        <a href="/noor" class="@Active("noor")"><span>✨</span>Noor</a>
-        <a href="/menu" class="@Active("menu")"><span>☰</span>Menu</a>
+        <a href="/" class="@Active("")"><span>🏠</span>@T("Home")</a>
+        <a href="/reels" class="@Active("reels")"><span>🎬</span>@T("Reels")</a>
+        <a href="/live" class="@Active("live")"><span>🔴</span>@T("Live")</a>
+        <a href="/prayer" class="@Active("prayer")"><span>🕋</span>@T("Prayer")</a>
+        <a href="/noor" class="@Active("noor")"><span>✨</span>@T("Noor")</a>
+        <a href="/menu" class="@Active("menu")"><span>☰</span>@T("Menu")</a>
     </nav>
 }
 
@@ -168,6 +168,8 @@ else
         Realtime.CountsChanged += Refresh;
         Realtime.PresenceChanged += Refresh;
         await Session.LoadAsync();
+        await I18n.InitializeAsync(Session.User?.Language);
+        I18n.Changed += Refresh;
         if (!Session.IsAuthenticated)
         {
             Nav.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/" + Path)}");
@@ -226,5 +228,6 @@ else
         Session.Changed -= OnSessionChanged;
         Realtime.CountsChanged -= Refresh;
         Realtime.PresenceChanged -= Refresh;
+        I18n.Changed -= Refresh;
     }
 }

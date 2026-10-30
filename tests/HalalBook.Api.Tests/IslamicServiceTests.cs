@@ -105,3 +105,19 @@ public class NormalizationTests
     [InlineData("Jumu'ah Mubarak", "jumu'ah mubarak")]
     public void UndoesFilterDodges(string input, string expected) => Assert.Equal(expected, ContentModerator.Normalize(input));
 }
+
+public class LanguageTests
+{
+    [Theory]
+    [InlineData("السلام عليكم", "ar")]
+    [InlineData("آپ کیسے ہیں؟ میں ٹھیک ہوں", "ur")]
+    [InlineData("আসসালামু আলাইকুম", "bn")]
+    [InlineData("Hello world", null)]
+    public void GuessesScript(string text, string? expected) => Assert.Equal(expected, Languages.GuessFromScript(text));
+
+    [Theory]
+    [InlineData("ar-EG", "ar")]
+    [InlineData("pt-BR", "en")]
+    [InlineData(null, "en")]
+    public void NormalizesCodes(string? code, string expected) => Assert.Equal(expected, Languages.Normalize(code));
+}

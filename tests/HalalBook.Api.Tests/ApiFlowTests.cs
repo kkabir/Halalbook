@@ -571,4 +571,25 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Empty((await me.GetFromJsonAsync<List<TimelineMediaDto>>($"/api/users/{name}/media?type=Image", Json))!);
         Assert.NotNull(await me.GetFromJsonAsync<List<PostDto>>("/api/memories", Json));
     }
+
+    [Fact]
+    public async Task Multilingual_SettingsDetectionAndTranslation()
+    {
+        var (c, _) = await SignUpWithId("polyglot");
+        var u = (await (await c.PutAsJsonAsync("/api/users/me/language", new LanguageSettingsRequest("ar-SA", true), Json)).Content.ReadFromJsonAsync<UserDto>(Json))!;
+        Assert.Equal("ar", u.Language);
+
+        var post = (await (await c.PostAsJsonAsync("/api/posts", new CreatePostRequest("السلام عليكم ورحمة الله", TranslateForUmmah: true), Json))
+            .Content.ReadFromJsonAsync<PostDto>(Json))!;
+        Assert.Equal("ar", post.OriginalLanguage);
+
+        // Without an AI key the original text comes back, flagged as not translated.
+        var t = (await c.GetFromJsonAsync<TranslatedTextDto>($"/api/posts/{post.Id}/translation?lang=en", Json))!;
+        Assert.False(t.UsedAi);
+
+        var ui = (await (await factory.CreateClient().PostAsJsonAsync("/api/i18n/translate", new TranslateUiRequest("en", ["Home", "Friends"]), Json))
+            .Content.ReadFromJsonAsync<Dictionary<string, string>>(Json))!;
+        Assert.Equal("Home", ui["Home"]);
+        Assert.Equal(19, (await factory.CreateClient().GetFromJsonAsync<List<LanguageInfo>>("/api/i18n/languages", Json))!.Count);
+    }
 }

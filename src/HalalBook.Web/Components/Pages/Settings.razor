@@ -88,6 +88,18 @@
     </div>
 
     <div class="card stack mt">
+        <div class="card-title">@T("Language")</div>
+        <label class="row spread wrap privacy-row" style="border-top:0">
+            <div class="grow"><b>@T("App language")</b><div class="subtle">@T("Menus, buttons and messages appear in this language.")</div></div>
+            <LanguagePicker />
+        </label>
+        <label class="row spread privacy-row" style="cursor:pointer">
+            <div class="grow"><b>@T("Show posts translated into my language")</b><div class="subtle">@T("Posts written in other languages appear translated, with a link to the original.")</div></div>
+            <input type="checkbox" style="width:22px;height:22px" checked="@(Session.User?.AutoTranslate != false)" @onchange="ToggleAutoTranslate" />
+        </label>
+    </div>
+
+    <div class="card stack mt">
         <div class="card-title">Privacy</div>
         <p class="subtle" style="margin:0">Choose who can reach you and find you, just like on Facebook.</p>
         @foreach (var (key, label, hint, options) in PrivacyRows)
@@ -220,6 +232,16 @@
             var u = await Api.PutAsync<UserDto>("api/users/me", new UpdateProfileRequest(null, null, null, null, null, null, null, null, null, null, who));
             await Session.UpdateUserAsync(u);
             Toasts.Show("Saved");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task ToggleAutoTranslate(ChangeEventArgs e)
+    {
+        try
+        {
+            var u = await Api.PutAsync<UserDto>("api/users/me/language", new LanguageSettingsRequest(I18n.Language, e.Value is true));
+            await Session.UpdateUserAsync(u);
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }

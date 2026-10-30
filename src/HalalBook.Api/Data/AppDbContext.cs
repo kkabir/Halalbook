@@ -34,6 +34,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Feedback> Feedback => Set<Feedback>();
     public DbSet<FriendList> FriendLists => Set<FriendList>();
     public DbSet<Call> Calls => Set<Call>();
+    public DbSet<UiTranslation> UiTranslations => Set<UiTranslation>();
     public DbSet<FriendListMember> FriendListMembers => Set<FriendListMember>();
     public DbSet<ErrorLog> ErrorLogs => Set<ErrorLog>();
 
@@ -71,6 +72,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasMany(x => x.Media).WithOne().HasForeignKey(x => x.PostId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Hashtags).WithOne().HasForeignKey(x => x.PostId).OnDelete(DeleteBehavior.Cascade);
         });
+
+        b.Entity<UiTranslation>(e =>
+        {
+            e.HasIndex(x => new { x.Language, x.Key }).IsUnique();
+            e.Property(x => x.Language).HasMaxLength(8);
+            e.Property(x => x.Key).HasMaxLength(32);
+        });
+        b.Entity<User>().Property(x => x.Language).HasMaxLength(8);
+        b.Entity<Post>().Property(x => x.Language).HasMaxLength(8);
 
         b.Entity<Call>(e =>
         {

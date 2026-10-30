@@ -59,7 +59,8 @@ public static class PostEndpoints
             return list.Count == 1 ? Results.Ok(list[0]) : Results.NotFound();
         });
 
-        posts.MapPost("/", async (CreatePostRequest req, ClaimsPrincipal cp, AppDbContext db, PostService svc, AiService ai, Notifier notifier, IWebHostEnvironment env, CancellationToken ct) =>
+        posts.MapPost("/", async (CreatePostRequest req, ClaimsPrincipal cp, AppDbContext db, PostService svc, AiService ai, Notifier notifier, IWebHostEnvironment env,
+            PostTranslationQueue translations, CancellationToken ct) =>
         {
             var me = cp.UserId();
             var content = (req.Content ?? "").Trim();
@@ -131,6 +132,7 @@ public static class PostEndpoints
                 await svc.SyncHashtagsAsync(p);
             }
             var post = created[0];
+            foreach (var p in created) p.Language = Languages.GuessFromScript(content) ?? p.Language;
             if (post.GroupId is null && audience.Count > 0)
                 db.PostAudiences.AddRange(audience.Select(uid => new PostAudience { PostId = post.Id, UserId = uid }));
             await db.SaveChangesAsync();
@@ -147,6 +149,8 @@ public static class PostEndpoints
             if (req.SharedPostId is Guid sid && await db.Posts.FindAsync(sid) is { } original)
                 await notifier.SendAsync(original.AuthorId, me, NotificationType.Share, $"{meUser.DisplayName} shared your post.", $"/post/{post.Id}");
 
+            // "Reach the whole Ummah": translate into the main languages in the background.
+            if (req.TranslateForUmmah && content.Length > 0) foreach (var p in created) translations.Enqueue(p.Id);
             var dto = (await svc.BuildAsync(db.Posts.Where(p => p.Id == post.Id), me))[0];
             return Results.Created($"/api/posts/{post.Id}", dto);
         });
@@ -280,6 +284,26 @@ public static class PostEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(existing is null);
         }).WithTags("Posts").RequireAuthorization();
+
+        // ---- Translation in the reader's language (cached on the post) ----
+        posts.MapGet("/{id:guid}/translation", async (Guid id, string? lang, ClaimsPrincipal cp, AppDbContext db, PostService svc, AiService ai, CancellationToken ct) =>
+        {
+            var me = cp.UserId();
+            var visible = await svc.VisibleToAsync(me, cp.IsModerator());
+            var post = await visible.FirstOrDefaultAsync(p => p.Id == id, ct);
+            if (post is null) return Results.NotFound();
+            var target = Languages.Normalize(lang ?? await db.Users.Where(u => u.Id == me).Select(u => u.Language).FirstAsync(ct));
+            if (PostTranslations.Read(post).TryGetValue(target, out var cached))
+                return Results.Ok(new TranslatedTextDto(cached, target, post.Language, true));
+            var (source, dict) = await ai.TranslateToManyAsync(post.Content, [target], ct);
+            if (!dict.TryGetValue(target, out var text))
+                return Results.Ok(new TranslatedTextDto(post.Content, target, source ?? post.Language, false));
+            var tracked = await db.Posts.FindAsync([id], ct);
+            tracked!.Language ??= source;
+            PostTranslations.Merge(tracked, dict);
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(new TranslatedTextDto(text, target, source, true));
+        });
 
         // ---- AI: summarize a long discussion ----
         posts.MapGet("/{id:guid}/summary", async (Guid id, AppDbContext db, AiService ai, CancellationToken ct) =>

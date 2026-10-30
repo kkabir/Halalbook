@@ -816,6 +816,10 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<int>("Kind")
                         .HasColumnType("int");
 
+                    b.Property<string>("Language")
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
                     b.Property<string>("LifeEvent")
                         .HasColumnType("nvarchar(max)");
 
@@ -839,6 +843,9 @@ namespace HalalBook.Api.Data.Migrations
 
                     b.Property<Guid?>("TargetUserId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Translations")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("Visibility")
                         .HasColumnType("int");
@@ -1034,6 +1041,38 @@ namespace HalalBook.Api.Data.Migrations
                     b.ToTable("StoryViews");
                 });
 
+            modelBuilder.Entity("HalalBook.Api.Data.UiTranslation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Language", "Key")
+                        .IsUnique();
+
+                    b.ToTable("UiTranslations");
+                });
+
             modelBuilder.Entity("HalalBook.Api.Data.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1049,6 +1088,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<string>("AsrSchool")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("AutoTranslate")
+                        .HasColumnType("bit");
 
                     b.Property<string>("AvatarUrl")
                         .HasColumnType("nvarchar(max)");
@@ -1080,6 +1122,11 @@ namespace HalalBook.Api.Data.Migrations
 
                     b.Property<bool>("IsVerified")
                         .HasColumnType("bit");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
 
                     b.Property<DateTime?>("LastSeenAt")
                         .HasColumnType("datetime2");

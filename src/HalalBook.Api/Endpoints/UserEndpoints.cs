@@ -260,6 +260,16 @@ public static partial class UserEndpoints
             return Results.NoContent();
         });
 
+        users.MapPut("/me/language", async (LanguageSettingsRequest req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var u = await db.Users.FindAsync(cp.UserId());
+            if (u is null) return Results.Unauthorized();
+            u.Language = Languages.Normalize(req.Language);
+            u.AutoTranslate = req.AutoTranslate;
+            await db.SaveChangesAsync();
+            return Results.Ok(u.ToDto());
+        });
+
         users.MapPut("/me/privacy", async (PrivacySettingsDto req, ClaimsPrincipal cp, AppDbContext db) =>
         {
             var u = await db.Users.FindAsync(cp.UserId());

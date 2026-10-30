@@ -43,7 +43,7 @@
                 {
                     <div class="menu-pop" @onclick="() => menuOpen = false">
                         <button @onclick="ToggleBookmark">@(Post.IsBookmarked ? "🔖 Remove from saved" : "🔖 Save post")</button>
-                        <button @onclick="Translate">🌐 Translate to English (AI)</button>
+                        <button @onclick="TranslateToMine">🌐 @T("See translation")</button>
                         <button @onclick="CheckSources">📖 Check Quran and hadith sources (AI)</button>
                         <button @onclick="CopyLink">🔗 Copy link</button>
                         @if (IsMine && Post.Group is null)
@@ -93,7 +93,16 @@
         }
         else if (!string.IsNullOrWhiteSpace(Post.Content))
         {
-            <div class="post-body @(Post.Content.Length < 90 && Post.Media.Count == 0 && Post.SharedPost is null ? "big" : "")">@RichText(Post.Content)</div>
+            var shown = showOriginal ? Post.Content : (liveTranslation ?? Post.TranslatedContent ?? Post.Content);
+            <div class="post-body @(shown.Length < 90 && Post.Media.Count == 0 && Post.SharedPost is null ? "big" : "")" dir="auto">@RichText(shown)</div>
+            @if (!showOriginal && (liveTranslation ?? Post.TranslatedContent) is not null)
+            {
+                <div class="translation-note">🌍 @T("Translated from") @Languages.Get(Post.OriginalLanguage ?? liveSource).NativeName · <a href="javascript:void(0)" @onclick="() => showOriginal = true">@T("See original")</a></div>
+            }
+            else if (NeedsTranslation)
+            {
+                <div class="translation-note"><a href="javascript:void(0)" @onclick="TranslateToMine">🌍 @T("See translation")</a>@if (translating) { <span> …</span> }</div>
+            }
         }
 
         @if (sources is not null)
@@ -102,10 +111,6 @@
         }
         @if (checkingSources) { <div class="subtle" style="padding:0 1.1rem .5rem">Noor is checking the sources…</div> }
 
-        @if (translation is not null)
-        {
-            <div style="padding:0 1.1rem .5rem"><div class="ai-summary"><span class="ai-tag">✨ Translated</span><br />@translation</div></div>
-        }
 
         <MediaGrid Media="Post.Media" />
 
@@ -145,12 +150,12 @@
                 }
                 <button class="action @(Post.MyReaction is not null ? "on" : "")" @onclick="QuickReact" @onmouseenter="() => pickerOpen = true">
                     @if (Post.MyReaction is { } mine) { <span>@Ui.Emoji(mine)</span> <span>@Ui.Label(mine)</span> }
-                    else { <span>👍</span> <span>Like</span> }
+                    else { <span>👍</span> <span>@T("Like")</span> }
                 </button>
             </div>
-            <button class="action" @onclick="ToggleComments">💬 <span>Comment</span></button>
-            <button class="action" @onclick="() => sharing = true">↗ <span>Share</span></button>
-            <button class="action @(Post.IsBookmarked ? "on" : "")" @onclick="ToggleBookmark">🔖 <span>@(Post.IsBookmarked ? "Saved" : "Save")</span></button>
+            <button class="action" @onclick="ToggleComments">💬 <span>@T("Comment")</span></button>
+            <button class="action" @onclick="() => sharing = true">↗ <span>@T("Share")</span></button>
+            <button class="action @(Post.IsBookmarked ? "on" : "")" @onclick="ToggleBookmark">🔖 <span>@(Post.IsBookmarked ? T("Saved") : T("Save"))</span></button>
         </div>
 
         @if (showComments)
@@ -192,7 +197,7 @@
     [Parameter] public EventCallback<PostDto> OnShared { get; set; }
 
     private bool menuOpen, pickerOpen, showComments, sharing, reporting, editing, deleted;
-    private string? reportReason, translation, editText;
+    private string? reportReason, editText;
 
     private bool IsMine => Post.Author.Id == Session.User?.Id;
 
@@ -274,18 +279,32 @@
         Toasts.Show("Link copied");
     }
 
-    private async Task Translate()
+    private string? sources, liveTranslation, liveSource;
+    private bool checkingSources, showOriginal, translating;
+
+    /// <summary>Offer a translation when the post is (or looks) written in another language than the reader's.</summary>
+    private bool NeedsTranslation
     {
-        try
+        get
         {
-            var res = await Api.PostAsync<AiTextResponse>("api/ai/translate", new AiTranslateRequest(Post.Content, "English"));
-            translation = res.UsedAi ? res.Text : "AI translation isn't configured on the server yet.";
+            var mine = I18n.Language;
+            var theirs = Post.OriginalLanguage ?? Languages.GuessFromScript(Post.Content);
+            return theirs is not null ? theirs != mine : mine != "en";
         }
-        catch (Exception ex) { Toasts.Error(ex); }
     }
 
-    private string? sources;
-    private bool checkingSources;
+    private async Task TranslateToMine()
+    {
+        translating = true;
+        try
+        {
+            var r = await Api.GetAsync<TranslatedTextDto>($"api/posts/{Post.Id}/translation?lang={I18n.Language}");
+            if (r.UsedAi) { liveTranslation = r.Text; liveSource = r.SourceLanguage; showOriginal = false; }
+            else Toasts.Show(T("Translation needs the AI assistant, which isn't configured yet."));
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { translating = false; }
+    }
 
     private async Task CheckSources()
     {

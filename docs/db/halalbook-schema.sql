@@ -1295,3 +1295,71 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030044657_Multilingual'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [AutoTranslate] bit NOT NULL DEFAULT CAST(1 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030044657_Multilingual'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [Language] nvarchar(8) NOT NULL DEFAULT N'en';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030044657_Multilingual'
+)
+BEGIN
+    ALTER TABLE [Posts] ADD [Language] nvarchar(8) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030044657_Multilingual'
+)
+BEGIN
+    ALTER TABLE [Posts] ADD [Translations] nvarchar(max) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030044657_Multilingual'
+)
+BEGIN
+    CREATE TABLE [UiTranslations] (
+        [Id] uniqueidentifier NOT NULL,
+        [Language] nvarchar(8) NOT NULL,
+        [Key] nvarchar(32) NOT NULL,
+        [Source] nvarchar(max) NOT NULL,
+        [Text] nvarchar(max) NOT NULL,
+        CONSTRAINT [PK_UiTranslations] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030044657_Multilingual'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_UiTranslations_Language_Key] ON [UiTranslations] ([Language], [Key]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030044657_Multilingual'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261030044657_Multilingual', N'10.0.14');
+END;
+
+COMMIT;
+GO
+

@@ -12,17 +12,18 @@
 <div class="menu-grid mt">
     @foreach (var (href, icon, name) in Items)
     {
-        <a class="card menu-tile" href="@href"><span>@icon</span><b>@name</b></a>
+        <a class="card menu-tile" href="@href"><span>@icon</span><b>@T(name)</b></a>
     }
     @if (Session.IsModerator) { <a class="card menu-tile" href="/moderation"><span>🛡️</span><b>Moderation</b></a> }
 </div>
 
 <div class="card mt stack" style="gap:.25rem">
-    <a class="menu-link" href="/settings">⚙️ Settings & privacy</a>
-    <a class="menu-link" href="/feedback">💬 Help & feedback</a>
+    <div class="menu-link" style="cursor:default">🌍 @T("Language") <LanguagePicker /></div>
+    <a class="menu-link" href="/settings">⚙️ @T("Settings & privacy")</a>
+    <a class="menu-link" href="/feedback">💬 @T("Help & feedback")</a>
     @if (Session.User?.Role == UserRole.Admin) { <a class="menu-link" href="/admin">🧭 Admin console</a> }
-    <a class="menu-link" href="/terms">📜 Community Agreement</a>
-    <button class="menu-link" @onclick="Session.SignOutAsync">🚪 Sign out</button>
+    <a class="menu-link" href="/terms">📜 @T("Community Agreement")</a>
+    <button class="menu-link" @onclick="Session.SignOutAsync">🚪 @T("Sign out")</button>
 </div>
 
 @code {
@@ -30,6 +31,6 @@
     [
         ("/friends", "🤝", "Friends"), ("/groups", "🕌", "Groups"), ("/messages", "💬", "Messages"), ("/live", "🔴", "Live"),
         ("/reels", "🎬", "Reels"), ("/events", "📅", "Events"), ("/pages", "📜", "Pages"), ("/bookmarks", "🔖", "Saved"),
-        ("/prayer", "🕋", "Prayer times"), ("/qibla", "🧭", "Qibla"), ("/calendar", "🌙", "Hijri calendar"), ("/noor", "✨", "Ask Noor"),
+        ("/prayer", "🕋", "Prayer times"), ("/qibla", "🧭", "Qibla finder"), ("/calendar", "🌙", "Hijri calendar"), ("/noor", "✨", "Ask Noor AI"),
     ];
 }

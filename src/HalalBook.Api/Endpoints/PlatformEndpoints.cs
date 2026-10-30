@@ -82,6 +82,12 @@ public static class PlatformEndpoints
             return Results.Ok(new SearchResultDto(people, posts, groups, pages, events, tags));
         }).WithTags("Search").RequireAuthorization();
 
+        // ---------- Interface translations (works before sign-in too) ----------
+        app.MapPost("/api/i18n/translate", async (TranslateUiRequest req, UiTranslator translator, CancellationToken ct) =>
+            await translator.TranslateAsync(req.Language, req.Texts ?? [], ct))
+            .WithTags("Languages").RequireRateLimiting("auth");
+        app.MapGet("/api/i18n/languages", () => Languages.All).WithTags("Languages");
+
         // ---------- Media upload ----------
         // purpose: post (default), reel, story, comment, message, profile or cover. Each has its own size and length limits.
         app.MapPost("/api/media", async (IFormFile file, string? purpose, HttpRequest request, IWebHostEnvironment env, IConfiguration config, MediaPolicy policy, MediaScreening screening, CancellationToken ct) =>

@@ -115,7 +115,7 @@ else
                         <span>Trace id</span><span>@(se.TraceId ?? "—")</span>
                         <span>Browser</span><span>@(se.UserAgent ?? "—")</span>
                     </div>
-                    @if (se.StackTrace is { Length: > 0 } st) { <pre class="stack">@st</pre> }
+                    @if (se.StackTrace is { Length: > 0 } st) { <pre class="stack-trace">@st</pre> }
                     <label class="field mt">Note<textarea class="input" rows="2" @bind="errorNote"></textarea></label>
                     <div class="row wrap mt">
                         @if (se.Status != ErrorStatus.Resolved) { <button class="btn btn-primary" @onclick="() => SaveError(ErrorStatus.Resolved)">✓ Mark resolved</button> }

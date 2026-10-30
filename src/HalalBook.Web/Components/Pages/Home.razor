@@ -9,15 +9,15 @@
     <StoriesBar />
     <div class="card catchup">
         <div class="row spread">
-            <div><b>✨ Catch me up</b><div class="subtle">Noor summarizes what your friends and groups shared recently.</div></div>
-            <button class="btn btn-gold btn-sm" disabled="@digestBusy" @onclick="CatchUp">@(digestBusy ? "Reading…" : digest is null ? "Summarize" : "Refresh")</button>
+            <div><b>✨ @T("Catch me up")</b><div class="subtle">@T("Noor summarizes what your friends and groups shared recently.")</div></div>
+            <button class="btn btn-gold btn-sm" disabled="@digestBusy" @onclick="CatchUp">@(digestBusy ? T("Reading…") : digest is null ? T("Summarize") : T("Refresh"))</button>
         </div>
         @if (digest is not null) { <div class="ai-summary mt">@digest</div> }
     </div>
     @if (memories is { Count: > 0 })
     {
         <div class="card memories">
-            <div class="card-title">On this day</div>
+            <div class="card-title">@T("On this day")</div>
             @foreach (var m in memories.Take(1))
             {
                 <div class="subtle">@(DateTime.UtcNow.Year - m.CreatedAt.Year) year@(DateTime.UtcNow.Year - m.CreatedAt.Year == 1 ? "" : "s") ago</div>
@@ -26,7 +26,7 @@
             @if (memories.Count > 1) { <div class="subtle center">and @(memories.Count - 1) more memories from this day</div> }
         </div>
     }
-    <Composer OnPosted="p => posts.Insert(0, p)" Placeholder="@($"What's on your heart, {FirstName}?")" />
+    <Composer OnPosted="p => posts.Insert(0, p)" Placeholder="@($"{T("What's on your heart")}, {FirstName}?")" />
 
     <div class="mt">
         @foreach (var p in posts)
