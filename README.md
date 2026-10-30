@@ -1,4 +1,4 @@
-# HalalBook
+﻿# HalalBook
 
 A beautiful, intelligent social network for the Muslim community: Facebook-style social features, an Islamic
 architecture design system (emerald and gold, eight-point star geometry, mihrab arches), AI help powered by Claude,
@@ -7,7 +7,7 @@ and everyday deen tools.
 | | Production | Local dev |
 |---|---|---|
 | Web (Blazor) | https://halalbook.app | https://localhost:7203 |
-| REST API | https://api.halalbook.app | https://localhost:7121 (`/openapi/v1.json`) |
+| REST API (Swagger UI) | https://api.halalbook.app | https://localhost:7121 |
 
 ## Solution layout
 

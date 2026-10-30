@@ -49,7 +49,7 @@ builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Ad
 builder.Services.AddSignalR().AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = 110_000_000);
 builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = 110_000_000);
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(o => o.AddDocumentTransformer<HalalBook.Api.OpenApiDocumentInfo>());
 builder.Services.AddProblemDetails();
 
 // ---------- Auth ----------
@@ -133,7 +133,15 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapOpenApi();
-app.MapGet("/", () => Results.Ok(new { name = "HalalBook API", status = "ok", docs = "/openapi/v1.json" })).ExcludeFromDescription();
+// Swagger UI on the API's home page (https://api.halalbook.app/). Use "Authorize" with a token from /api/auth/login.
+app.UseSwaggerUI(o =>
+{
+    o.SwaggerEndpoint("/openapi/v1.json", "HalalBook API v1");
+    o.RoutePrefix = "";
+    o.DocumentTitle = "HalalBook API";
+    o.EnablePersistAuthorization();
+    o.DisplayRequestDuration();
+});
 app.MapGet("/health", () => Results.Ok("healthy")).ExcludeFromDescription();
 app.MapUserEndpoints();
 app.MapPostEndpoints();
