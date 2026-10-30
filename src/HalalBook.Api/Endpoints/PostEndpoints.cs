@@ -52,6 +52,16 @@ public static class PostEndpoints
             return list.Count == 1 ? Results.Ok(list[0]) : Results.NotFound();
         }).WithTags("Posts");
 
+        // Public posts for the web app's sitemap.xml, newest first.
+        app.MapGet("/api/public/sitemap", async (AppDbContext db) =>
+        {
+            var privateGroups = db.Groups.Where(g => g.Privacy == GroupPrivacy.Private).Select(g => g.Id);
+            return await db.Posts.Where(p => !p.IsDeleted && p.Visibility == Visibility.Public && p.Moderation == ModerationStatus.Approved
+                    && !p.Author.IsSuspended && (p.GroupId == null || !privateGroups.Contains(p.GroupId.Value)))
+                .OrderByDescending(p => p.CreatedAt).Take(45000)
+                .Select(p => new { p.Id, Modified = p.EditedAt ?? p.CreatedAt }).ToListAsync();
+        }).WithTags("Posts").CacheOutput(_ => { });
+
         posts.MapGet("/{id:guid}", async (Guid id, ClaimsPrincipal cp, PostService svc) =>
         {
             var visible = await svc.VisibleToAsync(cp.UserId(), cp.IsModerator());
@@ -60,7 +70,7 @@ public static class PostEndpoints
         });
 
         posts.MapPost("/", async (CreatePostRequest req, ClaimsPrincipal cp, AppDbContext db, PostService svc, AiService ai, Notifier notifier, IWebHostEnvironment env,
-            PostTranslationQueue translations, CancellationToken ct) =>
+            PostTranslationQueue translations, IndexNowQueue indexNow, CancellationToken ct) =>
         {
             var me = cp.UserId();
             var content = (req.Content ?? "").Trim();
@@ -151,6 +161,9 @@ public static class PostEndpoints
 
             // "Reach the whole Ummah": translate into the main languages in the background.
             if (req.TranslateForUmmah && content.Length > 0) foreach (var p in created) translations.Enqueue(p.Id);
+            // Public posts are announced to search engines.
+            foreach (var p in created.Where(p => p.Visibility == Visibility.Public && p.Moderation == ModerationStatus.Approved && p.GroupId is null))
+                indexNow.Enqueue($"/p/{p.Id}");
             var dto = (await svc.BuildAsync(db.Posts.Where(p => p.Id == post.Id), me))[0];
             return Results.Created($"/api/posts/{post.Id}", dto);
         });
