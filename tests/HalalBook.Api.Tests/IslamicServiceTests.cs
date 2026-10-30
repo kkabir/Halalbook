@@ -188,3 +188,13 @@ public class NotificationRuleTests
         Assert.True(fromOther.Disappear);
     }
 }
+
+public class BirthdayTests
+{
+    [Theory]
+    [InlineData("2000-02-29", "2027-02-27", 1)]   // leap-day birthdays fall on 28 February in other years
+    [InlineData("1990-12-31", "2026-12-31", 0)]
+    [InlineData("1990-01-01", "2026-12-31", 1)]
+    public void CountsDaysToNextBirthday(string birthday, string today, int expected) =>
+        Assert.Equal(expected, HalalBook.Api.Endpoints.UserEndpoints.DaysUntil(DateOnly.Parse(birthday), DateOnly.Parse(today)));
+}

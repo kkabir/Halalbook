@@ -67,6 +67,20 @@
         </div>
     }
 
+    @if (pollOptions is not null)
+    {
+        <div class="poll-editor">
+            <div class="row spread"><b>📊 @T("Poll")</b><button class="btn btn-ghost btn-sm" @onclick="() => pollOptions = null">@T("Remove")</button></div>
+            <small class="subtle">@T("Your post text is the question.")</small>
+            @for (var i = 0; i < pollOptions.Count; i++)
+            {
+                var n = i;
+                <input class="input" maxlength="120" placeholder="@($"{T("Option")} {n + 1}")" value="@pollOptions[n]" @oninput="e => pollOptions[n] = e.Value?.ToString() ?? string.Empty" />
+            }
+            @if (pollOptions.Count < 6) { <button class="btn btn-ghost btn-sm" @onclick='() => pollOptions.Add("")'>＋ @T("Add option")</button> }
+        </div>
+    }
+
     @if (showExtras)
     {
         <div class="row wrap" style="margin-bottom:.5rem">
@@ -93,6 +107,7 @@
                 </label>
             }
             <button class="btn btn-ghost btn-sm" @onclick="() => showExtras = !showExtras">😊 @T("Feeling")</button>
+            @if (!ReelMode) { <button class="btn btn-ghost btn-sm" @onclick='() => pollOptions ??= ["", ""]'>📊 @T("Poll")</button> }
             @if (!ReelMode && PageId is null && Session.ShowFaith)
             {
                 <button class="btn btn-ghost btn-sm dua-toggle @(asDua ? "on" : "")" @onclick="() => asDua = !asDua"
@@ -185,6 +200,7 @@
         }
     }
     private bool uploading, posting, aiBusy, showExtras, asReel;
+    private List<string>? pollOptions;
     private int uploadIndex, uploadTotal;
     private InputFile? fileInput;
 
@@ -244,7 +260,8 @@
             var post = await Api.PostAsync<PostDto>("api/posts",
                 new CreatePostRequest(text ?? "", audience.Visibility, media.ToList(), GroupId, PageId, null, kind, feeling, location, TargetUserId,
                     audience.People, audience.GroupIds.Count > 0 ? audience.GroupIds : null, audience.OnProfile, audience.ListId,
-                    lifeEvent?.Key, lifeEvent is null ? null : lifeEventDate, forUmmah));
+                    lifeEvent?.Key, lifeEvent is null ? null : lifeEventDate, forUmmah,
+                    pollOptions?.Where(o => !string.IsNullOrWhiteSpace(o)).ToList()));
             var postedTo = audience.GroupIds.Count;
             text = feeling = location = moderationNote = null;
             lifeEvent = null;
@@ -252,7 +269,7 @@
             forUmmah = false;
             asDua = false;
             audience = audience with { GroupIds = [], GroupNames = [], OnProfile = true };
-            media.Clear(); suggestedTags = []; showExtras = asReel = false;
+            media.Clear(); suggestedTags = []; showExtras = asReel = false; pollOptions = null;
             Toasts.Show(post.Moderation == ModerationStatus.PendingReview ? "Posted. A moderator will review it shortly."
                 : postedTo > 0 ? $"Posted{(audience.OnProfile ? " to your profile and" : " to")} {postedTo} group{(postedTo == 1 ? "" : "s")}, alhamdulillah!"
                 : "Posted, alhamdulillah!");

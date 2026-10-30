@@ -30,6 +30,8 @@ public class User
     public bool AutoTranslate { get; set; } = true;
     /// <summary>HalalBook is open to everyone: members who aren't Muslim can hide the Islamic tools.</summary>
     public bool FaithFeatures { get; set; } = true;
+    public DateOnly? Birthday { get; set; }
+    public bool ShowBirthday { get; set; } = true;
     /// <summary>Phone notification settings (see NotificationSettingsDto).</summary>
     public bool NotifyShowPreview { get; set; } = true;
     public bool NotifyDisappearing { get; set; }
@@ -133,6 +135,23 @@ public class PageStat
     public DateOnly Day { get; set; }
     public string Path { get; set; } = "/";
     public int Views { get; set; }
+}
+
+public class PollOption
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid PostId { get; set; }
+    public string Text { get; set; } = "";
+    public int SortOrder { get; set; }
+}
+
+/// <summary>One vote per person per poll; voting again moves it.</summary>
+public class PollVote
+{
+    public Guid PostId { get; set; }
+    public Guid UserId { get; set; }
+    public Guid OptionId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>A browser or phone that asked for HalalBook notifications (Web Push).</summary>

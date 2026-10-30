@@ -667,7 +667,7 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
     {
         var (a, aId) = await SignUpWithId("chatA");
         var (b, bId) = await SignUpWithId("chatB");
-        await a.PostAsync($"/api/friends/{bId}/request", null);
+        await a.PostAsync($"/api/friends/{bId}", null);
         await b.PostAsync($"/api/friends/{aId}/accept", null);
         var conv = (await (await a.PostAsJsonAsync("/api/conversations", new StartConversationRequest([bId], null), Json)).Content.ReadFromJsonAsync<ConversationDto>(Json))!;
         (await a.PostAsJsonAsync($"/api/conversations/{conv.Id}/messages", new SendMessageRequest("Assalamu alaikum, iftar at 6?", null), Json)).EnsureSuccessStatusCode();
@@ -687,7 +687,7 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
     {
         var (a, aId) = await SignUpWithId("rxA");
         var (b, bId) = await SignUpWithId("rxB");
-        await a.PostAsync($"/api/friends/{bId}/request", null);
+        await a.PostAsync($"/api/friends/{bId}", null);
         await b.PostAsync($"/api/friends/{aId}/accept", null);
         var conv = (await (await a.PostAsJsonAsync("/api/conversations", new StartConversationRequest([bId], null), Json)).Content.ReadFromJsonAsync<ConversationDto>(Json))!;
         var first = (await (await a.PostAsJsonAsync($"/api/conversations/{conv.Id}/messages", new SendMessageRequest("Dinner at 7?", null), Json)).Content.ReadFromJsonAsync<MessageDto>(Json))!;
@@ -811,5 +811,39 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         (await a.DeleteAsync($"/api/users/{bId}/mute")).EnsureSuccessStatusCode();
         Assert.Empty((await a.GetFromJsonAsync<List<UserSummaryDto>>("/api/users/me/muted", Json))!);
+    }
+
+    [Fact]
+    public async Task Polls_VoteChangeAndTakeBack()
+    {
+        var (a, _) = await SignUpWithId("pollA");
+        var (b, _) = await SignUpWithId("pollB");
+        var post = (await (await a.PostAsJsonAsync("/api/posts", new CreatePostRequest("Best time for the family picnic?", PollOptions: ["Saturday", "Sunday", " ", "Sunday"]), Json))
+            .Content.ReadFromJsonAsync<PostDto>(Json))!;
+        Assert.Equal(2, post.Poll!.Options.Count); // blanks and duplicates dropped
+        var sat = post.Poll.Options[0].Id; var sun = post.Poll.Options[1].Id;
+
+        var p = (await (await b.PostAsJsonAsync($"/api/posts/{post.Id}/poll/vote", new PollVoteRequest(sat), Json)).Content.ReadFromJsonAsync<PollDto>(Json))!;
+        Assert.Equal(sat, p.MyVote); Assert.Equal(1, p.TotalVotes);
+        p = (await (await b.PostAsJsonAsync($"/api/posts/{post.Id}/poll/vote", new PollVoteRequest(sun), Json)).Content.ReadFromJsonAsync<PollDto>(Json))!;
+        Assert.Equal(sun, p.MyVote); Assert.Equal(1, p.TotalVotes);
+        p = (await (await b.PostAsJsonAsync($"/api/posts/{post.Id}/poll/vote", new PollVoteRequest(sun), Json)).Content.ReadFromJsonAsync<PollDto>(Json))!;
+        Assert.Null(p.MyVote); Assert.Equal(0, p.TotalVotes);
+    }
+
+    [Fact]
+    public async Task Birthdays_ShownToFriendsWhenShared()
+    {
+        var (a, aId) = await SignUpWithId("bdayA");
+        var (b, bId) = await SignUpWithId("bdayB");
+        await a.PostAsync($"/api/friends/{bId}", null);
+        await b.PostAsync($"/api/friends/{aId}/accept", null);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        (await b.PutAsJsonAsync("/api/users/me/birthday", new BirthdaySettingsRequest(new DateOnly(1990, today.Month, today.Day), true), Json)).EnsureSuccessStatusCode();
+        var list = (await a.GetFromJsonAsync<List<BirthdayDto>>("/api/friends/birthdays", Json))!;
+        Assert.Contains(list, x => x.User.Id == bId && x.DaysAway == 0);
+
+        await b.PutAsJsonAsync("/api/users/me/birthday", new BirthdaySettingsRequest(new DateOnly(1990, today.Month, today.Day), false), Json);
+        Assert.DoesNotContain((await a.GetFromJsonAsync<List<BirthdayDto>>("/api/friends/birthdays", Json))!, x => x.User.Id == bId);
     }
 }

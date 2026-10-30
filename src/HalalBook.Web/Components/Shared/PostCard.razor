@@ -106,6 +106,8 @@
             }
         }
 
+        @if (Post.Poll is { } poll) { <PollView PostId="Post.Id" Poll="poll" PollChanged="p => Post = Post with { Poll = p }" /> }
+
         @if (sources is not null)
         {
             <div style="padding:0 1.1rem .5rem"><div class="ai-summary"><span class="ai-tag">📖 Noor's source check</span><br />@sources</div></div>

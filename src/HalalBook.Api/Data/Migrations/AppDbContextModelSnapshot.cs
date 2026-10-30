@@ -924,6 +924,51 @@ namespace HalalBook.Api.Data.Migrations
                     b.ToTable("PageStats");
                 });
 
+            modelBuilder.Entity("HalalBook.Api.Data.PollOption", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PostId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PostId");
+
+                    b.ToTable("PollOptions");
+                });
+
+            modelBuilder.Entity("HalalBook.Api.Data.PollVote", b =>
+                {
+                    b.Property<Guid>("PostId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OptionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("PostId", "UserId");
+
+                    b.HasIndex("OptionId");
+
+                    b.ToTable("PollVotes");
+                });
+
             modelBuilder.Entity("HalalBook.Api.Data.Post", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1333,6 +1378,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<string>("Bio")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateOnly?>("Birthday")
+                        .HasColumnType("date");
+
                     b.Property<string>("CoverUrl")
                         .HasColumnType("nvarchar(max)");
 
@@ -1417,6 +1465,9 @@ namespace HalalBook.Api.Data.Migrations
 
                     b.Property<int>("Role")
                         .HasColumnType("int");
+
+                    b.Property<bool>("ShowBirthday")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("ShowOnlineStatus")
                         .HasColumnType("bit");

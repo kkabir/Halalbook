@@ -152,6 +152,19 @@ public static partial class UserEndpoints
             return await db.Users.Where(u => ids.Contains(u.Id)).OrderBy(u => u.DisplayName).Select(u => u.ToSummary()).ToListAsync();
         });
 
+        // Friends' birthdays today and in the coming week (only from people who share theirs). offset: the viewer's UTC offset in minutes.
+        friends.MapGet("/birthdays", async (int? offset, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var me = cp.UserId();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddMinutes(offset ?? 0));
+            var ids = db.Friendships.Where(f => f.Accepted && (f.RequesterId == me || f.AddresseeId == me))
+                .Select(f => f.RequesterId == me ? f.AddresseeId : f.RequesterId);
+            var people = await db.Users.Where(u => ids.Contains(u.Id) && u.ShowBirthday && u.Birthday != null && !u.IsSuspended).ToListAsync();
+            return people.Select(u => (u, days: DaysUntil(u.Birthday!.Value, today)))
+                .Where(x => x.days <= 7).OrderBy(x => x.days)
+                .Select(x => new BirthdayDto(x.u.ToSummary(), x.u.Birthday!.Value.Month, x.u.Birthday.Value.Day, x.days)).ToList();
+        });
+
         friends.MapGet("/requests", async (ClaimsPrincipal cp, AppDbContext db) =>
         {
             var me = cp.UserId();
@@ -287,6 +300,16 @@ public static partial class UserEndpoints
             return Results.Ok(u.ToDto());
         });
 
+        users.MapPut("/me/birthday", async (BirthdaySettingsRequest req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var u = await db.Users.FindAsync(cp.UserId());
+            if (u is null) return Results.Unauthorized();
+            if (req.Birthday is { } b && (b > DateOnly.FromDateTime(DateTime.UtcNow) || b.Year < 1900)) return Results.BadRequest("Please enter a real birthday.");
+            (u.Birthday, u.ShowBirthday) = (req.Birthday, req.ShowBirthday);
+            await db.SaveChangesAsync();
+            return Results.Ok(u.ToDto());
+        });
+
         users.MapPut("/me/faith", async (FaithSettingsRequest req, ClaimsPrincipal cp, AppDbContext db) =>
         {
             var u = await db.Users.FindAsync(cp.UserId());
@@ -368,5 +391,14 @@ public static partial class UserEndpoints
             _ => await db.Friendships.AnyAsync(f => f.Accepted && ((f.RequesterId == me && f.AddresseeId == ownerId) || (f.RequesterId == ownerId && f.AddresseeId == me)))
                 ? null : $"Only {owner.DisplayName}'s friends can post on their profile.",
         };
+}
+
+    /// <summary>Days from today until the next birthday (29 February counts as 28 February in other years).</summary>
+    public static int DaysUntil(DateOnly birthday, DateOnly today)
+    {
+        DateOnly On(int year) => new(year, birthday.Month, Math.Min(birthday.Day, DateTime.DaysInMonth(year, birthday.Month)));
+        var next = On(today.Year);
+        if (next < today) next = On(today.Year + 1);
+        return next.DayNumber - today.DayNumber;
     }
 }

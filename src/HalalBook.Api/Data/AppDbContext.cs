@@ -14,6 +14,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Follow> Follows => Set<Follow>();
     public DbSet<Block> Blocks => Set<Block>();
     public DbSet<MutedUser> MutedUsers => Set<MutedUser>();
+    public DbSet<PollOption> PollOptions => Set<PollOption>();
+    public DbSet<PollVote> PollVotes => Set<PollVote>();
     public DbSet<Post> Posts => Set<Post>();
     public DbSet<PostMedia> PostMedia => Set<PostMedia>();
     public DbSet<Hashtag> Hashtags => Set<Hashtag>();
@@ -47,6 +49,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     protected override void OnModelCreating(ModelBuilder b)
     {
         b.Entity<MutedUser>().HasKey(x => new { x.OwnerId, x.MutedId });
+        b.Entity<PollOption>(e => { e.HasIndex(x => x.PostId); e.Property(x => x.Text).HasMaxLength(120); });
+        b.Entity<PollVote>(e => { e.HasKey(x => new { x.PostId, x.UserId }); e.HasIndex(x => x.OptionId); });
         b.Entity<Khatm>(e =>
         {
             e.Property(x => x.Title).HasMaxLength(120);

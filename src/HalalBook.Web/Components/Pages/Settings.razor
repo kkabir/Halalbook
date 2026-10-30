@@ -104,6 +104,18 @@
         </div>
     </div>
 
+    <div class="card stack mt">
+        <div class="card-title">🎂 @T("Birthday")</div>
+        <div class="row wrap" style="gap:.6rem;align-items:center">
+            <input class="input" type="date" style="width:auto" value="@Session.User?.Birthday?.ToString("yyyy-MM-dd")" @onchange="SetBirthday" />
+            <span class="subtle">@T("Friends see the day and month, never the year.")</span>
+        </div>
+        <label class="row spread privacy-row" style="cursor:pointer">
+            <div class="grow"><b>@T("Show my birthday to friends")</b><div class="subtle">@T("They'll be reminded on the day and can send you a wish.")</div></div>
+            <input type="checkbox" role="switch" class="switch" checked="@(Session.User?.ShowBirthday != false)" @onchange="ToggleShowBirthday" />
+        </label>
+    </div>
+
     <MuteBlockSettings />
 
     <div class="card stack mt">
@@ -286,6 +298,19 @@
             "dnd" => Notify with { DoNotDisturb = on }, _ => Notify with { VipsBreakThrough = on },
         };
         try { await Session.UpdateUserAsync(await Api.PutAsync<UserDto>("api/users/me/notifications", n)); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task SetBirthday(ChangeEventArgs e)
+    {
+        DateOnly? b = DateOnly.TryParse(e.Value?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
+        try { await Session.UpdateUserAsync(await Api.PutAsync<UserDto>("api/users/me/birthday", new BirthdaySettingsRequest(b, Session.User?.ShowBirthday != false))); Toasts.Show(T("Birthday saved")); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task ToggleShowBirthday(ChangeEventArgs e)
+    {
+        try { await Session.UpdateUserAsync(await Api.PutAsync<UserDto>("api/users/me/birthday", new BirthdaySettingsRequest(Session.User?.Birthday, e.Value is true))); }
         catch (Exception ex) { Toasts.Error(ex); }
     }
 

@@ -55,7 +55,10 @@ public record UserDto(
     double? Latitude, double? Longitude, string PrayerMethod, string AsrSchool, bool EmailConfirmed = false, bool TwoFactorEnabled = false, bool ShowOnlineStatus = true,
     ProfilePostPermission WhoCanPost = ProfilePostPermission.Friends, string? AcceptedTermsVersion = null,
     PrivacySettingsDto? Privacy = null, string Language = "en", bool AutoTranslate = true, bool FaithFeatures = true,
-    NotificationSettingsDto? Notifications = null);
+    NotificationSettingsDto? Notifications = null, DateOnly? Birthday = null, bool ShowBirthday = true);
+/// <summary>Friends see the day and month only, never the year.</summary>
+public record BirthdaySettingsRequest(DateOnly? Birthday, bool ShowBirthday);
+public record BirthdayDto(UserSummaryDto User, int Month, int Day, int DaysAway);
 /// <summary>
 /// How phone notifications behave. Vips are the Family and Best friends lists: they always get through, and only they can send urgent messages.
 /// </summary>
@@ -84,7 +87,11 @@ public record CreatePostRequest(
     Guid? GroupId = null, Guid? PageId = null, Guid? SharedPostId = null, PostKind Kind = PostKind.Standard,
     string? Feeling = null, string? Location = null, Guid? TargetUserId = null,
     List<Guid>? AudienceUserIds = null, List<Guid>? GroupIds = null, bool AlsoOnProfile = false, Guid? FriendListId = null,
-    string? LifeEvent = null, DateOnly? LifeEventDate = null, bool TranslateForUmmah = false);
+    string? LifeEvent = null, DateOnly? LifeEventDate = null, bool TranslateForUmmah = false, List<string>? PollOptions = null);
+/// <summary>A poll on a post: the post text is the question.</summary>
+public record PollDto(List<PollOptionDto> Options, Guid? MyVote, int TotalVotes);
+public record PollOptionDto(Guid Id, string Text, int Votes);
+public record PollVoteRequest(Guid OptionId);
 
 public record UpdatePostRequest(string Content, Visibility Visibility, List<Guid>? AudienceUserIds = null);
 
@@ -95,7 +102,7 @@ public record PostDto(
     ModerationStatus Moderation, string? Feeling, string? Location,
     GroupSummaryDto? Group, PageSummaryDto? Page, PostDto? SharedPost, UserSummaryDto? TargetUser = null, List<UserSummaryDto>? Audience = null, string? FriendListName = null,
     string? LifeEvent = null, DateOnly? LifeEventDate = null, bool IsPinned = false,
-    string? OriginalLanguage = null, string? TranslatedContent = null, string? TranslatedTo = null, int ViewCount = 0)
+    string? OriginalLanguage = null, string? TranslatedContent = null, string? TranslatedTo = null, int ViewCount = 0, PollDto? Poll = null)
 {
     public int TotalReactions => Reactions.Values.Sum();
 }

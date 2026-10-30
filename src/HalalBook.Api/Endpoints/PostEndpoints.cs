@@ -87,6 +87,21 @@ public static class PostEndpoints
             return groups;
         }).WithTags("Posts").RequireAuthorization();
 
+        // Vote in a poll; voting for your current choice again takes the vote back.
+        app.MapPost("/api/posts/{id:guid}/poll/vote", async (Guid id, PollVoteRequest req, ClaimsPrincipal cp, AppDbContext db, PostService svc) =>
+        {
+            var me = cp.UserId();
+            var visible = await svc.VisibleToAsync(me);
+            if (!await visible.AnyAsync(p => p.Id == id)) return Results.NotFound();
+            if (!await db.PollOptions.AnyAsync(o => o.Id == req.OptionId && o.PostId == id)) return Results.BadRequest();
+            var vote = await db.PollVotes.FindAsync(id, me);
+            if (vote is null) db.PollVotes.Add(new PollVote { PostId = id, UserId = me, OptionId = req.OptionId });
+            else if (vote.OptionId == req.OptionId) db.PollVotes.Remove(vote);
+            else vote.OptionId = req.OptionId;
+            await db.SaveChangesAsync();
+            return Results.Ok((await svc.PollsAsync([id], me))[id]);
+        }).WithTags("Posts").RequireAuthorization();
+
         // Counts a watch once per person per video per day.
         app.MapPost("/api/posts/{id:guid}/view", async (Guid id, ClaimsPrincipal cp, AppDbContext db, IMemoryCache seen) =>
         {
@@ -209,6 +224,10 @@ public static class PostEndpoints
                 await svc.SyncHashtagsAsync(p);
             }
             var post = created[0];
+            var pollOptions = (req.PollOptions ?? []).Select(o => o.Trim()).Where(o => o.Length > 0).Distinct().Take(6).ToList();
+            if (pollOptions.Count >= 2)
+                foreach (var p in created)
+                    db.PollOptions.AddRange(pollOptions.Select((o, i) => new PollOption { PostId = p.Id, Text = o[..Math.Min(o.Length, 120)], SortOrder = i }));
             foreach (var p in created) p.Language = Languages.GuessFromScript(content) ?? p.Language;
             if (post.GroupId is null && audience.Count > 0)
                 db.PostAudiences.AddRange(audience.Select(uid => new PostAudience { PostId = post.Id, UserId = uid }));

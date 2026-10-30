@@ -127,6 +127,7 @@ public partial class PostService(AppDbContext db)
         var shares = await db.Posts.Where(p => p.SharedPostId != null && ids.Contains(p.SharedPostId.Value) && !p.IsDeleted)
             .GroupBy(p => p.SharedPostId).Select(g => new { PostId = g.Key, Count = g.Count() }).ToListAsync();
         var bookmarks = await db.Bookmarks.Where(b => b.UserId == me && ids.Contains(b.PostId)).Select(b => b.PostId).ToListAsync();
+        var polls = await PollsAsync(ids, me);
         var reader = await db.Users.Where(u => u.Id == me).Select(u => new { u.Language, u.AutoTranslate }).FirstOrDefaultAsync();
         string? Translated(Post p)
         {
@@ -161,7 +162,23 @@ public partial class PostService(AppDbContext db)
             mineCustom.Contains(p.Id) ? audiences.Where(a => a.PostId == p.Id).Select(a => a.User.ToSummary()).ToList() : null,
             p.FriendListId is Guid fl && p.AuthorId == me ? listNames.GetValueOrDefault(fl) : null,
             p.LifeEvent, p.LifeEventDate, pinned.Contains(p.Id),
-            p.Language, Translated(p), Translated(p) is null ? null : reader!.Language, p.ViewCount)).ToList();
+            p.Language, Translated(p), Translated(p) is null ? null : reader!.Language, p.ViewCount, polls.GetValueOrDefault(p.Id))).ToList();
+    }
+
+    /// <summary>Polls on these posts with their counts and this reader's vote.</summary>
+    public async Task<Dictionary<Guid, PollDto>> PollsAsync(List<Guid> postIds, Guid me)
+    {
+        var options = await db.PollOptions.Where(o => postIds.Contains(o.PostId)).OrderBy(o => o.SortOrder).ToListAsync();
+        if (options.Count == 0) return [];
+        var withPolls = options.Select(o => o.PostId).Distinct().ToList();
+        var counts = await db.PollVotes.Where(v => withPolls.Contains(v.PostId)).GroupBy(v => v.OptionId)
+            .Select(g => new { OptionId = g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.OptionId, x => x.Count);
+        var mine = await db.PollVotes.Where(v => v.UserId == me && withPolls.Contains(v.PostId)).ToDictionaryAsync(v => v.PostId, v => v.OptionId);
+        return options.GroupBy(o => o.PostId).ToDictionary(g => g.Key, g =>
+        {
+            var list = g.Select(o => new PollOptionDto(o.Id, o.Text, counts.GetValueOrDefault(o.Id))).ToList();
+            return new PollDto(list, mine.TryGetValue(g.Key, out var v) ? v : null, list.Sum(o => o.Votes));
+        });
     }
 
     /// <summary>Replaces a post's hashtags with the ones found in its text.</summary>

@@ -1134,3 +1134,23 @@ input.switch:focus-visible { outline: 2px solid var(--gold-500); outline-offset:
 .share-link { display: flex; gap: .4rem; margin-top: .7rem; }
 .share-link .input { flex: 1; min-width: 0; font-size: .82rem; color: var(--text-3); background: var(--bg); }
 .copied { background: var(--emerald-700, #0f5c45) !important; color: #fff !important; }
+
+/* ---------- Polls ---------- */
+.poll { padding: .2rem 1.1rem .8rem; display: flex; flex-direction: column; gap: .4rem; }
+.poll-option { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: .6rem; width: 100%; text-align: start;
+    padding: .65rem .85rem; border-radius: 12px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.poll-option:not(.voted):hover { border-color: var(--emerald-500); background: var(--emerald-50); }
+.poll-option i { position: absolute; inset: 0 auto 0 0; background: var(--emerald-50, #eef7f3); transition: width .4s ease-out; }
+.poll-option.mine { border-color: var(--emerald-600, #117257); }
+.poll-option.mine i { background: linear-gradient(90deg, var(--emerald-100), var(--gold-100)); }
+.poll-option span, .poll-option b { position: relative; }
+.poll-total { font-size: .8rem; }
+.poll-editor { display: flex; flex-direction: column; gap: .4rem; padding: .7rem; margin-bottom: .5rem; border: 1px dashed var(--gold-300); border-radius: 14px; background: var(--gold-100, #fbf3da); }
+
+/* ---------- Birthdays ---------- */
+.birthday-card { background: linear-gradient(135deg, #fff4e6, var(--surface)); border: 1px solid #f6c98e; }
+.birthday-today { display: flex; align-items: center; gap: .75rem; padding: .25rem 0; }
+.birthday-sent { color: var(--emerald-700, #0f5c45); font-weight: 700; font-size: .85rem; }
+.birthday-soon { margin-top: .4rem; font-size: .85rem; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .birthday-card { background: var(--surface); border-color: #6b4a1f; } }
+:root[data-theme="dark"] .birthday-card { background: var(--surface); border-color: #6b4a1f; }
