@@ -126,6 +126,31 @@ public static class PlatformEndpoints
 
         app.MapGet("/api/media/limits", (MediaOptions o) => o).WithTags("Media").RequireAuthorization();
 
+        // ---------- Phone and desktop notifications (Web Push) ----------
+        var push = app.MapGroup("/api/push").WithTags("Notifications");
+        push.MapGet("/key", (VapidKeys keys) => new { publicKey = keys.PublicKey });
+        push.MapPost("/subscribe", async (PushSubscribeRequest req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            if (!Uri.TryCreate(req.Endpoint, UriKind.Absolute, out var uri) || uri.Scheme != "https" || req.Endpoint.Length > 800)
+                return Results.BadRequest();
+            var sub = await db.PushSubscriptions.FirstOrDefaultAsync(s => s.Endpoint == req.Endpoint);
+            if (sub is null) db.PushSubscriptions.Add(sub = new PushSubscription { Endpoint = req.Endpoint });
+            (sub.UserId, sub.P256dh, sub.Auth) = (cp.UserId(), req.P256dh, req.Auth); // a shared device follows whoever signed in last
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        }).RequireAuthorization();
+        push.MapPost("/unsubscribe", async (PushSubscribeRequest req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var me = cp.UserId();
+            await db.PushSubscriptions.Where(s => s.Endpoint == req.Endpoint && s.UserId == me).ExecuteDeleteAsync();
+            return Results.NoContent();
+        }).RequireAuthorization();
+        push.MapPost("/test", (ClaimsPrincipal cp, PushQueue queue) =>
+        {
+            queue.Enqueue(cp.UserId(), "HalalBook", "Notifications are on. Assalamu alaikum! 🌙", "/notifications", "test", onlyWhenAway: false);
+            return Results.NoContent();
+        }).RequireAuthorization();
+
         // ---------- Islamic tools (public) ----------
         var islamic = app.MapGroup("/api/islamic").WithTags("Islamic");
 

@@ -877,3 +877,9 @@ select.lang-picker { width: auto; }
 .invite-joined { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: .75rem; }
 .invite-joined a { text-decoration: none; color: var(--text); }
 .join-card { max-width: 440px; margin: 1.5rem auto; padding: 2rem 1.5rem; }
+
+/* ---------- Install and notifications ---------- */
+.app-setup-prompt { position: relative; padding-right: 2.4rem; border: 1px solid var(--gold-300); background: linear-gradient(135deg, var(--surface), var(--gold-100, #fbf3da)); }
+.app-setup-close { position: absolute; top: .5rem; right: .6rem; border: 0; background: none; font-size: 1rem; color: var(--text-3); cursor: pointer; }
+[dir="rtl"] .app-setup-prompt { padding-right: 1rem; padding-left: 2.4rem; }
+[dir="rtl"] .app-setup-close { right: auto; left: .6rem; }

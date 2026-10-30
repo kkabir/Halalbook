@@ -6,6 +6,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
     public DbSet<Follow> Follows => Set<Follow>();
     public DbSet<Block> Blocks => Set<Block>();
     public DbSet<Post> Posts => Set<Post>();
@@ -40,6 +41,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<PushSubscription>(e =>
+        {
+            e.HasIndex(x => x.Endpoint).IsUnique();
+            e.Property(x => x.Endpoint).HasMaxLength(800);
+            e.Property(x => x.P256dh).HasMaxLength(200);
+            e.Property(x => x.Auth).HasMaxLength(100);
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
         b.Entity<User>(e =>
         {
             e.HasIndex(x => x.NormalizedUserName).IsUnique();

@@ -36,6 +36,48 @@ window.halalbook = {
 
     copy: (text) => navigator.clipboard?.writeText(text),
 
+    // ---------- Phone app and notifications ----------
+    // Push works in installed apps on iPhone (iOS 16.4+) and in normal browsers elsewhere.
+    pushStatus: async () => {
+        const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+        const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+        const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        let subscribed = false;
+        if (supported) {
+            const reg = await navigator.serviceWorker.getRegistration();
+            subscribed = !!(reg && await reg.pushManager.getSubscription());
+        }
+        return {
+            supported, subscribed, standalone, ios,
+            permission: supported ? Notification.permission : 'unsupported',
+            canInstall: !!window.__hbInstall,
+        };
+    },
+    pushEnable: async (publicKey) => {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return null;
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+        const key = Uint8Array.from(atob(publicKey.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(publicKey.length / 4) * 4, '=')), c => c.charCodeAt(0));
+        const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+        const json = sub.toJSON();
+        return { endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth };
+    },
+    pushDisable: async () => {
+        const reg = await navigator.serviceWorker.getRegistration();
+        const sub = reg && await reg.pushManager.getSubscription();
+        if (!sub) return null;
+        const json = sub.toJSON();
+        await sub.unsubscribe();
+        return { endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth };
+    },
+    install: async () => {
+        const prompt = window.__hbInstall;
+        if (!prompt) return false;
+        window.__hbInstall = null;
+        prompt.prompt();
+        return (await prompt.userChoice).outcome === 'accepted';
+    },
     // Draws a QR code for a link into an element (the library loads on first use).
     qr: async (el, text) => {
         if (!window.qrcode) await new Promise((ok, fail) => {
@@ -172,3 +214,7 @@ try { const t = localStorage.getItem('hb.theme'); if (t) document.documentElemen
     window.addEventListener('error', (e) => report(e.message, e.error?.stack));
     window.addEventListener('unhandledrejection', (e) => report(e.reason?.message || e.reason, e.reason?.stack));
 })();
+
+// Keep the browser's "Install app" offer for our own button, and register the service worker for notifications.
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__hbInstall = e; });
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => { });

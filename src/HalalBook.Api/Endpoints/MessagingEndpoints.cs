@@ -76,7 +76,7 @@ public static class MessagingEndpoints
         });
 
         chats.MapPost("/{id:guid}/messages", async (Guid id, SendMessageRequest req, ClaimsPrincipal cp, AppDbContext db,
-            IHubContext<RealtimeHub> hub, ContentModerator moderator, PostService svc) =>
+            IHubContext<RealtimeHub> hub, ContentModerator moderator, PostService svc, PushQueue push) =>
         {
             var me = cp.UserId();
             var conv = await db.Conversations.Include(c => c.Participants).FirstOrDefaultAsync(c => c.Id == id);
@@ -95,6 +95,9 @@ public static class MessagingEndpoints
             msg.Sender = (await db.Users.FindAsync(me))!;
             var dto = ToDto(msg);
             await hub.Clients.Users(conv.Participants.Select(p => p.UserId.ToString())).SendAsync("message", dto);
+            var preview = content.Length > 0 ? content : msg.MediaUrl is not null ? "📷 Photo" : "Shared a post";
+            foreach (var p in conv.Participants.Where(p => p.UserId != me))
+                push.Enqueue(p.UserId, msg.Sender.DisplayName, preview, $"/messages/{conv.Id}", $"chat-{conv.Id}");
             return Results.Ok(dto);
         });
 

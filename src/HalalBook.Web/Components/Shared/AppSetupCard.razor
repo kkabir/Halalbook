@@ -1,0 +1,140 @@
+@inject IJSRuntime JS
+@inject ApiClient Api
+@inject Toasts Toasts
+
+@* Install HalalBook as a phone app and turn on notifications for messages and calls.
+   On the home page it is a small, dismissible prompt; in Settings it is the full control. *@
+
+@if (status is not null && Visible)
+{
+    <div class="card app-setup @(InSettings ? "" : "app-setup-prompt")">
+        @if (InSettings) { <div class="card-title">📲 @T("App and notifications")</div> }
+        @if (status.Ios && !status.Standalone)
+        {
+            <div class="row" style="gap:.75rem;align-items:flex-start">
+                <img src="img/icon-192.png" alt="" width="48" height="48" style="border-radius:12px" />
+                <div class="grow">
+                    <b>@T("Add HalalBook to your Home Screen")</b>
+                    <div class="subtle">@T("Tap the Share button") <span aria-hidden="true">⎋</span> @T("in Safari, then") <b>@T("Add to Home Screen")</b>. @T("Open it from there to get message and call notifications.")</div>
+                </div>
+            </div>
+        }
+        else
+        {
+            @if (status.CanInstall)
+            {
+                <div class="row spread" style="gap:.75rem">
+                    <div class="grow"><b>@T("Install the HalalBook app")</b><div class="subtle">@T("Opens full screen from your home screen, like any other app.")</div></div>
+                    <button class="btn btn-gold btn-sm" @onclick="Install">@T("Install")</button>
+                </div>
+            }
+            @if (status.Supported)
+            {
+                <div class="row spread @(status.CanInstall ? "mt" : "")" style="gap:.75rem">
+                    <div class="grow">
+                        <b>🔔 @T(status.Subscribed ? "Notifications are on" : "Never miss a message or call")</b>
+                        <div class="subtle">@(status.Permission == "denied"
+                            ? T("Notifications are blocked for HalalBook. Allow them in your browser's site settings.")
+                            : T("Get notified on this device about messages, calls and friend requests, even when HalalBook is closed."))</div>
+                    </div>
+                    @if (status.Subscribed)
+                    {
+                        @if (InSettings)
+                        {
+                            <div class="row" style="gap:.4rem">
+                                <button class="btn btn-ghost btn-sm" @onclick="Test">@T("Test")</button>
+                                <button class="btn btn-ghost btn-sm" disabled="@busy" @onclick="Disable">@T("Turn off")</button>
+                            </div>
+                        }
+                    }
+                    else if (status.Permission != "denied")
+                    {
+                        <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="Enable">@(busy ? "…" : T("Turn on"))</button>
+                    }
+                </div>
+            }
+        }
+        @if (!InSettings) { <button class="app-setup-close" title="@T("Not now")" @onclick="Dismiss">✕</button> }
+    </div>
+}
+
+@code {
+    /// <summary>Full control in Settings; otherwise a prompt that hides itself once everything is set up.</summary>
+    [Parameter] public bool InSettings { get; set; }
+
+    private record PushStatus(bool Supported, bool Subscribed, bool Standalone, bool Ios, string Permission, bool CanInstall);
+    private PushStatus? status;
+    private bool busy, dismissed;
+
+    private bool Visible => InSettings || (!dismissed && (
+        (status!.Ios && !status.Standalone) || status.CanInstall || (status.Supported && !status.Subscribed && status.Permission == "default")));
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            if (!InSettings) dismissed = await JS.InvokeAsync<string?>("localStorage.getItem", "hb.appSetupDismissed") is not null;
+            // The browser's install offer can arrive a moment after the page loads.
+            await Task.Delay(InSettings ? 0 : 1500);
+            status = await JS.InvokeAsync<PushStatus>("halalbook.pushStatus");
+            StateHasChanged();
+        }
+        catch (JSException) { }
+    }
+
+    private async Task Enable()
+    {
+        busy = true;
+        try
+        {
+            var key = await Api.GetAsync<PushKey>("api/push/key");
+            var sub = await JS.InvokeAsync<PushSubscribeRequest?>("halalbook.pushEnable", key.PublicKey);
+            if (sub is null) Toasts.Show(T("Notifications weren't allowed. You can turn them on later in Settings."), true);
+            else
+            {
+                await Api.PostAsync("api/push/subscribe", sub);
+                Toasts.Show(T("Notifications are on 🔔"));
+            }
+            status = await JS.InvokeAsync<PushStatus>("halalbook.pushStatus");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task Disable()
+    {
+        busy = true;
+        try
+        {
+            if (await JS.InvokeAsync<PushSubscribeRequest?>("halalbook.pushDisable") is { } sub) await Api.PostAsync("api/push/unsubscribe", sub);
+            status = await JS.InvokeAsync<PushStatus>("halalbook.pushStatus");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task Test()
+    {
+        try { await Api.PostAsync("api/push/test", new { }); Toasts.Show(T("Sent. It should appear in a few seconds.")); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Install()
+    {
+        try
+        {
+            if (await JS.InvokeAsync<bool>("halalbook.install")) Toasts.Show(T("Installed. Find HalalBook on your home screen 🌙"));
+            status = await JS.InvokeAsync<PushStatus>("halalbook.pushStatus");
+        }
+        catch (JSException) { }
+    }
+
+    private async Task Dismiss()
+    {
+        dismissed = true;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", "hb.appSetupDismissed", "1"); } catch (JSException) { }
+    }
+
+    private record PushKey(string PublicKey);
+}

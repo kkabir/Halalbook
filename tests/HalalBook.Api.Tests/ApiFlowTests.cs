@@ -624,4 +624,20 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(1, after.JoinedCount);
         Assert.Equal("invitee", after.Joined[0].UserName);
     }
+
+    [Fact]
+    public async Task Push_KeyAndSubscriptions()
+    {
+        var anon = factory.CreateClient();
+        var key = await anon.GetFromJsonAsync<JsonElement>("/api/push/key", Json);
+        Assert.True(key.GetProperty("publicKey").GetString()!.Length > 40);
+
+        var (c, _) = await SignUpWithId("pushy");
+        var sub = new PushSubscribeRequest("https://push.example.test/abc123", "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM", "tBHItJI5svbpez7KI4CCXg");
+        Assert.Equal(HttpStatusCode.NoContent, (await c.PostAsJsonAsync("/api/push/subscribe", sub, Json)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await c.PostAsJsonAsync("/api/push/subscribe", sub, Json)).StatusCode); // idempotent
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync("/api/push/subscribe", sub with { Endpoint = "http://insecure.test/x" }, Json)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await c.PostAsJsonAsync("/api/push/unsubscribe", sub, Json)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anon.PostAsJsonAsync("/api/push/subscribe", sub, Json)).StatusCode);
+    }
 }

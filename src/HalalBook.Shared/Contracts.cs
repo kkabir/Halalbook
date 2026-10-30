@@ -26,6 +26,8 @@ public enum NotificationType { FriendRequest, FriendAccepted, Follow, Reaction, 
 public record RegisterRequest(string UserName, string Email, string Password, string DisplayName, string? AcceptedTermsVersion = null,
     string? InviteCode = null);
 /// <summary>A member's personal invite link and the people who joined through it.</summary>
+/// <summary>A browser's Web Push subscription (from PushSubscription.toJSON()).</summary>
+public record PushSubscribeRequest(string Endpoint, string P256dh, string Auth);
 public record InviteInfoDto(string Code, string Link, int JoinedCount, List<UserSummaryDto> Joined);
 public record AcceptTermsRequest(string Version);
 public record LoginRequest(string UserNameOrEmail, string Password);

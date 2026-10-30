@@ -15,7 +15,7 @@ public static class CallEndpoints
     {
         var calls = app.MapGroup("/api/calls").WithTags("Calls").RequireAuthorization();
 
-        calls.MapPost("/", async (StartCallRequest req, ClaimsPrincipal cp, AppDbContext db, IHubContext<RealtimeHub> hub, PostService svc) =>
+        calls.MapPost("/", async (StartCallRequest req, ClaimsPrincipal cp, AppDbContext db, IHubContext<RealtimeHub> hub, PostService svc, PushQueue push) =>
         {
             var me = cp.UserId();
             var conv = await db.Conversations.Include(c => c.Participants).ThenInclude(p => p.User).FirstOrDefaultAsync(c => c.Id == req.ConversationId);
@@ -34,7 +34,12 @@ public static class CallEndpoints
             call.Caller = (await db.Users.FindAsync(me))!;
             var others = conv.Participants.Where(p => p.UserId != me).Select(p => p.UserId.ToString()).ToList();
             foreach (var p in conv.Participants.Where(p => p.UserId != me))
+            {
                 await hub.Clients.User(p.UserId.ToString()).SendAsync("incomingCall", ToDto(call, conv, p.UserId));
+                // Ring locked phones too, even when the app is open in a background tab.
+                push.Enqueue(p.UserId, call.IsVideo ? "🎥 Incoming video call" : "📞 Incoming voice call",
+                    $"{call.Caller.DisplayName} is calling you", $"/call/{call.Id}", $"call-{call.Id}", onlyWhenAway: false);
+            }
             return Results.Ok(ToDto(call, conv, me));
         });
 

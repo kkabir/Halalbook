@@ -1,7 +1,9 @@
 {
   "name": "HalalBook",
   "short_name": "HalalBook",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#fbf8f1",
   "theme_color": "#0b3d2e",

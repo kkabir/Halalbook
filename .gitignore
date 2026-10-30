@@ -491,3 +491,6 @@ publish/
 
 # Local dev email pickup folder
 src/HalalBook.Api/emails/
+
+# Generated keys (Web Push)
+**/App_Data/vapid.json

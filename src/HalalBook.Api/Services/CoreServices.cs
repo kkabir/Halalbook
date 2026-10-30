@@ -46,7 +46,7 @@ public static class ClaimsExtensions
 }
 
 /// <summary>Stores a notification and pushes it to the recipient's live connections.</summary>
-public class Notifier(AppDbContext db, IHubContext<RealtimeHub> hub)
+public class Notifier(AppDbContext db, IHubContext<RealtimeHub> hub, PushQueue push)
 {
     public async Task SendAsync(Guid userId, Guid? actorId, NotificationType type, string message, string? link)
     {
@@ -57,6 +57,7 @@ public class Notifier(AppDbContext db, IHubContext<RealtimeHub> hub)
         var actor = actorId is null ? null : await db.Users.FindAsync(actorId);
         await hub.Clients.User(userId.ToString()).SendAsync("notification",
             new NotificationDto(n.Id, n.Type, actor?.ToSummary(), n.Message, n.Link, false, n.CreatedAt));
+        push.Enqueue(userId, "HalalBook", message, link ?? "/notifications", $"n-{type}");
     }
 }
 
