@@ -91,6 +91,8 @@ public class PostMedia
     public string Url { get; set; } = "";
     public MediaType Type { get; set; }
     public int SortOrder { get; set; }
+    /// <summary>AI-written description for screen readers.</summary>
+    public string? AltText { get; set; }
 }
 
 public class Hashtag

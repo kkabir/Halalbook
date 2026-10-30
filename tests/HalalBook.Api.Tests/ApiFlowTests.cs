@@ -311,4 +311,24 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var me = (await c.GetFromJsonAsync<UserDto>("/api/users/me", Json))!;
         Assert.Contains((await c.GetFromJsonAsync<PagedResult<PostDto>>($"/api/users/{me.UserName}/posts", Json))!.Items, p => p.Content.StartsWith("Halaqa"));
     }
+
+    [Fact]
+    public async Task AiFeatures_WorkWithoutAnApiKey()
+    {
+        var (c, _) = await SignUpWithId("yasmin");
+
+        var harsh = await (await c.PostAsJsonAsync("/api/ai/tone", new ToneRequest("you are so stupid"), Json)).Content.ReadFromJsonAsync<ToneResponse>(Json);
+        Assert.True(harsh!.IsHarsh);
+        var kind = await (await c.PostAsJsonAsync("/api/ai/tone", new ToneRequest("I see it differently, but thank you for sharing"), Json)).Content.ReadFromJsonAsync<ToneResponse>(Json);
+        Assert.False(kind!.IsHarsh);
+
+        var replies = await (await c.PostAsJsonAsync("/api/ai/replies", new SmartRepliesRequest("Alhamdulillah, we just had a baby girl!"), Json)).Content.ReadFromJsonAsync<SmartRepliesResponse>(Json);
+        Assert.Contains("Mabrook! 🎉", replies!.Replies);
+
+        var digest = await c.GetFromJsonAsync<AiTextResponse>("/api/ai/digest", Json);
+        Assert.False(string.IsNullOrWhiteSpace(digest!.Text));
+
+        var post = (await (await c.PostAsJsonAsync("/api/posts", new CreatePostRequest("The best of you are those who learn the Quran and teach it."), Json)).Content.ReadFromJsonAsync<PostDto>(Json))!;
+        Assert.Equal(HttpStatusCode.OK, (await c.GetAsync($"/api/ai/check-sources/{post.Id}")).StatusCode);
+    }
 }

@@ -886,3 +886,24 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030031353_MediaAltText'
+)
+BEGIN
+    ALTER TABLE [PostMedia] ADD [AltText] nvarchar(max) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030031353_MediaAltText'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261030031353_MediaAltText', N'10.0.14');
+END;
+
+COMMIT;
+GO
+

@@ -26,7 +26,28 @@ public partial class AiService(HttpClient http, AiOptions options, ContentModera
         "You are Noor, the assistant inside HalalBook, a social network for Muslims. " +
         "You are warm, respectful and concise, and you keep everything halal and family friendly.";
 
-    public async Task<string?> CompleteAsync(string system, IEnumerable<AiChatTurn> turns, int maxTokens = 800, CancellationToken ct = default)
+    public Task<string?> CompleteAsync(string system, IEnumerable<AiChatTurn> turns, int maxTokens = 800, CancellationToken ct = default) =>
+        CompleteRawAsync(system, new JsonArray(turns.Select(t => (JsonNode)new JsonObject
+        {
+            ["role"] = t.Role == "assistant" ? "assistant" : "user",
+            ["content"] = t.Content,
+        }).ToArray()), maxTokens, ct);
+
+    /// <summary>Sends a single user turn with an image (Claude vision) and a text prompt.</summary>
+    public Task<string?> CompleteWithImageAsync(string system, byte[] image, string mediaType, string prompt, int maxTokens = 400, CancellationToken ct = default) =>
+        CompleteRawAsync(system, new JsonArray(new JsonObject
+        {
+            ["role"] = "user",
+            ["content"] = new JsonArray(
+                new JsonObject
+                {
+                    ["type"] = "image",
+                    ["source"] = new JsonObject { ["type"] = "base64", ["media_type"] = mediaType, ["data"] = Convert.ToBase64String(image) },
+                },
+                new JsonObject { ["type"] = "text", ["text"] = prompt }),
+        }), maxTokens, ct);
+
+    private async Task<string?> CompleteRawAsync(string system, JsonArray messages, int maxTokens, CancellationToken ct)
     {
         if (!IsEnabled) return null;
         try
@@ -36,11 +57,7 @@ public partial class AiService(HttpClient http, AiOptions options, ContentModera
                 ["model"] = options.Model,
                 ["max_tokens"] = maxTokens,
                 ["system"] = system,
-                ["messages"] = new JsonArray(turns.Select(t => (JsonNode)new JsonObject
-                {
-                    ["role"] = t.Role == "assistant" ? "assistant" : "user",
-                    ["content"] = t.Content,
-                }).ToArray()),
+                ["messages"] = messages,
             };
             using var req = new HttpRequestMessage(HttpMethod.Post, options.Endpoint) { Content = JsonContent.Create(body) };
             req.Headers.Add("x-api-key", options.ApiKey);

@@ -27,9 +27,7 @@ shares, six reactions (Like, Love, MashaAllah, SubhanAllah, Ameen, Sad), threade
 #hashtags and trending, bookmarks, 24-hour stories, short-video reels, groups (public and private with approvals),
 pages, events with RSVPs, real-time 1:1 and group messaging with typing indicators, live notifications, global search.
 
-**AI (Claude)**: Noor assistant for questions about Islam and Muslim life; composer help (polish, shorter, warmer,
-add a dua, caption); hashtag suggestions; AI halal moderation layered on a fast word list; translation; summaries of long
-comment threads. Every AI feature falls back gracefully when no key is configured.
+**AI (Claude)**: Noor assistant for questions about Islam and Muslim life; composer help (polish, shorter, warmer, add a dua, caption); hashtag suggestions; translation; summaries of long comment threads. AI vision writes alt text for every photo and checks it against the halal guidelines (blocked, or sent to moderators when borderline). Smart one-tap replies for comments and chats. An adab assistant notices harsh comments and offers a kinder rewording. "Catch me up" summarizes what friends and groups shared recently. "Check sources" has Noor verify Quran and hadith claims with references. The feed learns your interests from the hashtags and people you engage with. Every AI feature has a sensible fallback when no API key is configured.
 
 **Deen tools**: prayer times (9 calculation methods, Hanafi or standard Asr, high-latitude fallback), monthly timetable,
 Qibla compass with live device heading, Hijri (Umm al-Qura) calendar with Islamic occasions and white days.

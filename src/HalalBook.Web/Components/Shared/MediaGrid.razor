@@ -21,7 +21,7 @@
                 }
                 else
                 {
-                    <img src="@m.Url" alt="" loading="lazy" />
+                    <img src="@m.Url" alt="@(m.AltText ?? "")" title="@m.AltText" loading="lazy" />
                 }
                 @if (i == 3 && Media.Count > 4)
                 {
@@ -50,7 +50,8 @@
             }
             else
             {
-                <img @key="m.Url" src="@m.Url" alt="" />
+                <img @key="m.Url" src="@m.Url" alt="@(m.AltText ?? "")" />
+                @if (m.AltText is { Length: > 0 } alt) { <div class="lb-alt">✨ @alt</div> }
             }
         </div>
     </div>

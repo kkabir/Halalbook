@@ -587,3 +587,11 @@ label.field { display: flex; flex-direction: column; gap: .35rem; font-weight: 6
 .audience-row small { color: var(--text-3); }
 .audience-row.compact { padding: .3rem .4rem; }
 .audience-friends { max-height: 260px; overflow-y: auto; margin-top: .4rem; }
+
+/* ---------- AI touches ---------- */
+.smart-replies { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
+.adab-nudge { border: 1px solid var(--gold-300); background: linear-gradient(135deg, var(--gold-100), var(--emerald-50)); border-radius: 14px; padding: .7rem .9rem; font-size: .9rem; }
+.adab-suggestion { margin-top: .4rem; font-style: italic; color: var(--emerald-600); }
+.catchup { border: 1px dashed var(--gold-300); background: linear-gradient(135deg, var(--surface), var(--gold-100)); margin-bottom: 1rem; }
+.alt-badge { position: absolute; left: 6px; bottom: 6px; background: rgba(0, 0, 0, .65); color: #fff; font-size: .65rem; font-weight: 800; padding: .15rem .4rem; border-radius: 6px; }
+.lb-alt { position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%); max-width: 80vw; color: #fff; background: rgba(0, 0, 0, .55); padding: .4rem .8rem; border-radius: 10px; font-size: .9rem; }

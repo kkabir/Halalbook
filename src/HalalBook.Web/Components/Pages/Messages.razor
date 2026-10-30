@@ -46,6 +46,13 @@
                     <div class="bubble @(mine ? "mine" : "")">@if (current.IsGroup && !mine) {<b style="font-size:.78rem;display:block">@m.Sender.DisplayName</b>}@if (m.MediaUrl is { } url) {<img src="@url" alt="" style="border-radius:12px;max-height:260px" />}<span>@m.Content</span><time>@Clock.Local(m.SentAt).ToString("h:mm tt")</time></div>
                 }
             </div>
+            @if (smart.Count > 0 && string.IsNullOrEmpty(text))
+            {
+                <div class="smart-replies" style="padding:.4rem .75rem 0">
+                    <span class="ai-tag">✨</span>
+                    @foreach (var r in smart) { <button class="chip" @onclick="() => text = r">@r</button> }
+                </div>
+            }
             <div class="chat-input">
                 <label class="icon-btn" title="Send a photo">🖼️<InputFile OnChange="SendPhoto" accept="image/*" style="display:none" /></label>
                 <input class="input" placeholder="Write a message…" @bind="text" @bind:event="oninput" @onkeydown="OnKey" style="border-radius:999px" />
@@ -61,6 +68,18 @@
     private List<MessageDto> messages = [];
     private ConversationDto? current;
     private string? text;
+    private List<string> smart = [];
+    private Guid? smartFor;
+
+    private async Task RefreshSmartRepliesAsync()
+    {
+        var last = messages.LastOrDefault();
+        if (last is null || last.Sender.Id == Session.User?.Id || string.IsNullOrWhiteSpace(last.Content)) { smart = []; return; }
+        if (smartFor == last.Id) return;
+        smartFor = last.Id;
+        try { smart = (await Api.PostAsync<SmartRepliesResponse>("api/ai/replies", new SmartRepliesRequest(last.Content, "message"))).Replies; }
+        catch (Exception) { smart = []; }
+    }
     private bool typing, scroll;
     private ElementReference body;
     private DateTime lastTypingSent;
@@ -85,6 +104,7 @@
             {
                 messages = await Api.GetAsync<List<MessageDto>>($"api/conversations/{current.Id}/messages");
                 scroll = true;
+                await RefreshSmartRepliesAsync();
                 await Realtime.RefreshCountsAsync();
             }
         }
@@ -102,6 +122,7 @@
         {
             if (messages.All(x => x.Id != m.Id)) messages.Add(m);
             typing = false; scroll = true;
+            await RefreshSmartRepliesAsync();
             if (m.Sender.Id != Session.User?.Id) { await Api.PostAsync($"api/conversations/{m.ConversationId}/read"); await Realtime.RefreshCountsAsync(); }
         }
         conversations = await Api.GetAsync<List<ConversationDto>>("api/conversations");

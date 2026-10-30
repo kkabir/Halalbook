@@ -30,7 +30,7 @@ public static class PostEndpoints
             return list.Count == 1 ? Results.Ok(list[0]) : Results.NotFound();
         });
 
-        posts.MapPost("/", async (CreatePostRequest req, ClaimsPrincipal cp, AppDbContext db, PostService svc, AiService ai, Notifier notifier, CancellationToken ct) =>
+        posts.MapPost("/", async (CreatePostRequest req, ClaimsPrincipal cp, AppDbContext db, PostService svc, AiService ai, Notifier notifier, IWebHostEnvironment env, CancellationToken ct) =>
         {
             var me = cp.UserId();
             var content = (req.Content ?? "").Trim();
@@ -68,6 +68,8 @@ public static class PostEndpoints
 
             var moderation = await ai.ModerateAsync(content, ct);
             if (!moderation.Allowed) return Results.Problem(string.Join(" ", moderation.Reasons), statusCode: 422, title: "Content not allowed");
+            if ((req.Media ?? []).Any(m => MediaNeedsReview(env, m.Url)))
+                moderation = moderation with { NeedsReview = true, Reasons = [.. moderation.Reasons, "A photo was flagged for review."] };
 
             Post NewPost(Guid? groupId) => new()
             {
@@ -79,7 +81,11 @@ public static class PostEndpoints
                 Feeling = req.Feeling, Location = req.Location,
                 Moderation = moderation.NeedsReview ? ModerationStatus.PendingReview : ModerationStatus.Approved,
                 ModerationNote = moderation.NeedsReview ? string.Join(" ", moderation.Reasons) : null,
-                Media = (req.Media ?? []).Take(10).Select((m, i) => new PostMedia { Url = m.Url, Type = m.Type, SortOrder = i }).ToList(),
+                Media = (req.Media ?? []).Take(10).Select((m, i) => new PostMedia
+                {
+                    Url = m.Url, Type = m.Type, SortOrder = i,
+                    AltText = m.AltText is { Length: > 0 } a ? a[..Math.Min(a.Length, 300)] : null,
+                }).ToList(),
             };
             var created = new List<Post>();
             if (onProfile) created.Add(NewPost(null));
@@ -348,6 +354,15 @@ public static class PostEndpoints
             var n = await db.Stories.Where(s => s.Id == id && s.AuthorId == cp.UserId()).ExecuteDeleteAsync();
             return n == 0 ? Results.NotFound() : Results.NoContent();
         });
+    }
+
+    /// <summary>True when AI vision marked this uploaded photo as borderline (a ".review" file sits next to it).</summary>
+    private static bool MediaNeedsReview(IWebHostEnvironment env, string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || !u.AbsolutePath.StartsWith("/uploads/")) return false;
+        var root = env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot");
+        var path = Path.GetFullPath(Path.Combine(root, u.AbsolutePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar)));
+        return path.StartsWith(Path.GetFullPath(root)) && File.Exists(path + ".review");
     }
 
     /// <summary>Comment photos must be images uploaded to HalalBook, not arbitrary links.</summary>

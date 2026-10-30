@@ -651,6 +651,9 @@ namespace HalalBook.Api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AltText")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid>("PostId")
                         .HasColumnType("uniqueidentifier");
 

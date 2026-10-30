@@ -7,6 +7,13 @@
 
 <div class="feed-column">
     <StoriesBar />
+    <div class="card catchup">
+        <div class="row spread">
+            <div><b>✨ Catch me up</b><div class="subtle">Noor summarizes what your friends and groups shared recently.</div></div>
+            <button class="btn btn-gold btn-sm" disabled="@digestBusy" @onclick="CatchUp">@(digestBusy ? "Reading…" : digest is null ? "Summarize" : "Refresh")</button>
+        </div>
+        @if (digest is not null) { <div class="ai-summary mt">@digest</div> }
+    </div>
     <Composer OnPosted="p => posts.Insert(0, p)" Placeholder="@($"What's on your heart, {FirstName}?")" />
 
     <div class="mt">
@@ -39,6 +46,17 @@
     private readonly List<PostDto> posts = [];
     private int page = 1;
     private bool loading = true, hasMore;
+
+    private string? digest;
+    private bool digestBusy;
+
+    private async Task CatchUp()
+    {
+        digestBusy = true;
+        try { digest = (await Api.GetAsync<AiTextResponse>("api/ai/digest")).Text; }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { digestBusy = false; }
+    }
 
     private string FirstName => Session.User?.DisplayName.Split(' ')[0] ?? "friend";
 

@@ -54,8 +54,8 @@ public record UpdateProfileRequest(
     double? Latitude, double? Longitude, string? PrayerMethod, string? AsrSchool, ProfilePostPermission? WhoCanPost = null);
 
 // ---------- Media ----------
-public record MediaDto(string Url, MediaType Type);
-public record UploadResult(string Url, MediaType Type);
+public record MediaDto(string Url, MediaType Type, string? AltText = null);
+public record UploadResult(string Url, MediaType Type, string? AltText = null, bool NeedsReview = false);
 
 // ---------- Posts ----------
 public record CreatePostRequest(
@@ -159,3 +159,9 @@ public record CreateLiveRequest(string Title, string? Description, LiveKind Kind
 public record LiveParticipantDto(string ConnectionId, UserSummaryDto User, bool IsHost, bool Sends);
 public record LiveChatDto(UserSummaryDto User, string Text, DateTime At);
 public record IceServerDto(string[] Urls, string? Username, string? Credential);
+
+// ---------- AI insights ----------
+public record SmartRepliesRequest(string Context, string Kind = "comment");
+public record SmartRepliesResponse(List<string> Replies, bool UsedAi);
+public record ToneRequest(string Text);
+public record ToneResponse(bool IsHarsh, string? Suggestion, string? Note, bool UsedAi);

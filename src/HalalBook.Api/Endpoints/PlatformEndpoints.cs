@@ -59,7 +59,7 @@ public static class PlatformEndpoints
 
         // ---------- Media upload ----------
         // purpose: post (default), reel, story, comment, message, profile or cover. Each has its own size and length limits.
-        app.MapPost("/api/media", async (IFormFile file, string? purpose, HttpRequest request, IWebHostEnvironment env, IConfiguration config, MediaPolicy policy) =>
+        app.MapPost("/api/media", async (IFormFile file, string? purpose, HttpRequest request, IWebHostEnvironment env, IConfiguration config, MediaPolicy policy, AiService ai, CancellationToken ct) =>
         {
             var ext = Path.GetExtension(file.FileName);
             if (!AllowedMedia.TryGetValue(ext, out var type)) return Results.Problem("Only images (jpg, png, gif, webp) and videos (mp4, webm, mov) are supported.", statusCode: 415);
@@ -71,11 +71,30 @@ public static class PlatformEndpoints
             var root = Path.Combine(env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot"), "uploads", folder);
             Directory.CreateDirectory(root);
             var name = $"{Guid.NewGuid():N}{ext.ToLowerInvariant()}";
-            await using (var stream = File.Create(Path.Combine(root, name)))
-                await file.CopyToAsync(stream);
+            var path = Path.Combine(root, name);
+            await using (var stream = File.Create(path))
+                await file.CopyToAsync(stream, ct);
+
+            // AI vision: alt text for screen readers and a modesty check. Blocked photos are deleted;
+            // borderline ones get a ".review" marker so posts using them wait for a moderator.
+            string? alt = null;
+            var needsReview = false;
+            if (type == MediaType.Image && ai.IsEnabled)
+            {
+                var mediaType = ext.ToLowerInvariant() switch { ".png" => "image/png", ".gif" => "image/gif", ".webp" => "image/webp", _ => "image/jpeg" };
+                var insight = await ai.AnalyzeImageAsync(await File.ReadAllBytesAsync(path, ct), mediaType, ct);
+                if (!insight.Allowed)
+                {
+                    File.Delete(path);
+                    return Results.Problem("This photo doesn't meet HalalBook's community guidelines." +
+                        (insight.Reasons.Count > 0 ? " " + string.Join(" ", insight.Reasons) : ""), statusCode: 422, title: "Photo not allowed");
+                }
+                alt = insight.AltText;
+                if (insight.NeedsReview) { needsReview = true; await File.WriteAllTextAsync(path + ".review", string.Join(" ", insight.Reasons), ct); }
+            }
 
             var baseUrl = config["PublicBaseUrl"]?.TrimEnd('/') ?? $"{request.Scheme}://{request.Host}";
-            return Results.Ok(new UploadResult($"{baseUrl}/uploads/{folder.Replace('\\', '/')}/{name}", type));
+            return Results.Ok(new UploadResult($"{baseUrl}/uploads/{folder.Replace('\\', '/')}/{name}", type, alt, needsReview));
         }).WithTags("Media").RequireAuthorization().DisableAntiforgery().RequireRateLimiting("upload");
 
         app.MapGet("/api/media/limits", (MediaOptions o) => o).WithTags("Media").RequireAuthorization();
@@ -112,6 +131,27 @@ public static class PlatformEndpoints
         ai.MapPost("/moderate", (AiComposeRequest req, AiService svc, CancellationToken ct) => svc.ModerateAsync(req.Text, ct));
         ai.MapPost("/translate", (AiTranslateRequest req, AiService svc, CancellationToken ct) => svc.TranslateAsync(req, ct));
         ai.MapPost("/ask", (AiAskRequest req, AiService svc, CancellationToken ct) => svc.AskAsync(req, ct));
+        ai.MapPost("/replies", (SmartRepliesRequest req, AiService svc, CancellationToken ct) => svc.SmartRepliesAsync(req, ct));
+        ai.MapPost("/tone", (ToneRequest req, AiService svc, CancellationToken ct) => svc.ToneCheckAsync(req.Text, ct));
+
+        // "Catch me up": the most relevant posts from the last two days, summarized.
+        ai.MapGet("/digest", async (ClaimsPrincipal cp, AppDbContext db, PostService posts, AiService svc, CancellationToken ct) =>
+        {
+            var me = cp.UserId();
+            var feed = await posts.FeedAsync(me, 1, 30, cp.IsModerator());
+            var since = DateTime.UtcNow.AddDays(-2);
+            var recent = feed.Items.Where(p => p.CreatedAt > since && p.Author.Id != me && !string.IsNullOrWhiteSpace(p.Content))
+                .Select(p => (p.Group is { } g ? $"{p.Author.DisplayName} in {g.Name}" : p.Author.DisplayName, p.Content)).ToList();
+            var user = await db.Users.FindAsync([me], ct);
+            return await svc.DigestAsync(user?.DisplayName.Split(' ')[0] ?? "friend", recent, ct);
+        });
+
+        ai.MapGet("/check-sources/{postId:guid}", async (Guid postId, ClaimsPrincipal cp, PostService posts, AiService svc, CancellationToken ct) =>
+        {
+            var visible = await posts.VisibleToAsync(cp.UserId(), cp.IsModerator());
+            var content = await visible.Where(p => p.Id == postId).Select(p => p.Content).FirstOrDefaultAsync(ct);
+            return content is null ? Results.NotFound() : Results.Ok(await svc.CheckSourcesAsync(content, ct));
+        });
 
         // ---------- Reports & moderation ----------
         app.MapPost("/api/reports", async (ReportRequest req, ClaimsPrincipal cp, AppDbContext db) =>

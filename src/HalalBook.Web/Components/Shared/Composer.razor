@@ -17,7 +17,8 @@
             @foreach (var m in media)
             {
                 <div class="thumb">
-                    @if (m.Type == MediaType.Video) { <video src="@(m.Url)#t=0.1" muted playsinline controls preload="metadata"></video> } else { <img src="@m.Url" alt="" /> }
+                    @if (m.Type == MediaType.Video) { <video src="@(m.Url)#t=0.1" muted playsinline controls preload="metadata"></video> } else { <img src="@m.Url" alt="@(m.AltText ?? "")" /> }
+                    @if (m.AltText is { Length: > 0 } alt) { <span class="alt-badge" title="@alt">ALT ✨</span> }
                     <button class="icon-btn x" @onclick="() => media.Remove(m)" aria-label="Remove">✕</button>
                 </div>
             }
@@ -153,7 +154,9 @@
         {
             var uploaded = await Guard.UploadAsync(files, ReelMode ? "reel" : "post", fileInput?.Element,
                 (i, n) => { uploadIndex = i; uploadTotal = n; InvokeAsync(StateHasChanged); });
-            media.AddRange(uploaded.Select(u => new MediaDto(u.Url, u.Type)));
+            media.AddRange(uploaded.Select(u => new MediaDto(u.Url, u.Type, u.AltText)));
+            if (uploaded.Any(u => u.NeedsReview))
+                Toasts.Show("A photo will be checked by a moderator before others can see your post.");
         }
         finally { uploading = false; }
     }

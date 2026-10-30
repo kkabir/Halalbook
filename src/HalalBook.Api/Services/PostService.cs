@@ -58,6 +58,22 @@ public partial class PostService(AppDbContext db)
             .OrderByDescending(p => p.CreatedAt).Take(500).ToListAsync();
 
         var now = DateTime.UtcNow;
+        // Interests learned from what you engaged with in the last 30 days: hashtags you reacted to, commented on or saved,
+        // and the people whose posts you interact with most.
+        var month = DateTime.UtcNow.AddDays(-30);
+        var engagedPostIds = await db.Reactions.Where(r => r.UserId == me && r.PostId != null && r.CreatedAt > month).Select(r => r.PostId!.Value)
+            .Concat(db.Comments.Where(c => c.AuthorId == me && c.CreatedAt > month).Select(c => c.PostId))
+            .Concat(db.Bookmarks.Where(b => b.UserId == me && b.CreatedAt > month).Select(b => b.PostId))
+            .Take(500).ToListAsync();
+        var interestTags = await db.PostHashtags.Where(ph => engagedPostIds.Contains(ph.PostId))
+            .GroupBy(ph => ph.HashtagId).Select(g => new { g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count).Take(15).ToDictionaryAsync(x => x.Key, x => x.Count);
+        var authorAffinity = await db.Posts.Where(p => engagedPostIds.Contains(p.Id) && p.AuthorId != me)
+            .GroupBy(p => p.AuthorId).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count);
+        var candidateIds = candidates.Select(c => c.Id).ToList();
+        var candidateTags = (await db.PostHashtags.Where(ph => candidateIds.Contains(ph.PostId)).Select(ph => new { ph.PostId, ph.HashtagId }).ToListAsync())
+            .ToLookup(x => x.PostId, x => x.HashtagId);
+
         var ranked = candidates.Select(c =>
         {
             double affinity = c.AuthorId == me ? 3
@@ -67,6 +83,9 @@ public partial class PostService(AppDbContext db)
                 : c.GroupId is Guid gid && groups.Contains(gid) ? 2.5
                 : 0.5;
             double engagement = Math.Log(1 + c.Reactions + 2 * c.Comments);
+            double interest = candidateTags[c.Id].Sum(t => interestTags.TryGetValue(t, out var n) ? Math.Log(1 + n) : 0);
+            affinity += authorAffinity.TryGetValue(c.AuthorId, out var a) ? Math.Min(2, Math.Log(1 + a)) : 0;
+            engagement += Math.Min(3, interest);
             double hours = (now - c.CreatedAt).TotalHours;
             double freshness = 1 / Math.Pow(hours + 2, 1.2);
             return (c.Id, Score: (affinity + engagement) * freshness);
@@ -114,7 +133,7 @@ public partial class PostService(AppDbContext db)
 
         return posts.Select(p => new PostDto(
             p.Id, p.Author.ToSummary(), p.Content, p.Visibility, p.Kind, p.CreatedAt, p.EditedAt,
-            p.Media.OrderBy(m => m.SortOrder).Select(m => new MediaDto(m.Url, m.Type)).ToList(),
+            p.Media.OrderBy(m => m.SortOrder).Select(m => new MediaDto(m.Url, m.Type, m.AltText)).ToList(),
             p.Hashtags.Select(h => h.Hashtag.Tag).ToList(),
             comments.FirstOrDefault(c => c.PostId == p.Id)?.Count ?? 0,
             shares.FirstOrDefault(s => s.PostId == p.Id)?.Count ?? 0,

@@ -44,6 +44,7 @@
                     <div class="menu-pop" @onclick="() => menuOpen = false">
                         <button @onclick="ToggleBookmark">@(Post.IsBookmarked ? "🔖 Remove from saved" : "🔖 Save post")</button>
                         <button @onclick="Translate">🌐 Translate to English (AI)</button>
+                        <button @onclick="CheckSources">📖 Check Quran and hadith sources (AI)</button>
                         <button @onclick="CopyLink">🔗 Copy link</button>
                         @if (IsMine)
                         {
@@ -80,6 +81,12 @@
         {
             <div class="post-body @(Post.Content.Length < 90 && Post.Media.Count == 0 && Post.SharedPost is null ? "big" : "")">@RichText(Post.Content)</div>
         }
+
+        @if (sources is not null)
+        {
+            <div style="padding:0 1.1rem .5rem"><div class="ai-summary"><span class="ai-tag">📖 Noor's source check</span><br />@sources</div></div>
+        }
+        @if (checkingSources) { <div class="subtle" style="padding:0 1.1rem .5rem">Noor is checking the sources…</div> }
 
         @if (translation is not null)
         {
@@ -134,7 +141,7 @@
 
         @if (showComments)
         {
-            <CommentsSection PostId="Post.Id" CommentCount="Post.CommentCount" OnCountChanged="c => Post = Post with { CommentCount = c }" />
+            <CommentsSection PostId="Post.Id" CommentCount="Post.CommentCount" PostContent="@Post.Content" OnCountChanged="c => Post = Post with { CommentCount = c }" />
         }
     </article>
 }
@@ -285,6 +292,17 @@
             translation = res.UsedAi ? res.Text : "AI translation isn't configured on the server yet.";
         }
         catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private string? sources;
+    private bool checkingSources;
+
+    private async Task CheckSources()
+    {
+        checkingSources = true;
+        try { sources = (await Api.GetAsync<AiTextResponse>($"api/ai/check-sources/{Post.Id}")).Text; }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { checkingSources = false; }
     }
 
     private void StartEdit() { editText = Post.Content; editing = true; }

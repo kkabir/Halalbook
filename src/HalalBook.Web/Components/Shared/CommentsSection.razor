@@ -28,6 +28,25 @@
         }
     }
 
+    @if (tone is { IsHarsh: true })
+    {
+        <div class="adab-nudge">
+            <div><b>🌿 A gentle reminder</b> @(tone.Note ?? "This might come across as hurtful.")</div>
+            @if (tone.Suggestion is { Length: > 0 } better) { <div class="adab-suggestion">“@better”</div> }
+            <div class="row" style="gap:.4rem;margin-top:.4rem">
+                @if (tone.Suggestion is { Length: > 0 } s2) { <button class="btn btn-primary btn-sm" @onclick="() => UseSuggestion(s2)">Use kinder version</button> }
+                <button class="btn btn-ghost btn-sm" @onclick="() => tone = null">Edit</button>
+                <button class="btn btn-outline btn-sm" @onclick="() => SendCore(skipToneCheck: true)">Send anyway</button>
+            </div>
+        </div>
+    }
+    @if (smart.Count > 0 && string.IsNullOrEmpty(text))
+    {
+        <div class="smart-replies">
+            <span class="ai-tag">✨</span>
+            @foreach (var r in smart) { <button class="chip" @onclick="() => text = r">@r</button> }
+        </div>
+    }
     <div class="comment-input">
         <Avatar User="Me" Size="32" />
         <input class="input" placeholder="@(replyTo is null ? "Write a comment…" : $"Reply to {replyTo.Author.DisplayName}…")" @bind="text" @bind:event="oninput" @onkeydown="OnKey" />
@@ -46,6 +65,11 @@
     [Parameter] public Guid PostId { get; set; }
     [Parameter] public int CommentCount { get; set; }
     [Parameter] public EventCallback<int> OnCountChanged { get; set; }
+    /// <summary>The post's text, used to suggest smart replies.</summary>
+    [Parameter] public string? PostContent { get; set; }
+
+    private List<string> smart = [];
+    private ToneResponse? tone;
 
     private List<CommentDto>? comments;
     private string? text, summary;
@@ -59,6 +83,10 @@
     {
         try { comments = await Api.GetAsync<List<CommentDto>>($"api/posts/{PostId}/comments"); }
         catch (Exception ex) { comments = []; Toasts.Error(ex); }
+        if (!string.IsNullOrWhiteSpace(PostContent))
+        {
+            try { smart = (await Api.PostAsync<SmartRepliesResponse>("api/ai/replies", new SmartRepliesRequest(PostContent))).Replies; } catch (Exception) { }
+        }
     }
 
     private RenderFragment CommentView(CommentDto c, bool topLevel) => __builder =>
@@ -90,8 +118,23 @@
         if (e.Key == "Enter" && !e.ShiftKey) await Send();
     }
 
-    private async Task Send()
+    private Task Send() => SendCore(skipToneCheck: false);
+
+    private void UseSuggestion(string s) { text = s; tone = null; }
+
+    private async Task SendCore(bool skipToneCheck)
     {
+        // The adab assistant reviews the wording first; the person can always send anyway.
+        if (!skipToneCheck && !string.IsNullOrWhiteSpace(text))
+        {
+            try
+            {
+                var check = await Api.PostAsync<ToneResponse>("api/ai/tone", new ToneRequest(text));
+                if (check.IsHarsh) { tone = check; return; }
+            }
+            catch (Exception) { }
+        }
+        tone = null;
         if ((string.IsNullOrWhiteSpace(text) && photo is null) || sending) return;
         sending = true;
         try
