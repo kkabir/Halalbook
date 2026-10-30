@@ -936,3 +936,112 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030040501_FeedbackAndErrorLog'
+)
+BEGIN
+    CREATE TABLE [ErrorLogs] (
+        [Id] uniqueidentifier NOT NULL,
+        [Fingerprint] nvarchar(40) NOT NULL,
+        [Source] nvarchar(20) NOT NULL,
+        [Level] nvarchar(20) NOT NULL,
+        [Message] nvarchar(max) NOT NULL,
+        [ExceptionType] nvarchar(max) NULL,
+        [StackTrace] nvarchar(max) NULL,
+        [Path] nvarchar(max) NULL,
+        [Method] nvarchar(10) NULL,
+        [StatusCode] int NULL,
+        [UserId] uniqueidentifier NULL,
+        [TraceId] nvarchar(100) NULL,
+        [UserAgent] nvarchar(max) NULL,
+        [Count] int NOT NULL,
+        [FirstSeen] datetime2 NOT NULL,
+        [LastSeen] datetime2 NOT NULL,
+        [Status] int NOT NULL,
+        [Note] nvarchar(max) NULL,
+        [ResolvedById] uniqueidentifier NULL,
+        CONSTRAINT [PK_ErrorLogs] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030040501_FeedbackAndErrorLog'
+)
+BEGIN
+    CREATE TABLE [Feedback] (
+        [Id] uniqueidentifier NOT NULL,
+        [UserId] uniqueidentifier NULL,
+        [Name] nvarchar(max) NULL,
+        [Email] nvarchar(max) NULL,
+        [Category] int NOT NULL,
+        [Status] int NOT NULL,
+        [Subject] nvarchar(200) NOT NULL,
+        [Message] nvarchar(max) NOT NULL,
+        [Page] nvarchar(max) NULL,
+        [ScreenshotUrl] nvarchar(max) NULL,
+        [Reply] nvarchar(max) NULL,
+        [AdminNote] nvarchar(max) NULL,
+        [HandledById] uniqueidentifier NULL,
+        [CreatedAt] datetime2 NOT NULL,
+        [UpdatedAt] datetime2 NOT NULL,
+        CONSTRAINT [PK_Feedback] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_Feedback_Users_HandledById] FOREIGN KEY ([HandledById]) REFERENCES [Users] ([Id]) ON DELETE NO ACTION,
+        CONSTRAINT [FK_Feedback_Users_UserId] FOREIGN KEY ([UserId]) REFERENCES [Users] ([Id]) ON DELETE NO ACTION
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030040501_FeedbackAndErrorLog'
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_ErrorLogs_Fingerprint] ON [ErrorLogs] ([Fingerprint]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030040501_FeedbackAndErrorLog'
+)
+BEGIN
+    CREATE INDEX [IX_ErrorLogs_Status_LastSeen] ON [ErrorLogs] ([Status], [LastSeen]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030040501_FeedbackAndErrorLog'
+)
+BEGIN
+    CREATE INDEX [IX_Feedback_HandledById] ON [Feedback] ([HandledById]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030040501_FeedbackAndErrorLog'
+)
+BEGIN
+    CREATE INDEX [IX_Feedback_Status_CreatedAt] ON [Feedback] ([Status], [CreatedAt]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030040501_FeedbackAndErrorLog'
+)
+BEGIN
+    CREATE INDEX [IX_Feedback_UserId] ON [Feedback] ([UserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030040501_FeedbackAndErrorLog'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261030040501_FeedbackAndErrorLog', N'10.0.14');
+END;
+
+COMMIT;
+GO
+

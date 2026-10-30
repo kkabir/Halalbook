@@ -48,6 +48,11 @@ var mediaOptions = config.GetSection("Media").Get<MediaOptions>() ?? new MediaOp
 builder.Services.AddSingleton(mediaOptions);
 builder.Services.AddSingleton<MediaPolicy>();
 builder.Services.AddScoped<MediaScreening>();
+// Error log: unhandled exceptions and Error-level logs are saved to the database for the admin console.
+builder.Services.AddSingleton<ErrorSink>();
+builder.Services.AddHostedService<ErrorLogWriter>();
+builder.Services.AddExceptionHandler<DbExceptionHandler>();
+builder.Logging.Services.AddSingleton<ILoggerProvider, DbLoggerProvider>();
 builder.Services.AddSingleton<HalalBook.Api.Hubs.LiveRoomTracker>();
 builder.Services.AddSingleton(config.GetSection("Live").Get<LiveOptions>() ?? new LiveOptions());
 builder.Services.AddScoped<Mailer>();
@@ -86,7 +91,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("moderator", p => p.RequireRole(nameof(UserRole.Moderator), nameof(UserRole.Admin)));
+    .AddPolicy("moderator", p => p.RequireRole(nameof(UserRole.Moderator), nameof(UserRole.Admin)))
+    .AddPolicy("admin", p => p.RequireRole(nameof(UserRole.Admin)));
 builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, NameIdentifierUserIdProvider>();
 
 // ---------- CORS (halalbook.app + local dev) ----------
@@ -162,6 +168,7 @@ app.MapMessagingEndpoints();
 app.MapPlatformEndpoints();
 app.MapPresenceEndpoints();
 app.MapLiveEndpoints();
+app.MapAdminEndpoints();
 app.MapHub<RealtimeHub>("/hubs/realtime");
 app.MapHub<LiveHub>("/hubs/live");
 

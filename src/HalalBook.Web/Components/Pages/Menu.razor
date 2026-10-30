@@ -19,6 +19,8 @@
 
 <div class="card mt stack" style="gap:.25rem">
     <a class="menu-link" href="/settings">⚙️ Settings & privacy</a>
+    <a class="menu-link" href="/feedback">💬 Help & feedback</a>
+    @if (Session.User?.Role == UserRole.Admin) { <a class="menu-link" href="/admin">🧭 Admin console</a> }
     <a class="menu-link" href="/terms">📜 Community Agreement</a>
     <button class="menu-link" @onclick="Session.SignOutAsync">🚪 Sign out</button>
 </div>

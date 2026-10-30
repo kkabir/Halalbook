@@ -129,6 +129,14 @@ public class EmailTemplates(EmailOptions options)
             P("It expires in 15 minutes. If this wasn't you, change your password right away.")),
         $"Your HalalBook sign-in code is {code}. It expires in 15 minutes.");
 
+    public EmailMessage FeedbackReply(string to, string name, string subject, string reply) => new(to, name,
+        $"Re: {subject}",
+        Layout("We replied to your message", $"Assalamu alaikum, {name}",
+            P($"Thank you for contacting HalalBook about <b>{WebUtility.HtmlEncode(subject)}</b>. Here is our reply:") +
+            $"<div style=\"margin:16px 0;padding:14px 16px;border-left:4px solid #c9a227;background:#f8f0d4;border-radius:8px;white-space:pre-wrap\">{WebUtility.HtmlEncode(reply)}</div>" +
+            Button("View your requests", "/feedback")),
+        $"Re: {subject}\n\n{reply}\n\nView your requests: {options.WebsiteUrl}/feedback");
+
     public EmailMessage PasswordChanged(string to, string name) => new(to, name,
         "Your HalalBook password was changed",
         Layout("Password changed", "Your password was changed",

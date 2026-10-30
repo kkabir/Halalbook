@@ -1,0 +1,45 @@
+@page "/feedback"
+@inject ApiClient Api
+@inject ClientClock Clock
+
+<PageTitle>Help & feedback · HalalBook</PageTitle>
+
+<div class="feed-column">
+    <div class="page-hero"><h1>Help & feedback</h1><p>Questions, ideas, problems or appeals. We read every message.</p></div>
+    <div class="card"><FeedbackForm OnSent="Load" /></div>
+
+    <h2 class="mt">Your requests</h2>
+    @if (mine is null) { <div class="spinner"></div> }
+    else if (mine.Count == 0) { <p class="muted">You haven't sent anything yet.</p> }
+    @foreach (var f in mine ?? [])
+    {
+        <div class="card">
+            <div class="row spread wrap">
+                <b>@f.Subject</b>
+                <span class="status-pill s-@f.Status.ToString().ToLowerInvariant()">@StatusText(f.Status)</span>
+            </div>
+            <div class="subtle">@f.Category · @Clock.Local(f.CreatedAt).ToString("MMM d, yyyy h:mm tt")</div>
+            <p style="white-space:pre-wrap;margin-top:.5rem">@f.Message</p>
+            @if (f.Reply is { Length: > 0 } reply)
+            {
+                <div class="ai-summary"><span class="ai-tag">💌 HalalBook team</span><br />@reply</div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<FeedbackDto>? mine;
+
+    public static string StatusText(FeedbackStatus s) => s switch
+    {
+        FeedbackStatus.New => "Received", FeedbackStatus.InProgress => "In progress", FeedbackStatus.Resolved => "Resolved", _ => "Closed",
+    };
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        try { mine = await Api.GetAsync<List<FeedbackDto>>("api/feedback/mine"); } catch (Exception) { mine = []; }
+    }
+}

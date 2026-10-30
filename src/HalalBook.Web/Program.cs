@@ -20,6 +20,7 @@ builder.Services.AddScoped<Realtime>();
 builder.Services.AddScoped<Toasts>();
 builder.Services.AddScoped<ClientClock>();
 builder.Services.AddScoped<MediaGuard>();
+builder.Logging.Services.AddSingleton<ILoggerProvider, ApiErrorLoggerProvider>();
 
 var app = builder.Build();
 

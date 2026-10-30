@@ -113,3 +113,17 @@ window.halalbook = {
 };
 
 try { const t = localStorage.getItem('hb.theme'); if (t) document.documentElement.dataset.theme = t; } catch { }
+
+// Report browser errors to the admin console's error log (at most 10 per page load).
+(() => {
+    let sent = 0;
+    const report = (message, stack) => {
+        if (!window.halalbookApi || sent++ >= 10 || !message) return;
+        fetch(window.halalbookApi + 'api/errors/client', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+            body: JSON.stringify({ source: 'Browser', message: String(message).slice(0, 2000), stackTrace: stack ? String(stack).slice(0, 8000) : null, path: location.pathname, userAgent: navigator.userAgent }),
+        }).catch(() => { });
+    };
+    window.addEventListener('error', (e) => report(e.message, e.error?.stack));
+    window.addEventListener('unhandledrejection', (e) => report(e.reason?.message || e.reason, e.reason?.stack));
+})();

@@ -31,6 +31,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<EmailCode> EmailCodes => Set<EmailCode>();
     public DbSet<LiveSession> LiveSessions => Set<LiveSession>();
     public DbSet<PostAudience> PostAudiences => Set<PostAudience>();
+    public DbSet<Feedback> Feedback => Set<Feedback>();
+    public DbSet<ErrorLog> ErrorLogs => Set<ErrorLog>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -65,6 +67,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(x => x.TargetUser).WithMany().HasForeignKey(x => x.TargetUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(x => x.Media).WithOne().HasForeignKey(x => x.PostId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Hashtags).WithOne().HasForeignKey(x => x.PostId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<Feedback>(e =>
+        {
+            e.HasIndex(x => new { x.Status, x.CreatedAt });
+            e.Property(x => x.Subject).HasMaxLength(200);
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.HandledBy).WithMany().HasForeignKey(x => x.HandledById).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<ErrorLog>(e =>
+        {
+            e.HasIndex(x => x.Fingerprint).IsUnique();
+            e.HasIndex(x => new { x.Status, x.LastSeen });
+            e.Property(x => x.Fingerprint).HasMaxLength(40);
+            e.Property(x => x.Source).HasMaxLength(20);
+            e.Property(x => x.Level).HasMaxLength(20);
+            e.Property(x => x.Method).HasMaxLength(10);
+            e.Property(x => x.TraceId).HasMaxLength(100);
         });
 
         b.Entity<PostAudience>(e =>

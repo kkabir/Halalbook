@@ -166,3 +166,23 @@ public record SmartRepliesRequest(string Context, string Kind = "comment");
 public record SmartRepliesResponse(List<string> Replies, bool UsedAi);
 public record ToneRequest(string Text);
 public record ToneResponse(bool IsHarsh, string? Suggestion, string? Note, bool UsedAi);
+
+// ---------- Feedback & error log ----------
+public enum FeedbackCategory { Question, Feedback, Suggestion, BugReport, Complaint, Appeal }
+public enum FeedbackStatus { New, InProgress, Resolved, Closed }
+public enum ErrorStatus { Open, Resolved, Ignored }
+
+public record CreateFeedbackRequest(FeedbackCategory Category, string Subject, string Message, string? Page = null,
+    string? ScreenshotUrl = null, string? Name = null, string? Email = null);
+public record FeedbackDto(Guid Id, FeedbackCategory Category, FeedbackStatus Status, string Subject, string Message, string? Page,
+    string? ScreenshotUrl, UserSummaryDto? User, string? Name, string? Email, string? Reply, string? AdminNote,
+    DateTime CreatedAt, DateTime UpdatedAt, UserSummaryDto? HandledBy);
+public record UpdateFeedbackRequest(FeedbackStatus Status, string? Reply, string? AdminNote);
+
+public record ClientErrorRequest(string Source, string Message, string? StackTrace, string? Path, string? UserAgent);
+public record ErrorLogDto(Guid Id, string Source, string Level, string Message, string? ExceptionType, string? StackTrace, string? Path,
+    string? Method, int? StatusCode, int Count, DateTime FirstSeen, DateTime LastSeen, ErrorStatus Status, string? Note,
+    UserSummaryDto? LastUser, string? TraceId, string? UserAgent);
+public record UpdateErrorRequest(ErrorStatus Status, string? Note);
+public record AdminStatsDto(int NewFeedback, int OpenFeedback, int OpenErrors, int ErrorsLast24h, int Users, int UsersLast7d,
+    int Posts, int PostsLast24h, int PendingReview, int OpenReports);

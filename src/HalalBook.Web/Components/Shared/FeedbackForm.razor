@@ -1,0 +1,89 @@
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject NavigationManager Nav
+@inject MediaGuard Guard
+
+@if (sent)
+{
+    <div class="center stack" style="gap:.5rem;padding:1rem 0">
+        <div style="font-size:2.5rem">💌</div>
+        <h2>JazakAllahu khayran!</h2>
+        <p class="muted">We've received your message and will reply @(Anonymous ? "by email" : "here and by email") inshaAllah.</p>
+        <button class="btn btn-outline" @onclick="Reset">Send another</button>
+    </div>
+}
+else
+{
+    <form class="stack" @onsubmit="Send">
+        <div>
+            <div class="field-label">What is it about?</div>
+            <div class="row wrap" style="gap:.4rem">
+                @foreach (var (cat, icon, label) in Categories)
+                {
+                    <button type="button" class="chip @(category == cat ? "active" : "")" @onclick="() => category = cat">@icon @label</button>
+                }
+            </div>
+        </div>
+        @if (Anonymous)
+        {
+            <div class="row wrap">
+                <label class="field grow">Your name<input class="input" @bind="name" /></label>
+                <label class="field grow">Email (for our reply)<input class="input" type="email" @bind="email" required /></label>
+            </div>
+        }
+        <label class="field">Subject<input class="input" @bind="subject" maxlength="200" placeholder="@Hint" required /></label>
+        <label class="field">Message<textarea class="input" rows="5" @bind="message" maxlength="5000" placeholder="Tell us as much as you can. For a problem: what you did, what happened, and what you expected." required></textarea></label>
+        @if (!Anonymous)
+        {
+            <div class="row">
+                <label class="btn btn-outline btn-sm">📷 @(screenshot is null ? "Attach a screenshot" : "Change screenshot")<InputFile OnChange="Attach" accept="image/*" style="display:none" /></label>
+                @if (screenshot is not null) { <img src="@screenshot" alt="" style="height:48px;border-radius:8px" /> }
+            </div>
+        }
+        @if (error is not null) { <div class="error">@error</div> }
+        <button class="btn btn-gold" type="submit" disabled="@busy">@(busy ? "Sending…" : "Send")</button>
+    </form>
+}
+
+@code {
+    [Parameter] public bool Anonymous { get; set; }
+    [Parameter] public EventCallback OnSent { get; set; }
+
+    public static readonly (FeedbackCategory, string, string)[] Categories =
+    [
+        (FeedbackCategory.Question, "❓", "Question"), (FeedbackCategory.Feedback, "💬", "Feedback"), (FeedbackCategory.Suggestion, "💡", "Suggestion"),
+        (FeedbackCategory.BugReport, "🐞", "Report a problem"), (FeedbackCategory.Complaint, "⚠️", "Complaint"), (FeedbackCategory.Appeal, "⚖️", "Appeal a decision"),
+    ];
+
+    private FeedbackCategory category = FeedbackCategory.Feedback;
+    private string? name, email, subject, message, screenshot, error;
+    private bool busy, sent;
+
+    private string Hint => category switch
+    {
+        FeedbackCategory.BugReport => "e.g. Video upload stops at 50%",
+        FeedbackCategory.Suggestion => "e.g. Add Quran recitation stories",
+        FeedbackCategory.Appeal => "e.g. My post was removed by mistake",
+        _ => "A short summary",
+    };
+
+    private async Task Attach(InputFileChangeEventArgs e) =>
+        screenshot = (await Guard.UploadAsync([e.File], "message")).FirstOrDefault()?.Url ?? screenshot;
+
+    private async Task Send()
+    {
+        busy = true; error = null;
+        try
+        {
+            await Api.PostAsync<object>("api/feedback", new CreateFeedbackRequest(category, subject ?? "", message ?? "",
+                Nav.Uri, screenshot, name, email));
+            sent = true;
+            await OnSent.InvokeAsync();
+        }
+        catch (ApiException ex) { error = ex.Message; }
+        catch (Exception) { error = "We couldn't send your message. Please try again."; }
+        finally { busy = false; }
+    }
+
+    private void Reset() { sent = false; subject = message = screenshot = null; }
+}

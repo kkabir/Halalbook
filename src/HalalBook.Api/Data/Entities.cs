@@ -329,3 +329,48 @@ public class PostAudience
     public Guid PostId { get; set; }
     public Guid UserId { get; set; }
 }
+
+public class Feedback
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? UserId { get; set; }
+    public User? User { get; set; }
+    public string? Name { get; set; }
+    public string? Email { get; set; }
+    public FeedbackCategory Category { get; set; }
+    public FeedbackStatus Status { get; set; }
+    public string Subject { get; set; } = "";
+    public string Message { get; set; } = "";
+    public string? Page { get; set; }
+    public string? ScreenshotUrl { get; set; }
+    public string? Reply { get; set; }
+    public string? AdminNote { get; set; }
+    public Guid? HandledById { get; set; }
+    public User? HandledBy { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>One row per distinct error; repeats increase Count and LastSeen.</summary>
+public class ErrorLog
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Fingerprint { get; set; } = "";
+    public string Source { get; set; } = "";
+    public string Level { get; set; } = "Error";
+    public string Message { get; set; } = "";
+    public string? ExceptionType { get; set; }
+    public string? StackTrace { get; set; }
+    public string? Path { get; set; }
+    public string? Method { get; set; }
+    public int? StatusCode { get; set; }
+    public Guid? UserId { get; set; }
+    public string? TraceId { get; set; }
+    public string? UserAgent { get; set; }
+    public int Count { get; set; } = 1;
+    public DateTime FirstSeen { get; set; } = DateTime.UtcNow;
+    public DateTime LastSeen { get; set; } = DateTime.UtcNow;
+    public ErrorStatus Status { get; set; }
+    public string? Note { get; set; }
+    public Guid? ResolvedById { get; set; }
+}

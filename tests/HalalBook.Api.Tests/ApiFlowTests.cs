@@ -381,4 +381,65 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var res = await factory.CreateClient().PostAsJsonAsync("/api/auth/register", new RegisterRequest(name, $"{name}@example.com", "Bismillah-123", name), Json);
         Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
     }
+
+    private async Task<HttpClient> SignUpAdmin()
+    {
+        var (c, id) = await SignUpWithId("admin");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HalalBook.Api.Data.AppDbContext>();
+            var u = await db.Users.FindAsync(id);
+            u!.Role = UserRole.Admin;
+            await db.SaveChangesAsync();
+        }
+        // Sign in again so the token carries the Admin role.
+        var me = (await c.GetFromJsonAsync<UserDto>("/api/users/me", Json))!;
+        var login = (await (await factory.CreateClient().PostAsJsonAsync("/api/auth/login", new LoginRequest(me.UserName, "Bismillah-123"), Json))
+            .Content.ReadFromJsonAsync<AuthResult>(Json))!;
+        var admin = factory.CreateClient();
+        admin.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.Auth!.Token);
+        return admin;
+    }
+
+    [Fact]
+    public async Task Feedback_FlowsToAdminAndBack()
+    {
+        var (member, _) = await SignUpWithId("feedbacker");
+        (await member.PostAsJsonAsync("/api/feedback", new CreateFeedbackRequest(FeedbackCategory.Suggestion, "Add Quran stories", "It would be lovely."), Json)).EnsureSuccessStatusCode();
+
+        // Visitors who aren't signed in must leave an email.
+        var anon = await factory.CreateClient().PostAsJsonAsync("/api/feedback", new CreateFeedbackRequest(FeedbackCategory.Question, "Can't sign in", "Help"), Json);
+        Assert.Equal(HttpStatusCode.BadRequest, anon.StatusCode);
+
+        // Members can't open the admin console.
+        Assert.Equal(HttpStatusCode.Forbidden, (await member.GetAsync("/api/admin/feedback")).StatusCode);
+
+        var admin = await SignUpAdmin();
+        var item = (await admin.GetFromJsonAsync<List<FeedbackDto>>("/api/admin/feedback?q=Quran%20stories", Json))!.First();
+        (await admin.PutAsJsonAsync($"/api/admin/feedback/{item.Id}", new UpdateFeedbackRequest(FeedbackStatus.Resolved, "Great idea, it's on our list!", null), Json)).EnsureSuccessStatusCode();
+
+        var mine = (await member.GetFromJsonAsync<List<FeedbackDto>>("/api/feedback/mine", Json))!.Single();
+        Assert.Equal(FeedbackStatus.Resolved, mine.Status);
+        Assert.Equal("Great idea, it's on our list!", mine.Reply);
+    }
+
+    [Fact]
+    public async Task Errors_AreLoggedGroupedAndResolvable()
+    {
+        var anon = factory.CreateClient();
+        for (int i = 0; i < 3; i++)
+            await anon.PostAsJsonAsync("/api/errors/client", new ClientErrorRequest("Browser", "TypeError: x is undefined (test)", "at foo (app.js:1)", "/reels", "test"), Json);
+
+        var admin = await SignUpAdmin();
+        ErrorLogDto? logged = null;
+        for (int i = 0; i < 20 && logged is null; i++)
+        {
+            await Task.Delay(150); // written in the background
+            logged = (await admin.GetFromJsonAsync<List<ErrorLogDto>>("/api/admin/errors?source=Browser", Json))!
+                .FirstOrDefault(e => e.Message.Contains("x is undefined (test)") && e.Count == 3);
+        }
+        Assert.NotNull(logged);
+        (await admin.PutAsJsonAsync($"/api/admin/errors/{logged!.Id}", new UpdateErrorRequest(ErrorStatus.Resolved, "Fixed"), Json)).EnsureSuccessStatusCode();
+        Assert.Contains((await admin.GetFromJsonAsync<List<ErrorLogDto>>("/api/admin/errors?status=Resolved", Json))!, e => e.Id == logged.Id);
+    }
 }

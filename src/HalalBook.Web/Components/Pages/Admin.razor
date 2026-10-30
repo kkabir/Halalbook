@@ -1,0 +1,216 @@
+@page "/admin"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+@inject ClientClock Clock
+
+<PageTitle>Admin console · HalalBook</PageTitle>
+
+@if (Session.User?.Role != UserRole.Admin)
+{
+    <div class="card"><Empty Title="Admins only" Text="You don't have access to the admin console." /></div>
+}
+else
+{
+    <div class="page-hero row spread wrap">
+        <div><h1>Admin console</h1><p>Member feedback, errors and the health of HalalBook.</p></div>
+        <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.4)" @onclick="LoadAll">↻ Refresh</button>
+    </div>
+
+    @if (stats is { } s)
+    {
+        <div class="stat-grid">
+            <button class="stat @(tab == "feedback" ? "active" : "")" @onclick='() => Tab("feedback")'><b>@s.NewFeedback</b><span>New feedback</span><small>@s.OpenFeedback open</small></button>
+            <button class="stat warn @(tab == "errors" ? "active" : "")" @onclick='() => Tab("errors")'><b>@s.OpenErrors</b><span>Open errors</span><small>@s.ErrorsLast24h in 24 h</small></button>
+            <a class="stat" href="/moderation"><b>@(s.PendingReview + s.OpenReports)</b><span>To moderate</span><small>@s.PendingReview posts · @s.OpenReports reports</small></a>
+            <div class="stat"><b>@s.Users</b><span>Members</span><small>+@s.UsersLast7d this week</small></div>
+            <div class="stat"><b>@s.Posts</b><span>Posts</span><small>+@s.PostsLast24h today</small></div>
+        </div>
+    }
+
+    @if (tab == "feedback")
+    {
+        <div class="row wrap admin-filters">
+            @foreach (var st in new FeedbackStatus?[] { null, FeedbackStatus.New, FeedbackStatus.InProgress, FeedbackStatus.Resolved, FeedbackStatus.Closed })
+            {
+                <button class="chip @(fStatus == st ? "active" : "")" @onclick="() => FilterFeedback(st)">@(st is { } x ? Feedback.StatusText(x) : "All")</button>
+            }
+            <input class="input grow" style="max-width:260px" placeholder="Search feedback" @bind="fQuery" @bind:after="LoadFeedback" />
+        </div>
+        <div class="admin-split">
+            <div class="admin-list">
+                @if (feedback is null) { <div class="spinner"></div> }
+                else if (feedback.Count == 0) { <Empty Title="Nothing here" Text="No feedback matches this filter." /> }
+                @foreach (var f in feedback ?? [])
+                {
+                    <button class="admin-item @(selectedFeedback?.Id == f.Id ? "active" : "")" @onclick="() => SelectFeedback(f)">
+                        <div class="row spread"><b>@f.Subject</b><span class="status-pill s-@f.Status.ToString().ToLowerInvariant()">@Feedback.StatusText(f.Status)</span></div>
+                        <div class="subtle">@CategoryIcon(f.Category) @f.Category · @(f.User?.DisplayName ?? f.Name ?? f.Email) · @Ui.TimeAgo(f.CreatedAt)</div>
+                    </button>
+                }
+            </div>
+            <div class="admin-detail card">
+                @if (selectedFeedback is { } sf)
+                {
+                    <div class="row spread wrap"><h2 style="margin:0">@sf.Subject</h2><span class="status-pill s-@sf.Status.ToString().ToLowerInvariant()">@Feedback.StatusText(sf.Status)</span></div>
+                    <div class="subtle">@CategoryIcon(sf.Category) @sf.Category · @Clock.Local(sf.CreatedAt).ToString("MMM d, yyyy h:mm tt")</div>
+                    <div class="row mt" style="gap:.5rem">
+                        @if (sf.User is { } u) { <Avatar User="u" Size="32" /><a href="/u/@u.UserName"><b>@u.DisplayName</b></a> }
+                        else { <span>@sf.Name</span> }
+                        @if (sf.Email is { } em) { <a href="mailto:@em">@em</a> }
+                    </div>
+                    <p style="white-space:pre-wrap" class="mt">@sf.Message</p>
+                    @if (sf.ScreenshotUrl is { } shot) { <a href="@shot" target="_blank"><img src="@shot" alt="Screenshot" style="max-height:220px;border-radius:12px" /></a> }
+                    @if (sf.Page is { } pg) { <div class="subtle">Sent from: @pg</div> }
+                    <hr class="divider" />
+                    <label class="field">Reply to the member (sent as a notification and email)<textarea class="input" rows="4" @bind="reply"></textarea></label>
+                    <label class="field mt">Internal note (admins only)<textarea class="input" rows="2" @bind="note"></textarea></label>
+                    <div class="row wrap mt">
+                        <select class="input" style="width:auto" @bind="newStatus">
+                            @foreach (var st in Enum.GetValues<FeedbackStatus>()) { <option value="@st">@Feedback.StatusText(st)</option> }
+                        </select>
+                        <button class="btn btn-primary" @onclick="SaveFeedback">Save</button>
+                        @if (sf.HandledBy is { } h) { <span class="subtle">Last handled by @h.DisplayName</span> }
+                    </div>
+                }
+                else { <Empty Title="Select a message" Text="Choose feedback on the left to read and reply." /> }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row wrap admin-filters">
+            @foreach (var st in Enum.GetValues<ErrorStatus>())
+            {
+                <button class="chip @(eStatus == st ? "active" : "")" @onclick="() => FilterErrors(st)">@st</button>
+            }
+            @foreach (var src in new string?[] { null, "Api", "Web", "Browser" })
+            {
+                <button class="chip gold @(eSource == src ? "active" : "")" @onclick="() => FilterSource(src)">@(src ?? "All sources")</button>
+            }
+            <button class="btn btn-ghost btn-sm" @onclick="TestError">Log a test error</button>
+        </div>
+        <div class="admin-split">
+            <div class="admin-list">
+                @if (errors is null) { <div class="spinner"></div> }
+                else if (errors.Count == 0) { <Empty Title="No errors" Text="Alhamdulillah, nothing to fix here." /> }
+                @foreach (var e in errors ?? [])
+                {
+                    <button class="admin-item @(selectedError?.Id == e.Id ? "active" : "")" @onclick="() => SelectError(e)">
+                        <div class="row spread"><b class="error-msg">@e.Message</b><span class="count-pill">×@e.Count</span></div>
+                        <div class="subtle">@e.Source · @(e.Path ?? "—") · last @Ui.TimeAgo(e.LastSeen)</div>
+                    </button>
+                }
+            </div>
+            <div class="admin-detail card">
+                @if (selectedError is { } se)
+                {
+                    <div class="row spread wrap"><h2 style="margin:0">@se.Source error</h2><span class="status-pill s-@se.Status.ToString().ToLowerInvariant()">@se.Status</span></div>
+                    <p class="mt"><b>@se.Message</b></p>
+                    <div class="kv">
+                        <span>Type</span><span>@(se.ExceptionType ?? "—")</span>
+                        <span>Where</span><span>@se.Method @(se.Path ?? "—") @(se.StatusCode is { } sc ? $"({sc})" : "")</span>
+                        <span>Seen</span><span>@se.Count times · first @Clock.Local(se.FirstSeen).ToString("MMM d HH:mm") · last @Clock.Local(se.LastSeen).ToString("MMM d HH:mm")</span>
+                        <span>Last user</span><span>@if (se.LastUser is { } lu) { <a href="/u/@lu.UserName">@lu.DisplayName</a> } else { <text>—</text> }</span>
+                        <span>Trace id</span><span>@(se.TraceId ?? "—")</span>
+                        <span>Browser</span><span>@(se.UserAgent ?? "—")</span>
+                    </div>
+                    @if (se.StackTrace is { Length: > 0 } st) { <pre class="stack">@st</pre> }
+                    <label class="field mt">Note<textarea class="input" rows="2" @bind="errorNote"></textarea></label>
+                    <div class="row wrap mt">
+                        @if (se.Status != ErrorStatus.Resolved) { <button class="btn btn-primary" @onclick="() => SaveError(ErrorStatus.Resolved)">✓ Mark resolved</button> }
+                        @if (se.Status != ErrorStatus.Ignored) { <button class="btn btn-outline" @onclick="() => SaveError(ErrorStatus.Ignored)">Ignore</button> }
+                        @if (se.Status != ErrorStatus.Open) { <button class="btn btn-ghost" @onclick="() => SaveError(ErrorStatus.Open)">Reopen</button> }
+                    </div>
+                }
+                else { <Empty Title="Select an error" Text="Repeats of the same error are grouped and counted." /> }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private AdminStatsDto? stats;
+    private string tab = "feedback";
+    private List<FeedbackDto>? feedback;
+    private List<ErrorLogDto>? errors;
+    private FeedbackDto? selectedFeedback;
+    private ErrorLogDto? selectedError;
+    private FeedbackStatus? fStatus = FeedbackStatus.New;
+    private ErrorStatus eStatus = ErrorStatus.Open;
+    private string? fQuery, eSource, reply, note, errorNote;
+    private FeedbackStatus newStatus;
+
+    private static string CategoryIcon(FeedbackCategory c) => FeedbackForm.Categories.First(x => x.Item1 == c).Item2;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.User?.Role == UserRole.Admin) await LoadAll();
+    }
+
+    private async Task LoadAll()
+    {
+        try { stats = await Api.GetAsync<AdminStatsDto>("api/admin/stats"); } catch (Exception ex) { Toasts.Error(ex); }
+        if (tab == "feedback") await LoadFeedback(); else await LoadErrors();
+    }
+
+    private async Task Tab(string t) { tab = t; await LoadAll(); }
+    private async Task FilterFeedback(FeedbackStatus? s) { fStatus = s; await LoadFeedback(); }
+    private async Task FilterErrors(ErrorStatus s) { eStatus = s; await LoadErrors(); }
+    private async Task FilterSource(string? s) { eSource = s; await LoadErrors(); }
+
+    private async Task LoadFeedback()
+    {
+        var q = new List<string>();
+        if (fStatus is { } s) q.Add($"status={s}");
+        if (!string.IsNullOrWhiteSpace(fQuery)) q.Add($"q={Uri.EscapeDataString(fQuery)}");
+        try { feedback = await Api.GetAsync<List<FeedbackDto>>("api/admin/feedback" + (q.Count > 0 ? "?" + string.Join("&", q) : "")); }
+        catch (Exception ex) { feedback = []; Toasts.Error(ex); }
+    }
+
+    private async Task LoadErrors()
+    {
+        var url = $"api/admin/errors?status={eStatus}" + (eSource is null ? "" : $"&source={eSource}");
+        try { errors = await Api.GetAsync<List<ErrorLogDto>>(url); } catch (Exception ex) { errors = []; Toasts.Error(ex); }
+    }
+
+    private void SelectFeedback(FeedbackDto f)
+    {
+        selectedFeedback = f;
+        reply = f.Reply; note = f.AdminNote;
+        newStatus = f.Status == FeedbackStatus.New ? FeedbackStatus.InProgress : f.Status;
+    }
+
+    private async Task SaveFeedback()
+    {
+        try
+        {
+            var updated = await Api.PutAsync<FeedbackDto>($"api/admin/feedback/{selectedFeedback!.Id}", new UpdateFeedbackRequest(newStatus, reply, note));
+            Toasts.Show("Saved" + (string.IsNullOrWhiteSpace(reply) ? "" : " and the member has been notified"));
+            selectedFeedback = updated;
+            await LoadAll();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private void SelectError(ErrorLogDto e) { selectedError = e; errorNote = e.Note; }
+
+    private async Task SaveError(ErrorStatus status)
+    {
+        try
+        {
+            await Api.PutAsync($"api/admin/errors/{selectedError!.Id}", new UpdateErrorRequest(status, errorNote));
+            Toasts.Show(status switch { ErrorStatus.Resolved => "Marked resolved", ErrorStatus.Ignored => "Ignored", _ => "Reopened" });
+            selectedError = null;
+            await LoadAll();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task TestError()
+    {
+        await Api.PostAsync("api/admin/errors/test");
+        await Task.Delay(800);
+        await LoadAll();
+    }
+}
