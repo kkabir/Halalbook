@@ -1154,3 +1154,27 @@ input.switch:focus-visible { outline: 2px solid var(--gold-500); outline-offset:
 .birthday-soon { margin-top: .4rem; font-size: .85rem; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .birthday-card { background: var(--surface); border-color: #6b4a1f; } }
 :root[data-theme="dark"] .birthday-card { background: var(--surface); border-color: #6b4a1f; }
+
+/* ---------- Marketplace ---------- */
+.market-page { max-width: 1100px; margin: 0 auto; }
+.market-cats { display: flex; gap: .4rem; overflow-x: auto; padding: .6rem 0; scrollbar-width: none; }
+.market-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: .8rem; }
+.market-card { display: flex; flex-direction: column; gap: .15rem; color: var(--text); text-decoration: none !important; }
+.market-photo { position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: var(--surface-2); }
+.market-photo img { width: 100%; height: 100%; object-fit: cover; transition: transform .25s; }
+.market-card:hover .market-photo img { transform: scale(1.04); }
+.market-price { font-weight: 800; color: var(--emerald-800); }
+.market-price.big { font-size: 1.5rem; margin: .2rem 0; }
+.market-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sold-badge { position: absolute; top: .5rem; left: .5rem; background: #c0392b; color: #fff; font-weight: 800; font-size: .75rem; padding: .15rem .6rem; border-radius: 999px; }
+.sold-badge.static { position: static; display: inline-block; }
+.market-detail { padding: 0; overflow: hidden; }
+.market-detail h1 { font-size: 1.4rem; margin: .2rem 0 0; }
+.market-gallery { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; background: #000; }
+.market-gallery img { flex: none; width: 100%; max-height: 420px; object-fit: contain; scroll-snap-align: center; }
+.market-photos-edit { display: flex; flex-wrap: wrap; gap: .5rem; }
+.market-photos-edit > div { position: relative; width: 80px; height: 80px; }
+.market-photos-edit img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; }
+.market-photos-edit button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: #000a; color: #fff; cursor: pointer; }
+.market-add-photo { width: 80px; height: 80px; border-radius: 10px; border: 2px dashed var(--gold-300); display: grid; place-items: center; text-align: center; font-size: .75rem; cursor: pointer; }
+@media (max-width: 520px) { .market-grid { grid-template-columns: repeat(2, 1fr); gap: .6rem; } }

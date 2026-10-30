@@ -137,6 +137,25 @@ public class PageStat
     public int Views { get; set; }
 }
 
+/// <summary>Something for sale (or free) in the Marketplace.</summary>
+public class Listing
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SellerId { get; set; }
+    public User Seller { get; set; } = null!;
+    public string Title { get; set; } = "";
+    public string Description { get; set; } = "";
+    public decimal Price { get; set; }
+    public string Currency { get; set; } = "USD";
+    public string Category { get; set; } = "Other";
+    public string? Condition { get; set; }
+    public string? Location { get; set; }
+    /// <summary>Photo URLs (JSON array).</summary>
+    public string Photos { get; set; } = "[]";
+    public ListingStatus Status { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
 public class PollOption
 {
     public Guid Id { get; set; } = Guid.NewGuid();

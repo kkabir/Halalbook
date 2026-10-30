@@ -105,6 +105,16 @@
     </div>
 
     <div class="card stack mt">
+        <div class="card-title">🌗 @T("Appearance")</div>
+        <div class="row" style="gap:.4rem;flex-wrap:wrap">
+            @foreach (var (key, label) in new[] { ("auto", "📱 Match my phone"), ("light", "☀️ Light"), ("dark", "🌙 Dark") })
+            {
+                <button class="chip @(theme == key ? "active" : "")" @onclick="() => SetTheme(key)">@T(label)</button>
+            }
+        </div>
+    </div>
+
+    <div class="card stack mt">
         <div class="card-title">🎂 @T("Birthday")</div>
         <div class="row wrap" style="gap:.6rem;align-items:center">
             <input class="input" type="date" style="width:auto" value="@Session.User?.Birthday?.ToString("yyyy-MM-dd")" @onchange="SetBirthday" />
@@ -254,7 +264,9 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        try { blocked = await Api.GetAsync<List<UserSummaryDto>>("api/users/me/blocked"); StateHasChanged(); } catch (Exception) { }
+        try { blocked = await Api.GetAsync<List<UserSummaryDto>>("api/users/me/blocked"); } catch (Exception) { }
+        try { theme = await JS.InvokeAsync<string>("halalbook.getTheme"); } catch (JSException) { }
+        StateHasChanged();
     }
 
     private async Task Unblock(UserSummaryDto u)
@@ -299,6 +311,14 @@
         };
         try { await Session.UpdateUserAsync(await Api.PutAsync<UserDto>("api/users/me/notifications", n)); }
         catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private string theme = "auto";
+
+    private async Task SetTheme(string t)
+    {
+        theme = t;
+        try { await JS.InvokeVoidAsync("halalbook.setTheme", t); } catch (JSException) { }
     }
 
     private async Task SetBirthday(ChangeEventArgs e)

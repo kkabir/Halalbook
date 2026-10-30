@@ -189,6 +189,7 @@ app.MapPresenceEndpoints();
 app.MapLiveEndpoints();
 app.MapVisitorEndpoints();
 app.MapKhatmEndpoints();
+app.MapMarketEndpoints();
 app.MapAdminEndpoints();
 app.MapFriendListEndpoints();
 app.MapCallEndpoints();

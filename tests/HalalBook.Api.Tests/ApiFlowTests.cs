@@ -846,4 +846,23 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await b.PutAsJsonAsync("/api/users/me/birthday", new BirthdaySettingsRequest(new DateOnly(1990, today.Month, today.Day), false), Json);
         Assert.DoesNotContain((await a.GetFromJsonAsync<List<BirthdayDto>>("/api/friends/birthdays", Json))!, x => x.User.Id == bId);
     }
+
+    [Fact]
+    public async Task Marketplace_ListSellAndRefuseHaramItems()
+    {
+        var (a, _) = await SignUpWithId("seller");
+        var (b, _) = await SignUpWithId("buyer");
+        var photo = "https://example.test/uploads/abaya.jpg";
+        var bad = await a.PostAsJsonAsync("/api/market", new CreateListingRequest("Vintage wine glasses and red wine", null, 20, "USD", "Home & furniture", null, null, [photo]), Json);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, bad.StatusCode);
+
+        var item = (await (await a.PostAsJsonAsync("/api/market", new CreateListingRequest("Black abaya, size M", "Worn twice", 35, "usd", "Modest fashion", "Like new", "Dhaka", [photo]), Json))
+            .Content.ReadFromJsonAsync<ListingDto>(Json))!;
+        Assert.Equal("USD", item.Currency);
+        Assert.Contains((await b.GetFromJsonAsync<PagedResult<ListingDto>>("/api/market?q=abaya", Json))!.Items, l => l.Id == item.Id);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await b.PutAsJsonAsync($"/api/market/{item.Id}/status", new ListingStatusRequest(ListingStatus.Sold), Json)).StatusCode);
+        (await a.PutAsJsonAsync($"/api/market/{item.Id}/status", new ListingStatusRequest(ListingStatus.Sold), Json)).EnsureSuccessStatusCode();
+        Assert.DoesNotContain((await b.GetFromJsonAsync<PagedResult<ListingDto>>("/api/market?q=abaya", Json))!.Items, l => l.Id == item.Id);
+    }
 }

@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Block> Blocks => Set<Block>();
     public DbSet<MutedUser> MutedUsers => Set<MutedUser>();
     public DbSet<PollOption> PollOptions => Set<PollOption>();
+    public DbSet<Listing> Listings => Set<Listing>();
     public DbSet<PollVote> PollVotes => Set<PollVote>();
     public DbSet<Post> Posts => Set<Post>();
     public DbSet<PostMedia> PostMedia => Set<PostMedia>();
@@ -49,6 +50,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     protected override void OnModelCreating(ModelBuilder b)
     {
         b.Entity<MutedUser>().HasKey(x => new { x.OwnerId, x.MutedId });
+        b.Entity<Listing>(e =>
+        {
+            e.HasIndex(x => new { x.Status, x.CreatedAt });
+            e.Property(x => x.Title).HasMaxLength(100);
+            e.Property(x => x.Description).HasMaxLength(3000);
+            e.Property(x => x.Price).HasPrecision(14, 2);
+            e.Property(x => x.Currency).HasMaxLength(3);
+            e.Property(x => x.Category).HasMaxLength(40);
+            e.Property(x => x.Condition).HasMaxLength(30);
+            e.Property(x => x.Location).HasMaxLength(120);
+            e.HasOne(x => x.Seller).WithMany().HasForeignKey(x => x.SellerId).OnDelete(DeleteBehavior.Cascade);
+        });
         b.Entity<PollOption>(e => { e.HasIndex(x => x.PostId); e.Property(x => x.Text).HasMaxLength(120); });
         b.Entity<PollVote>(e => { e.HasKey(x => new { x.PostId, x.UserId }); e.HasIndex(x => x.OptionId); });
         b.Entity<Khatm>(e =>

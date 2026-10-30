@@ -250,6 +250,14 @@ public record NisabDto(string Currency, double GoldPerGram, double SilverPerGram
 public record PlaceDto(string Name, string Type, double Latitude, double Longitude, string? Address, string? OpeningHours,
     string? Phone, string? Website, string? Cuisine, double DistanceKm);
 
+// ---------- Marketplace ----------
+public enum ListingStatus { Active, Sold, Removed }
+public record ListingDto(Guid Id, UserSummaryDto Seller, string Title, string Description, decimal Price, string Currency, string Category,
+    string? Condition, string? Location, List<string> Photos, ListingStatus Status, DateTime CreatedAt, bool IsMine);
+public record CreateListingRequest(string Title, string? Description, decimal Price, string? Currency, string Category, string? Condition,
+    string? Location, List<string>? Photos);
+public record ListingStatusRequest(ListingStatus Status);
+
 // ---------- Quran khatm together ----------
 public record CreateKhatmRequest(string Title, string? Intention, DateOnly? DueDate);
 public record KhatmPartDto(int Juz, UserSummaryDto? Reader, bool Done, bool Mine);

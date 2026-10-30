@@ -1,3 +1,6 @@
+// Apply the saved light/dark choice before anything draws, so there is no flash.
+(() => { try { const t = localStorage.getItem('hb.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch { } })();
+
 // Small browser helpers called from Blazor via JS interop.
 window.halalbook = {
     getLocation: () => new Promise((resolve) => {
@@ -84,6 +87,13 @@ window.halalbook = {
             v.closest('a')?.addEventListener('mouseleave', () => v.pause());
         });
     }),
+    // ---------- Theme: "auto" follows the phone, or force light/dark ----------
+    getTheme: () => { try { return localStorage.getItem('hb.theme') || 'auto'; } catch { return 'auto'; } },
+    setTheme: (t) => {
+        try { localStorage.setItem('hb.theme', t); } catch { }
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+        else delete document.documentElement.dataset.theme;
+    },
     // ---------- Tasbeeh ----------
     // Adds n counts and returns [today, all time, days in a row]; kept on this device only.
     tasbeehStats: (n) => {
