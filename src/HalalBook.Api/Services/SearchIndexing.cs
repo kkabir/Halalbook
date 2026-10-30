@@ -20,7 +20,7 @@ public class IndexNowQueue
 }
 
 /// <summary>Sends queued URLs to IndexNow in small batches, so new public posts show up in search within minutes.</summary>
-public class IndexNowWorker(IndexNowQueue queue, SeoOptions seo, IHttpClientFactory http, ILogger<IndexNowWorker> log) : BackgroundService
+public class IndexNowWorker(IndexNowQueue queue, SeoOptions seo, IHttpClientFactory http, IHostEnvironment env, ILogger<IndexNowWorker> log) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -30,7 +30,8 @@ public class IndexNowWorker(IndexNowQueue queue, SeoOptions seo, IHttpClientFact
             await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
             var paths = new HashSet<string>();
             while (paths.Count < 1000 && queue.Reader.TryRead(out var p)) paths.Add(p);
-            if (!seo.IsEnabled || paths.Count == 0) continue;
+            // Only the live site announces itself; development and tests never do.
+            if (!seo.IsEnabled || !env.IsProduction() || paths.Count == 0) continue;
             try { await SubmitAsync(http.CreateClient(), seo, paths, stoppingToken); }
             catch (Exception ex) when (ex is not OperationCanceledException) { log.LogWarning(ex, "IndexNow submission failed"); }
         }

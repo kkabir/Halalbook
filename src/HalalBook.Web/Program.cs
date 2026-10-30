@@ -36,6 +36,7 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+app.MapSearchEngineFiles();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

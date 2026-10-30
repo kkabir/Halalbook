@@ -172,7 +172,8 @@ else
         I18n.Changed += Refresh;
         if (!Session.IsAuthenticated)
         {
-            Nav.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/" + Path)}");
+            // Newcomers on the front page meet the welcome page; deep links go to sign in and come back.
+            Nav.NavigateTo(Path == "" ? "/welcome" : $"/login?returnUrl={Uri.EscapeDataString("/" + Path)}");
             return;
         }
         await Clock.LoadAsync();
@@ -197,7 +198,8 @@ else
     private void Refresh() => InvokeAsync(StateHasChanged);
     private void OnSessionChanged()
     {
-        if (!Session.IsAuthenticated) InvokeAsync(() => Nav.NavigateTo("/login"));
+        // Signing out mid-session; the first load handles signed-out visitors itself.
+        if (!Session.IsAuthenticated && ready) InvokeAsync(() => Nav.NavigateTo("/login"));
         else InvokeAsync(StateHasChanged);
     }
 

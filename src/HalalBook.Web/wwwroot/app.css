@@ -821,3 +821,21 @@ label.field { display: flex; flex-direction: column; gap: .35rem; font-weight: 6
 
 select.lang-picker { width: auto; }
 @media (max-width: 860px) { .auth-form .lang-picker.compact { position: static; align-self: flex-end; margin-bottom: .6rem; } .auth-form { display: flex; flex-direction: column; } }
+
+/* ---------- Public welcome page ---------- */
+.welcome-hero { text-align: center; padding: 1.5rem .5rem 1rem; }
+.welcome-logo { width: 96px; height: 96px; display: block; margin: 0 auto; }
+.welcome-hero h1 { font-size: clamp(1.6rem, 5vw, 2.4rem); line-height: 1.2; margin: .75rem 0 .25rem; color: var(--primary, #0b3d2e); }
+.welcome-ar { font-size: 1.6rem; color: var(--gold-500); margin: 0; }
+.welcome-lead { max-width: 560px; margin: .75rem auto 1.25rem; font-size: 1.05rem; color: var(--text-2, inherit); }
+.welcome-cta { justify-content: center; gap: .75rem; }
+.welcome-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .9rem; margin: 1.25rem 0; }
+.welcome-feature h2 { font-size: 1.05rem; margin: .4rem 0 .3rem; }
+.welcome-feature p { margin: 0; color: var(--text-3, #555); font-size: .93rem; }
+.welcome-icon { font-size: 1.8rem; }
+.welcome-langs h2, .welcome-join h2 { margin-top: 0; }
+.welcome-langs ul { list-style: none; padding: 0; margin: .5rem 0 0; display: flex; flex-wrap: wrap; gap: .45rem; }
+.welcome-langs li { padding: .3rem .7rem; border-radius: 999px; background: var(--gold-100, #f6eccb); font-size: .9rem; }
+.welcome-join { margin-top: 1rem; }
+.welcome-links { margin-top: 1rem; }
+.public-main:has(.welcome-hero) { max-width: 960px; }

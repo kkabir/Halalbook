@@ -60,7 +60,7 @@ public static class PostEndpoints
                     && !p.Author.IsSuspended && (p.GroupId == null || !privateGroups.Contains(p.GroupId.Value)))
                 .OrderByDescending(p => p.CreatedAt).Take(45000)
                 .Select(p => new { p.Id, Modified = p.EditedAt ?? p.CreatedAt }).ToListAsync();
-        }).WithTags("Posts").CacheOutput(_ => { });
+        }).WithTags("Posts");
 
         posts.MapGet("/{id:guid}", async (Guid id, ClaimsPrincipal cp, PostService svc) =>
         {

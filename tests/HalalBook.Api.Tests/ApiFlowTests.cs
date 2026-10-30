@@ -592,4 +592,16 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal("Home", ui["Home"]);
         Assert.Equal(19, (await factory.CreateClient().GetFromJsonAsync<List<LanguageInfo>>("/api/i18n/languages", Json))!.Count);
     }
+
+    [Fact]
+    public async Task Sitemap_ListsOnlyPublicApprovedPosts()
+    {
+        var (c, _) = await SignUpWithId("seo");
+        var pub = (await (await c.PostAsJsonAsync("/api/posts", new CreatePostRequest("Public reminder for everyone"), Json)).Content.ReadFromJsonAsync<PostDto>(Json))!;
+        var friends = (await (await c.PostAsJsonAsync("/api/posts", new CreatePostRequest("Only for friends", Visibility.Friends), Json)).Content.ReadFromJsonAsync<PostDto>(Json))!;
+
+        var json = await factory.CreateClient().GetStringAsync("/api/public/sitemap");
+        Assert.Contains(pub.Id.ToString(), json);
+        Assert.DoesNotContain(friends.Id.ToString(), json);
+    }
 }

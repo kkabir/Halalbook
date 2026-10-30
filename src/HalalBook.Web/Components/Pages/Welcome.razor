@@ -1,0 +1,69 @@
+@page "/welcome"
+@attribute [ExcludeFromInteractiveRouting]
+@layout PublicLayout
+
+@* Server-rendered front door: what search engines index and what newcomers see first. *@
+
+<PageTitle>HalalBook: the social home for the Ummah</PageTitle>
+<HeadContent>
+    <link rel="canonical" href="@SearchEngineFiles.SiteUrl(Config)/welcome" />
+</HeadContent>
+
+<section class="welcome-hero">
+    <img class="welcome-logo" src="img/logo-mark.svg" alt="HalalBook logo" width="96" height="96" />
+    <h1>A beautiful, intelligent social home for the Ummah</h1>
+    <p class="arabic welcome-ar">بيت الأمة الرقمي</p>
+    <p class="welcome-lead">
+        HalalBook brings Muslims together with friends and family, in a safe, halal space.
+        Share moments, watch reels, go live, pray on time and read every post in your own language.
+    </p>
+    <div class="row welcome-cta">
+        <a class="btn btn-gold" href="/register">Join free</a>
+        <a class="btn btn-primary" href="/login">Sign in</a>
+    </div>
+</section>
+
+<section class="welcome-grid">
+    @foreach (var (icon, title, text) in Features)
+    {
+        <article class="card welcome-feature">
+            <div class="welcome-icon" aria-hidden="true">@icon</div>
+            <h2>@title</h2>
+            <p>@text</p>
+        </article>
+    }
+</section>
+
+<section class="card welcome-langs">
+    <h2>Speaks your language</h2>
+    <p class="muted">HalalBook works in 19 languages, and translates posts from around the world into yours.</p>
+    <ul>
+        @foreach (var l in Languages.All)
+        {
+            <li lang="@l.Code" dir="@(l.RightToLeft ? "rtl" : "ltr")">@l.NativeName</li>
+        }
+    </ul>
+</section>
+
+<section class="card center welcome-join">
+    <h2>Your community is waiting</h2>
+    <p class="muted">Free to join. No adult content and no endless outrage. Just the Ummah, together.</p>
+    <a class="btn btn-gold" href="/register">Create your account</a>
+    <p class="subtle welcome-links"><a href="/terms">Community Agreement</a> · <a href="/contact">Contact us</a></p>
+</section>
+
+@code {
+    [Inject] private IConfiguration Config { get; set; } = default!;
+
+    private static readonly (string Icon, string Title, string Text)[] Features =
+    [
+        ("🤝", "Friends and family", "Family, close friends and best friends groups, so each post reaches exactly the people you choose."),
+        ("🎬", "Reels, photos and stories", "Share photos, videos, reels and stories. Every upload is checked so the feed stays clean and halal."),
+        ("🔴", "Live shows and calls", "Go live for halaqas, podcasts and events, or start voice and video calls with friends."),
+        ("🕋", "Prayer times and Qibla", "Accurate prayer times for your city, and a Qibla compass wherever you are."),
+        ("✨", "Noor, your AI companion", "Summaries of what you missed, smarter search, help writing posts and checks for authentic sources."),
+        ("🛡️", "Safe by design", "Blocking, private profiles, who-can-contact controls and AI moderation against nudity and abuse."),
+        ("📜", "A timeline worth keeping", "Life events with Islamic milestones like Hajj, Shahada and Nikah, pinned posts and On this day memories."),
+        ("🌍", "Reach the whole Ummah", "Write once and HalalBook translates your post into the main languages of the Muslim world."),
+    ];
+}
