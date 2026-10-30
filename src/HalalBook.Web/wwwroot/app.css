@@ -1129,3 +1129,8 @@ input.switch:focus-visible { outline: 2px solid var(--gold-500); outline-offset:
 .mb-options { position: absolute; left: 0; right: 0; top: 100%; z-index: 5; background: var(--surface); border-radius: 12px; box-shadow: var(--shadow-lg); padding: .3rem; }
 .mb-options button { display: flex; align-items: center; gap: .5rem; width: 100%; border: 0; background: none; padding: .45rem .5rem; border-radius: 8px; font: inherit; cursor: pointer; text-align: start; }
 .mb-options button:hover { background: var(--emerald-50, #eef7f3); }
+
+/* ---------- Copy link ---------- */
+.share-link { display: flex; gap: .4rem; margin-top: .7rem; }
+.share-link .input { flex: 1; min-width: 0; font-size: .82rem; color: var(--text-3); background: var(--bg); }
+.copied { background: var(--emerald-700, #0f5c45) !important; color: #fff !important; }

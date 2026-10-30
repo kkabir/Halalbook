@@ -8,6 +8,12 @@
     <div class="modal share-sheet" @onclick:stopPropagation>
         <div class="row spread"><h2 style="margin:0">Share</h2><button class="icon-btn" @onclick="Close" aria-label="Close">✕</button></div>
 
+        @* Like Facebook's "Copy link": paste it into WhatsApp, Messenger, SMS or anywhere. Public posts show a preview card. *@
+        <div class="share-link">
+            <input class="input" readonly value="@Url" onfocus="this.select()" />
+            <button class="btn btn-primary btn-sm" data-url="@Url" onclick="halalbook.copyLink(this)"><span data-label>🔗 Copy link</span></button>
+        </div>
+
         <div class="tabs" style="margin:.6rem 0">
             <button class="@(tab == "feed" ? "active" : "")" @onclick='() => tab = "feed"'>📰 Feed</button>
             <button class="@(tab == "groups" ? "active" : "")" @onclick="ShowGroups">🕌 Groups</button>
@@ -73,7 +79,7 @@
                     <a class="share-app" href="@($"https://www.linkedin.com/sharing/share-offsite/?url={Enc(Url)}")" target="_blank" rel="noopener"><span style="background:#0a66c2">in</span>LinkedIn</a>
                     <a class="share-app" href="@($"mailto:?subject={Enc("Shared from HalalBook")}&body={Enc(Title + "\n\n" + Url)}")"><span style="background:#c9a227">@@</span>Email</a>
                     <a class="share-app" href="@($"sms:?&body={Enc(Title + " " + Url)}")"><span style="background:#34c759">💬</span>Text message</a>
-                    <button class="share-app" @onclick="Copy"><span style="background:#4b5d55">🔗</span>Copy link</button>
+                    <button class="share-app" data-url="@Url" onclick="halalbook.copyLink(this)"><span style="background:#4b5d55">🔗</span><b data-label>Copy link</b></button>
                 </div>
                 <p class="subtle center mt">@(Post.Visibility == Visibility.Public ? "Anyone with the link can see this public post." : "Only people who can already see this post can open the link.")</p>
                 break;

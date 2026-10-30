@@ -46,7 +46,7 @@
                         <button @onclick="ToggleBookmark">@(Post.IsBookmarked ? "🔖 Remove from saved" : "🔖 Save post")</button>
                         <button @onclick="TranslateToMine">🌐 @T("See translation")</button>
                         <button @onclick="CheckSources">📖 Check Quran and hadith sources (AI)</button>
-                        <button @onclick="CopyLink">🔗 Copy link</button>
+                        <button data-url="@Nav.ToAbsoluteUri($"/p/{Post.SharedPost?.Id ?? Post.Id}")" onclick="halalbook.copyLink(this)"><span data-label>🔗 @T("Copy link")</span></button>
                         @if (IsMine && Post.Group is null)
                         {
                             @if (Post.IsPinned) { <button @onclick="Unpin">📌 Unpin from profile</button> }
@@ -290,12 +290,6 @@
 
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
-    private async Task CopyLink()
-    {
-        await JS.InvokeVoidAsync("halalbook.copy", Nav.ToAbsoluteUri($"/p/{Post.SharedPost?.Id ?? Post.Id}").ToString());
-        sharing = false;
-        Toasts.Show("Link copied");
-    }
 
     private string? sources, liveTranslation, liveSource;
     private bool checkingSources, showOriginal, translating;

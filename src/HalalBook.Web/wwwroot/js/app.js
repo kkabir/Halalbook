@@ -34,7 +34,30 @@ window.halalbook = {
         }
     },
 
-    copy: (text) => navigator.clipboard?.writeText(text),
+    copy: (text) => window.halalbook.copyText(text),
+    // Copies text; falls back to a hidden text box where the clipboard API isn't allowed (older phones, in-app browsers).
+    copyText: (text) => {
+        const fallback = () => {
+            const t = document.createElement('textarea');
+            t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
+            document.body.appendChild(t); t.select(); t.setSelectionRange(0, text.length);
+            let ok = false; try { ok = document.execCommand('copy'); } catch { }
+            t.remove(); return ok;
+        };
+        if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text).then(() => true, fallback);
+        return Promise.resolve(fallback());
+    },
+    // Called straight from a button's onclick, so phones (iPhone Safari especially) still count it as a tap and allow copying.
+    copyLink: (button) => {
+        const url = button.dataset.url;
+        window.halalbook.copyText(url).then(ok => {
+            const label = button.querySelector('[data-label]') || button;
+            const before = label.textContent;
+            label.textContent = ok === false ? '⚠ Press and hold the link to copy' : '✓ Copied';
+            button.classList.add('copied');
+            setTimeout(() => { label.textContent = before; button.classList.remove('copied'); }, 2200);
+        });
+    },
 
     // Short-video cards on the home page: preview silently while on screen (or while hovered on a computer).
     reelLoop: (value) => {
