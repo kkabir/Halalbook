@@ -17,7 +17,7 @@ public static class SeedData
             {
                 UserName = userName, NormalizedUserName = userName.ToUpperInvariant(),
                 Email = $"{userName}@example.com", NormalizedEmail = $"{userName}@example.com".ToUpperInvariant(),
-                DisplayName = name, Bio = bio, Location = location, Role = role, IsVerified = role == UserRole.Admin,
+                DisplayName = name, Bio = bio, Location = location, Role = role, IsVerified = role == UserRole.Admin, EmailConfirmed = true,
                 CreatedAt = DateTime.UtcNow.AddDays(-Random.Shared.Next(20, 400)),
             };
             u.PasswordHash = hasher.HashPassword(u, password);

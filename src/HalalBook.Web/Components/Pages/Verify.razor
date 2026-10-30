@@ -1,0 +1,63 @@
+@page "/verify"
+@layout AuthLayout
+@inject ApiClient Api
+@inject AuthSession Session
+@inject NavigationManager Nav
+
+<PageTitle>@(IsLogin ? "Sign-in code" : "Confirm your email") · HalalBook</PageTitle>
+
+<div class="card">
+    <div class="center" style="margin-bottom:1.25rem">
+        <div style="font-size:2.4rem">@(IsLogin ? "🔐" : "✉️")</div>
+        <h1 style="font-family:var(--font-display);font-weight:700">@(IsLogin ? "Enter your sign-in code" : "Confirm your email")</h1>
+        <p class="muted">@(info ?? Msg ?? $"We sent a 6-digit code to {Email}.")</p>
+    </div>
+    <form class="stack" @onsubmit="Submit">
+        <label class="field">6-digit code
+            <input class="input" style="font-size:1.6rem;letter-spacing:.5rem;text-align:center" inputmode="numeric" autocomplete="one-time-code"
+                   maxlength="6" @bind="code" @bind:event="oninput" required />
+        </label>
+        @if (error is not null) { <div class="error">@error</div> }
+        <button class="btn btn-primary btn-block" type="submit" disabled="@(busy || (code?.Length ?? 0) != 6)">@(busy ? "Checking…" : IsLogin ? "Sign in" : "Confirm and continue")</button>
+    </form>
+    <hr class="ornament" style="margin:1.25rem 0" />
+    <p class="center muted">
+        Didn't get it? Check your spam folder, or <a href="javascript:void(0)" @onclick="Resend">send a new code</a>.<br />
+        <a href="/login">Back to sign in</a>
+    </p>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Email { get; set; }
+    [SupplyParameterFromQuery] public string? Step { get; set; }
+    [SupplyParameterFromQuery] public string? Msg { get; set; }
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private string? code, error, info;
+    private bool busy;
+    private bool IsLogin => Step == nameof(AuthStep.LoginCode);
+
+    private async Task Submit()
+    {
+        busy = true; error = null;
+        try
+        {
+            var result = await Api.PostAsync<AuthResult>(IsLogin ? "api/auth/login-code" : "api/auth/verify-email", new VerifyCodeRequest(Email ?? "", code ?? ""));
+            await AuthFlow.ContinueAsync(result, Session, Nav, ReturnUrl);
+        }
+        catch (ApiException ex) { error = ex.Message; }
+        catch (Exception) { error = "We couldn't reach HalalBook. Please try again."; }
+        finally { busy = false; }
+    }
+
+    private async Task Resend()
+    {
+        error = null;
+        try
+        {
+            var r = await Api.PostAsync<AuthResult>("api/auth/resend-code", new ResendCodeRequest(Email ?? "", IsLogin ? AuthStep.LoginCode : AuthStep.VerifyEmail));
+            info = r.Message;
+        }
+        catch (ApiException ex) { error = ex.Message; }
+    }
+}

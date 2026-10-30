@@ -653,3 +653,58 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030022511_EmailVerification'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [EmailConfirmed] bit NOT NULL DEFAULT CAST(0 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030022511_EmailVerification'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [TwoFactorEnabled] bit NOT NULL DEFAULT CAST(0 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030022511_EmailVerification'
+)
+BEGIN
+    CREATE TABLE [EmailCodes] (
+        [Id] uniqueidentifier NOT NULL,
+        [UserId] uniqueidentifier NOT NULL,
+        [Purpose] int NOT NULL,
+        [CodeHash] nvarchar(64) NOT NULL,
+        [Attempts] int NOT NULL,
+        [CreatedAt] datetime2 NOT NULL,
+        [ExpiresAt] datetime2 NOT NULL,
+        [ConsumedAt] datetime2 NULL,
+        CONSTRAINT [PK_EmailCodes] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030022511_EmailVerification'
+)
+BEGIN
+    CREATE INDEX [IX_EmailCodes_UserId_Purpose_CreatedAt] ON [EmailCodes] ([UserId], [Purpose], [CreatedAt]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030022511_EmailVerification'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261030022511_EmailVerification', N'10.0.14');
+END;
+
+COMMIT;
+GO
+

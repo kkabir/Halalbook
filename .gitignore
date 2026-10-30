@@ -488,3 +488,6 @@ src/HalalBook.Api/appsettings.Production.json
 *.db-wal
 **/wwwroot/uploads/
 publish/
+
+# Local dev email pickup folder
+src/HalalBook.Api/emails/

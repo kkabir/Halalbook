@@ -12,45 +12,7 @@ public static partial class UserEndpoints
 {
     public static void MapUserEndpoints(this IEndpointRouteBuilder app)
     {
-        var auth = app.MapGroup("/api/auth").WithTags("Auth");
-
-        auth.MapPost("/register", async (RegisterRequest req, AppDbContext db, TokenService tokens, IPasswordHasher<User> hasher) =>
-        {
-            var errors = new Dictionary<string, string[]>();
-            if (!UserNameRegex().IsMatch(req.UserName ?? "")) errors["userName"] = ["Use 3-32 letters, numbers, dots or underscores."];
-            if (string.IsNullOrWhiteSpace(req.Email) || !req.Email.Contains('@')) errors["email"] = ["Enter a valid email."];
-            if ((req.Password ?? "").Length < 8) errors["password"] = ["Use at least 8 characters."];
-            if (string.IsNullOrWhiteSpace(req.DisplayName)) errors["displayName"] = ["Enter your name."];
-            if (errors.Count > 0) return Results.ValidationProblem(errors);
-
-            var nu = req.UserName!.ToUpperInvariant();
-            var ne = req.Email.Trim().ToUpperInvariant();
-            if (await db.Users.AnyAsync(u => u.NormalizedUserName == nu)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["userName"] = ["That username is taken."] });
-            if (await db.Users.AnyAsync(u => u.NormalizedEmail == ne)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["email"] = ["That email is already registered."] });
-
-            var user = new User
-            {
-                UserName = req.UserName!, NormalizedUserName = nu, Email = req.Email.Trim(), NormalizedEmail = ne,
-                DisplayName = req.DisplayName.Trim(),
-                Role = await db.Users.AnyAsync() ? UserRole.User : UserRole.Admin, // first account administers the site
-            };
-            user.PasswordHash = hasher.HashPassword(user, req.Password!);
-            db.Users.Add(user);
-            await db.SaveChangesAsync();
-            var (token, exp) = tokens.Create(user);
-            return Results.Ok(new AuthResponse(token, exp, user.ToDto()));
-        });
-
-        auth.MapPost("/login", async (LoginRequest req, AppDbContext db, TokenService tokens, IPasswordHasher<User> hasher) =>
-        {
-            var key = (req.UserNameOrEmail ?? "").Trim().ToUpperInvariant();
-            var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedUserName == key || u.NormalizedEmail == key);
-            if (user is null || hasher.VerifyHashedPassword(user, user.PasswordHash, req.Password ?? "") == PasswordVerificationResult.Failed)
-                return Results.Problem("Incorrect username or password.", statusCode: 401);
-            if (user.IsSuspended) return Results.Problem("This account is suspended.", statusCode: 403);
-            var (token, exp) = tokens.Create(user);
-            return Results.Ok(new AuthResponse(token, exp, user.ToDto()));
-        });
+        app.MapAuthEndpoints();
 
         var users = app.MapGroup("/api/users").WithTags("Users").RequireAuthorization();
 
@@ -246,5 +208,4 @@ public static partial class UserEndpoints
         });
     }
 
-    [GeneratedRegex(@"^[A-Za-z0-9_\.]{3,32}$")] private static partial Regex UserNameRegex();
 }

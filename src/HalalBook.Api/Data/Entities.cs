@@ -19,6 +19,8 @@ public class User
     public UserRole Role { get; set; }
     public bool IsVerified { get; set; }
     public bool IsSuspended { get; set; }
+    public bool EmailConfirmed { get; set; }
+    public bool TwoFactorEnabled { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
     public string PrayerMethod { get; set; } = "MWL";
@@ -272,4 +274,19 @@ public class Report
     public ReportStatus Status { get; set; }
     public Guid? ResolvedById { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public enum EmailCodePurpose { VerifyEmail, ResetPassword, Login }
+
+/// <summary>One-time code sent by email. Only a hash of the code is stored.</summary>
+public class EmailCode
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public EmailCodePurpose Purpose { get; set; }
+    public string CodeHash { get; set; } = "";
+    public int Attempts { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresAt { get; set; }
+    public DateTime? ConsumedAt { get; set; }
 }

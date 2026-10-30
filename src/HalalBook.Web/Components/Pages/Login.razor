@@ -15,6 +15,7 @@
     <form class="stack" @onsubmit="Submit">
         <label class="field">Username or email<input class="input" @bind="user" autocomplete="username" required /></label>
         <label class="field">Password<input class="input" type="password" @bind="password" autocomplete="current-password" required /></label>
+        <div style="text-align:right;margin-top:-.5rem"><a href="/forgot-password" style="font-size:.88rem">Forgot password?</a></div>
         @if (error is not null) { <div class="error">@error</div> }
         <button class="btn btn-primary btn-block" type="submit" disabled="@busy">@(busy ? "Signing in…" : "Sign in")</button>
     </form>
@@ -38,9 +39,8 @@
         busy = true; error = null;
         try
         {
-            var auth = await Api.PostAsync<AuthResponse>("api/auth/login", new LoginRequest(user ?? "", password ?? ""));
-            await Session.SignInAsync(auth);
-            Nav.NavigateTo(ReturnUrl is { Length: > 1 } r && r.StartsWith('/') && !r.StartsWith("//") ? r : "/", forceLoad: false);
+            var result = await Api.PostAsync<AuthResult>("api/auth/login", new LoginRequest(user ?? "", password ?? ""));
+            await AuthFlow.ContinueAsync(result, Session, Nav, ReturnUrl);
         }
         catch (ApiException ex) { error = ex.Message; }
         catch (Exception) { error = "We couldn't reach HalalBook. Please try again."; }

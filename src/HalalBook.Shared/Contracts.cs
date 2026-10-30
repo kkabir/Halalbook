@@ -20,13 +20,23 @@ public record RegisterRequest(string UserName, string Email, string Password, st
 public record LoginRequest(string UserNameOrEmail, string Password);
 public record AuthResponse(string Token, DateTime ExpiresAt, UserDto User);
 
+/// <summary>Where sign-in or sign-up stands: done (signed in), or waiting for an emailed code.</summary>
+public enum AuthStep { Done, VerifyEmail, LoginCode }
+public record AuthResult(AuthStep Step, AuthResponse? Auth, string? Email, string? Message);
+public record VerifyCodeRequest(string Email, string Code);
+public record EmailRequest(string Email);
+public record ResendCodeRequest(string Email, AuthStep Step);
+public record ResetPasswordRequest(string Email, string Code, string NewPassword);
+public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+public record TwoFactorRequest(bool Enabled);
+
 // ---------- Users ----------
 public record UserSummaryDto(Guid Id, string UserName, string DisplayName, string? AvatarUrl, bool IsVerified);
 
 public record UserDto(
     Guid Id, string UserName, string Email, string DisplayName, string? Bio, string? AvatarUrl, string? CoverUrl,
     string? Location, string? Website, UserRole Role, bool IsVerified, DateTime JoinedAt,
-    double? Latitude, double? Longitude, string PrayerMethod, string AsrSchool);
+    double? Latitude, double? Longitude, string PrayerMethod, string AsrSchool, bool EmailConfirmed = false, bool TwoFactorEnabled = false);
 
 public record ProfileDto(
     UserSummaryDto User, string? Bio, string? CoverUrl, string? Location, string? Website, DateTime JoinedAt,

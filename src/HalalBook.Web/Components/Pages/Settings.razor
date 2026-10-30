@@ -52,10 +52,30 @@
     <div class="row mt" style="justify-content:flex-end">
         <button class="btn btn-primary" disabled="@busy" @onclick="Save">Save changes</button>
     </div>
+
+    <div class="card stack mt">
+        <div class="card-title">Account security</div>
+        <div class="row spread wrap">
+            <div><b>Email</b><div class="subtle">@Session.User?.Email</div></div>
+            @if (Session.User?.EmailConfirmed == true) { <span class="chip">✓ Confirmed</span> } else { <span class="chip gold">Not confirmed</span> }
+        </div>
+        <hr class="divider" />
+        <label class="row spread" style="cursor:pointer">
+            <div><b>Two-step sign-in</b><div class="subtle">We'll email you a code each time you sign in.</div></div>
+            <input type="checkbox" style="width:22px;height:22px" checked="@(Session.User?.TwoFactorEnabled == true)" @onchange="ToggleTwoFactor" />
+        </label>
+        <hr class="divider" />
+        <b>Change password</b>
+        <div class="row wrap">
+            <input class="input grow" type="password" placeholder="Current password" autocomplete="current-password" @bind="currentPassword" />
+            <input class="input grow" type="password" placeholder="New password (8+ characters)" autocomplete="new-password" @bind="newPassword" />
+            <button class="btn btn-outline" disabled="@(string.IsNullOrEmpty(currentPassword) || (newPassword?.Length ?? 0) < 8)" @onclick="ChangePassword">Update password</button>
+        </div>
+    </div>
 </div>
 
 @code {
-    private string? name, bio, location, website, avatar, cover, method, asr;
+    private string? name, bio, location, website, avatar, cover, method, asr, currentPassword, newPassword;
     private double? lat, lng;
     private bool busy;
     private List<PrayerMethodDto> methods = [];
@@ -83,6 +103,28 @@
         var c = await JS.InvokeAsync<PrayerWidget.Coords?>("halalbook.getLocation");
         if (c is null) { Toasts.Show("Location permission was denied.", true); return; }
         lat = Math.Round(c.Latitude, 4); lng = Math.Round(c.Longitude, 4);
+    }
+
+    private async Task ToggleTwoFactor(ChangeEventArgs e)
+    {
+        try
+        {
+            var u = await Api.PutAsync<UserDto>("api/users/me/two-factor", new TwoFactorRequest(e.Value is true));
+            await Session.UpdateUserAsync(u);
+            Toasts.Show(u.TwoFactorEnabled ? "Two-step sign-in is on" : "Two-step sign-in is off");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task ChangePassword()
+    {
+        try
+        {
+            await Api.PutAsync("api/users/me/password", new ChangePasswordRequest(currentPassword ?? "", newPassword ?? ""));
+            currentPassword = newPassword = null;
+            Toasts.Show("Password updated. We've emailed you a confirmation.");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
     }
 
     private async Task Save()

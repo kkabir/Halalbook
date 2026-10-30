@@ -28,6 +28,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Report> Reports => Set<Report>();
+    public DbSet<EmailCode> EmailCodes => Set<EmailCode>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -110,6 +111,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasIndex(x => new { x.UserId, x.CreatedAt });
             e.HasOne(x => x.Actor).WithMany().HasForeignKey(x => x.ActorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<EmailCode>(e =>
+        {
+            e.HasIndex(x => new { x.UserId, x.Purpose, x.CreatedAt });
+            e.Property(x => x.CodeHash).HasMaxLength(64);
         });
 
         b.Entity<Report>().HasOne(x => x.Reporter).WithMany().HasForeignKey(x => x.ReporterId).OnDelete(DeleteBehavior.Restrict);

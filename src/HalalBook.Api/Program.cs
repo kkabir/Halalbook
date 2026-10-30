@@ -38,6 +38,12 @@ builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<PostService>();
 builder.Services.AddScoped<Notifier>();
 builder.Services.AddHttpClient<AiService>(c => c.Timeout = TimeSpan.FromSeconds(60));
+builder.Services.AddSingleton(config.GetSection("Email").Get<EmailOptions>() ?? new EmailOptions());
+builder.Services.AddSingleton(config.GetSection("Auth").Get<AuthOptions>() ?? new AuthOptions());
+builder.Services.AddSingleton<EmailTemplates>();
+builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+builder.Services.AddScoped<OtpService>();
+builder.Services.AddScoped<Mailer>();
 
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddSignalR().AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -85,6 +91,10 @@ builder.Services.AddRateLimiter(o =>
     o.AddPolicy("ai", ctx => RateLimitPartition.GetFixedWindowLimiter(
         ctx.User.Identity?.Name ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "anon",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) }));
+    // Sign-in, codes and password resets: slows down guessing and email flooding.
+    o.AddPolicy("auth", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "anon",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = config.GetValue("Auth:RequestsPerMinute", 20), Window = TimeSpan.FromMinutes(1) }));
 });
 
 var app = builder.Build();

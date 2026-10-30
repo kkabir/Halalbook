@@ -34,9 +34,8 @@
         busy = true; error = null;
         try
         {
-            var auth = await Api.PostAsync<AuthResponse>("api/auth/register", new RegisterRequest(userName ?? "", email ?? "", password ?? "", name ?? ""));
-            await Session.SignInAsync(auth);
-            Nav.NavigateTo("/");
+            var result = await Api.PostAsync<AuthResult>("api/auth/register", new RegisterRequest(userName ?? "", email ?? "", password ?? "", name ?? ""));
+            await AuthFlow.ContinueAsync(result, Session, Nav, null);
         }
         catch (ApiException ex) { error = ex.Message; }
         catch (Exception) { error = "We couldn't reach HalalBook. Please try again."; }
