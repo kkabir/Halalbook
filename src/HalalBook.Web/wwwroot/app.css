@@ -595,3 +595,77 @@ label.field { display: flex; flex-direction: column; gap: .35rem; font-weight: 6
 .catchup { border: 1px dashed var(--gold-300); background: linear-gradient(135deg, var(--surface), var(--gold-100)); margin-bottom: 1rem; }
 .alt-badge { position: absolute; left: 6px; bottom: 6px; background: rgba(0, 0, 0, .65); color: #fff; font-size: .65rem; font-weight: 800; padding: .15rem .4rem; border-radius: 6px; }
 .lb-alt { position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%); max-width: 80vw; color: #fff; background: rgba(0, 0, 0, .55); padding: .4rem .8rem; border-radius: 10px; font-size: .9rem; }
+
+/* ---------- Phones: Facebook-style compact layout ---------- */
+@media (max-width: 860px) {
+    html, body { font-size: 14.5px; }
+    .auth { display: flex; flex-direction: column; min-height: 100dvh; }
+    .auth-art { min-height: 0; padding: 1rem 1.25rem .9rem; background-size: cover; background-position: center 70%; }
+    .auth-art .brand svg { width: 40px; height: 40px; }
+    .auth-art .brand-name { font-size: 1.6rem; display: inline; }
+    .auth-art .bismillah { font-size: 1.15rem; margin-top: .3rem; }
+    .auth-art h2, .auth-art > p, .auth-art .features { display: none; }
+    .auth-form { padding: 1rem .9rem 2rem; place-items: start center; }
+    .auth-card .card { padding: 2rem 1.25rem 1.5rem; border-radius: 60px 60px var(--radius) var(--radius); }
+    .auth-card h1 { font-size: 1.4rem; }
+    .topbar { height: 56px; }
+    .topbar-search input { height: 38px; }
+    .shell, .shell.wide { padding: .75rem .5rem 5.5rem; gap: .75rem; }
+    .card { border-radius: 14px; padding: .85rem .9rem; }
+    .post-head { padding: .8rem .9rem .3rem; }
+    .post-body { padding: .2rem .9rem .5rem; }
+    .post-actions { margin: 0 .4rem; }
+    .action { padding: .5rem .2rem; font-size: .82rem; gap: .3rem; }
+    .page-hero { padding: 1.1rem 1rem; border-radius: 14px; }
+    .page-hero h1 { font-size: 1.5rem; }
+    .modal { padding: 1rem; max-height: 92dvh; }
+    .overlay { padding: .5rem; align-items: end; }
+    .grid-cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .6rem; }
+    .profile-head { padding: 0 .9rem; margin-top: -60px; gap: .6rem; }
+    .profile-name { font-size: 1.5rem; }
+    .tabs button, .tabs a { padding: .65rem .7rem; font-size: .85rem; }
+    .stories { gap: .5rem; }
+    .story { width: 96px; height: 160px; }
+    .chat { height: calc(100dvh - 140px); border-radius: 14px; }
+    .live-stage { height: 45dvh; }
+    .live-side { max-height: none; }
+    .prayer-big { grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+    .prayer-tile { padding: 1.2rem .4rem .8rem; border-radius: 50px 50px 14px 14px; }
+    .prayer-tile .t { font-size: 1.1rem; }
+    .cal { gap: 3px; }
+    .cal .day { padding: .25rem; font-size: .7rem; border-radius: 8px; }
+    .composer-tools .btn { padding: .35rem .55rem; }
+    .reel { height: calc(100dvh - 150px); }
+    .row.wrap > .input.grow { min-width: 0; }
+    input, select, textarea { font-size: 16px !important; } /* stops iPhone zooming into fields */
+}
+@media (max-width: 420px) {
+    .action span:last-child { display: none; } /* icon-only action buttons on small phones */
+    .topbar-actions { gap: .3rem; }
+    .topbar .icon-btn { width: 36px; height: 36px; }
+}
+
+/* ---------- Profile header like Facebook (round photo over the cover, camera buttons) ---------- */
+.profile-head .avatar { border-radius: 50%; }
+.profile-head .avatar img { border-radius: 50%; }
+.avatar-wrap { position: relative; flex: none; }
+.cam-btn { position: absolute; right: 6px; bottom: 6px; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--surface-2); border: 2px solid var(--surface); box-shadow: var(--shadow); cursor: pointer; font-size: 1.1rem; z-index: 3; }
+.cam-btn:hover { background: var(--emerald-100); }
+.cover-btn { position: absolute; right: 1rem; bottom: 1rem; z-index: 2; background: rgba(255, 255, 255, .92); color: #17241f; }
+.photo-menu { position: absolute; left: 0; top: calc(100% + 4px); z-index: 30; }
+@media (max-width: 860px) {
+    .profile-head { flex-direction: column; align-items: center; text-align: center; margin-top: -78px; }
+    .profile-head .avatar { --size: 140px; }
+    .profile-head .grow { padding-bottom: 0 !important; }
+    .profile-head > .row { justify-content: center; padding-bottom: .5rem !important; }
+    .cover { height: 180px; border-radius: 0; }
+    .cover-btn { bottom: .6rem; right: .6rem; padding: .35rem .7rem; font-size: .8rem; }
+}
+@media (max-width: 860px) { .cover-btn { top: .6rem; bottom: auto; } }
+
+.menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.menu-tile { display: flex; flex-direction: column; gap: .35rem; color: var(--text); text-decoration: none !important; margin: 0 !important; }
+.menu-tile span { font-size: 1.5rem; }
+.menu-link { display: block; padding: .7rem .4rem; border: 0; background: none; text-align: left; font: 600 .95rem var(--font); color: var(--text); border-radius: 10px; cursor: pointer; }
+.menu-link:hover { background: var(--surface-2); text-decoration: none; }

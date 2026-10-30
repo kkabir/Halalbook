@@ -1,0 +1,32 @@
+@page "/menu"
+@inject AuthSession Session
+
+<PageTitle>Menu · HalalBook</PageTitle>
+
+@* Facebook-style "Menu" tab: every section in one place on phones. *@
+<a class="card row" href="/u/@Session.User?.UserName" style="color:var(--text);text-decoration:none">
+    <span class="avatar ring" style="--size:48px">@if (Session.User?.AvatarUrl is { } a) { <img src="@a" alt="" /> } else { @Ui.Initials(Session.User?.DisplayName ?? "?") }</span>
+    <div class="grow"><b>@Session.User?.DisplayName</b><div class="subtle">See your profile</div></div>
+</a>
+
+<div class="menu-grid mt">
+    @foreach (var (href, icon, name) in Items)
+    {
+        <a class="card menu-tile" href="@href"><span>@icon</span><b>@name</b></a>
+    }
+    @if (Session.IsModerator) { <a class="card menu-tile" href="/moderation"><span>🛡️</span><b>Moderation</b></a> }
+</div>
+
+<div class="card mt stack" style="gap:.25rem">
+    <a class="menu-link" href="/settings">⚙️ Settings & privacy</a>
+    <button class="menu-link" @onclick="Session.SignOutAsync">🚪 Sign out</button>
+</div>
+
+@code {
+    private static readonly (string, string, string)[] Items =
+    [
+        ("/friends", "🤝", "Friends"), ("/groups", "🕌", "Groups"), ("/messages", "💬", "Messages"), ("/live", "🔴", "Live"),
+        ("/reels", "🎬", "Reels"), ("/events", "📅", "Events"), ("/pages", "📜", "Pages"), ("/bookmarks", "🔖", "Saved"),
+        ("/prayer", "🕋", "Prayer times"), ("/qibla", "🧭", "Qibla"), ("/calendar", "🌙", "Hijri calendar"), ("/noor", "✨", "Ask Noor"),
+    ];
+}

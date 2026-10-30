@@ -4,6 +4,7 @@
 @inject Toasts Toasts
 @inject NavigationManager Nav
 @inject Realtime Realtime
+@inject MediaGuard Guard
 
 <PageTitle>@(profile?.User.DisplayName ?? UserName) · HalalBook</PageTitle>
 
@@ -16,9 +17,30 @@ else
 {
     var p = profile;
     <div class="card" style="padding:0;overflow:hidden">
-        <div class="cover">@if (p.CoverUrl is { } c) { <img src="@c" alt="" /> }</div>
+        <div class="cover" style="cursor:@(p.CoverUrl is null ? "default" : "zoom-in")" @onclick="() => viewing = p.CoverUrl">
+            @if (p.CoverUrl is { } c) { <img src="@c" alt="Cover photo" /> }
+            @if (IsSelf)
+            {
+                <label class="btn btn-sm cover-btn" @onclick:stopPropagation>📷 @(p.CoverUrl is null ? "Add cover photo" : "Edit cover")
+                    <InputFile OnChange="e => ChangePhoto(e, cover: true)" accept="image/*" style="display:none" /></label>
+            }
+        </div>
         <div class="profile-head">
-            <span class="avatar">@if (p.User.AvatarUrl is { } a) { <img src="@a" alt="" /> } else { @Ui.Initials(p.User.DisplayName) }</span>
+            <div class="avatar-wrap">
+                <span class="avatar" style="cursor:pointer" @onclick="() => photoMenu = !photoMenu">@if (p.User.AvatarUrl is { } a) { <img src="@a" alt="@p.User.DisplayName" /> } else { @Ui.Initials(p.User.DisplayName) }</span>
+                @if (IsSelf) { <label class="cam-btn" title="Update profile picture">📷<InputFile OnChange="e => ChangePhoto(e, cover: false)" accept="image/*" style="display:none" /></label> }
+                @if (photoMenu)
+                {
+                    <div class="menu-pop photo-menu" @onclick="() => photoMenu = false">
+                        @if (p.User.AvatarUrl is { } full) { <button @onclick="() => viewing = full">🖼️ View profile picture</button> }
+                        @if (IsSelf)
+                        {
+                            <label class="btn-like" style="display:flex;gap:.6rem;padding:.55rem .7rem;cursor:pointer">📷 Upload new picture<InputFile OnChange="e => ChangePhoto(e, cover: false)" accept="image/*" style="display:none" /></label>
+                            @if (p.User.AvatarUrl is not null) { <button @onclick="RemovePhoto">🗑️ Remove picture</button> }
+                        }
+                    </div>
+                }
+            </div>
             <div class="grow" style="padding-bottom:.5rem">
                 <div class="profile-name">@p.User.DisplayName @if (p.User.IsVerified) { <span class="verified">✦</span> }</div>
                 <div class="muted">@@@p.User.UserName · @p.FriendCount friends · @p.FollowerCount followers</div>
@@ -113,13 +135,58 @@ else
     </div>
 }
 
+@if (viewing is not null)
+{
+    <div class="overlay lightbox" @onclick="() => viewing = null">
+        <button class="icon-btn lb-close" aria-label="Close">✕</button>
+        <div class="lb-stage"><img src="@viewing" alt="" /></div>
+    </div>
+}
+@if (uploadingPhoto) { <div class="toasts"><div class="toast">Uploading photo…</div></div> }
+
 @code {
     [Parameter] public string UserName { get; set; } = "";
     private ProfileDto? profile;
     private List<UserSummaryDto>? friends;
     private PostList? list;
     private string tab = "posts";
-    private bool missing, menu;
+    private bool missing, menu, photoMenu, uploadingPhoto;
+    private string? viewing;
+    private bool IsSelf => profile?.Friendship == FriendshipStatus.Self;
+
+    /// <summary>Like Facebook: change your profile or cover picture from your profile, and share the new picture with friends.</summary>
+    private async Task ChangePhoto(InputFileChangeEventArgs e, bool cover)
+    {
+        photoMenu = false;
+        uploadingPhoto = true;
+        try
+        {
+            var up = (await Guard.UploadAsync([e.File], cover ? "cover" : "profile")).FirstOrDefault();
+            if (up is null) return;
+            var u = await Api.PutAsync<UserDto>("api/users/me", cover
+                ? new UpdateProfileRequest(null, null, null, up.Url, null, null, null, null, null, null)
+                : new UpdateProfileRequest(null, null, up.Url, null, null, null, null, null, null, null));
+            await Session.UpdateUserAsync(u);
+            await Api.PostAsync<PostDto>("api/posts", new CreatePostRequest(cover ? "Updated my cover photo 🌙" : "Updated my profile picture 🌙",
+                Visibility.Friends, [new MediaDto(up.Url, MediaType.Image, up.AltText)]));
+            Toasts.Show(cover ? "Cover photo updated" : "Profile picture updated");
+            await Load();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { uploadingPhoto = false; }
+    }
+
+    private async Task RemovePhoto()
+    {
+        try
+        {
+            var u = await Api.PutAsync<UserDto>("api/users/me", new UpdateProfileRequest(null, null, "", null, null, null, null, null, null, null));
+            await Session.UpdateUserAsync(u);
+            await Load();
+            Toasts.Show("Profile picture removed");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
 
     protected override async Task OnParametersSetAsync()
     {

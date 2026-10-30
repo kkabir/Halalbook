@@ -25,8 +25,9 @@ public static partial class UserEndpoints
             if (u is null) return Results.Unauthorized();
             if (!string.IsNullOrWhiteSpace(req.DisplayName)) u.DisplayName = req.DisplayName.Trim();
             u.Bio = req.Bio ?? u.Bio;
-            u.AvatarUrl = req.AvatarUrl ?? u.AvatarUrl;
-            u.CoverUrl = req.CoverUrl ?? u.CoverUrl;
+            // An empty string removes the photo; null leaves it unchanged.
+            if (req.AvatarUrl is not null) u.AvatarUrl = req.AvatarUrl.Length == 0 ? null : req.AvatarUrl;
+            if (req.CoverUrl is not null) u.CoverUrl = req.CoverUrl.Length == 0 ? null : req.CoverUrl;
             u.Location = req.Location ?? u.Location;
             u.Website = req.Website ?? u.Website;
             if (req.WhoCanPost is { } who) u.WhoCanPost = who;
