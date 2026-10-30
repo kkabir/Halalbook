@@ -467,4 +467,24 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var search = (await stranger.GetFromJsonAsync<SearchResultDto>($"/api/search?q={ownerName}", Json))!;
         Assert.DoesNotContain(search.People, x => x.Id == ownerId);
     }
+
+    [Fact]
+    public async Task SharePost_InMessagesAndPublicLink()
+    {
+        var (a, aId) = await SignUpWithId("sharer");
+        var (b, bId) = await SignUpWithId("receiver");
+        await MakeFriends(a, aId, b, bId);
+        var pub = (await (await a.PostAsJsonAsync("/api/posts", new CreatePostRequest("A public reminder"), Json)).Content.ReadFromJsonAsync<PostDto>(Json))!;
+        var priv = (await (await a.PostAsJsonAsync("/api/posts", new CreatePostRequest("Friends only", Visibility.Friends), Json)).Content.ReadFromJsonAsync<PostDto>(Json))!;
+
+        var sent = await (await a.PostAsJsonAsync("/api/conversations/send-post", new SendPostRequest(pub.Id, [bId], "Look at this"), Json)).Content.ReadFromJsonAsync<int>(Json);
+        Assert.Equal(1, sent);
+        var conv = (await b.GetFromJsonAsync<List<ConversationDto>>("/api/conversations", Json))!.Single();
+        var msg = (await b.GetFromJsonAsync<List<MessageDto>>($"/api/conversations/{conv.Id}/messages", Json))!.Last();
+        Assert.Equal(pub.Id, msg.SharedPost!.PostId);
+
+        var anon = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.OK, (await anon.GetAsync($"/api/public/posts/{pub.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await anon.GetAsync($"/api/public/posts/{priv.Id}")).StatusCode);
+    }
 }

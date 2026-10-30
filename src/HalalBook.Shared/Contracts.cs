@@ -121,9 +121,14 @@ public record RsvpRequest(RsvpStatus Status);
 
 // ---------- Messaging ----------
 public record ConversationDto(Guid Id, string Title, bool IsGroup, List<UserSummaryDto> Participants, MessageDto? LastMessage, int UnreadCount);
-public record MessageDto(Guid Id, Guid ConversationId, UserSummaryDto Sender, string Content, string? MediaUrl, DateTime SentAt);
+public record MessageDto(Guid Id, Guid ConversationId, UserSummaryDto Sender, string Content, string? MediaUrl, DateTime SentAt,
+    SharedPostPreview? SharedPost = null);
+/// <summary>A post shared into a chat, shown as a small card.</summary>
+public record SharedPostPreview(Guid PostId, string AuthorName, string? Text, string? ImageUrl);
 public record StartConversationRequest(List<Guid> ParticipantIds, string? Title);
-public record SendMessageRequest(string Content, string? MediaUrl);
+public record SendMessageRequest(string Content, string? MediaUrl, Guid? SharedPostId = null);
+/// <summary>Send a post to several people at once (each gets it in their chat with you).</summary>
+public record SendPostRequest(Guid PostId, List<Guid> UserIds, string? Note);
 
 // ---------- Notifications ----------
 public record NotificationDto(Guid Id, NotificationType Type, UserSummaryDto? Actor, string Message, string? Link, bool IsRead, DateTime CreatedAt);

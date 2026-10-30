@@ -43,7 +43,7 @@
                 @foreach (var m in messages)
                 {
                     var mine = m.Sender.Id == Session.User?.Id;
-                    <div class="bubble @(mine ? "mine" : "")">@if (current.IsGroup && !mine) {<b style="font-size:.78rem;display:block">@m.Sender.DisplayName</b>}@if (m.MediaUrl is { } url) {<img src="@url" alt="" style="border-radius:12px;max-height:260px" />}<span>@m.Content</span><time>@Clock.Local(m.SentAt).ToString("h:mm tt")</time></div>
+                    <div class="bubble @(mine ? "mine" : "")">@if (current.IsGroup && !mine) {<b style="font-size:.78rem;display:block">@m.Sender.DisplayName</b>}@if (m.MediaUrl is { } url) {<img src="@url" alt="" style="border-radius:12px;max-height:260px" />}@if (m.SharedPost is { } sp) {<a class="chat-post" href="/post/@sp.PostId">@if (sp.ImageUrl is { } im) {<img src="@im" alt="" />}<b>@sp.AuthorName</b><span>@sp.Text</span></a>}<span>@m.Content</span><time>@Clock.Local(m.SentAt).ToString("h:mm tt")</time></div>
                 }
             </div>
             @if (smart.Count > 0 && string.IsNullOrEmpty(text))

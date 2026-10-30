@@ -148,19 +148,7 @@
 
 @if (sharing)
 {
-    <div class="overlay" @onclick="() => sharing = false">
-        <div class="modal" @onclick:stopPropagation>
-            <h2>Share post</h2>
-            <textarea class="input" placeholder="Say something about this…" @bind="shareText"></textarea>
-            <div class="row mt spread">
-                <button class="btn btn-outline" @onclick="CopyLink">🔗 Copy link</button>
-                <div class="row">
-                    <button class="btn btn-ghost" @onclick="() => sharing = false">Cancel</button>
-                    <button class="btn btn-primary" @onclick="Share">Share now</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <ShareSheet Post="Post" OnClose="() => sharing = false" OnShared="async p => { Post = Post with { ShareCount = Post.ShareCount + 1 }; await OnShared.InvokeAsync(p); }" />
 }
 
 @if (reporting)
@@ -190,7 +178,7 @@
     [Parameter] public EventCallback<PostDto> OnShared { get; set; }
 
     private bool menuOpen, pickerOpen, showComments, sharing, reporting, editing, deleted;
-    private string? shareText, reportReason, translation, editText;
+    private string? reportReason, translation, editText;
 
     private bool IsMine => Post.Author.Id == Session.User?.Id;
 
@@ -262,24 +250,11 @@
         catch (Exception ex) { Toasts.Error(ex); }
     }
 
-    private async Task Share()
-    {
-        try
-        {
-            var created = await Api.PostAsync<PostDto>("api/posts", new CreatePostRequest(shareText ?? "", SharedPostId: Post.SharedPost?.Id ?? Post.Id));
-            sharing = false; shareText = null;
-            Post = Post with { ShareCount = Post.ShareCount + 1 };
-            Toasts.Show("Shared to your timeline");
-            await OnShared.InvokeAsync(created);
-        }
-        catch (Exception ex) { Toasts.Error(ex); }
-    }
-
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private async Task CopyLink()
     {
-        await JS.InvokeVoidAsync("halalbook.copy", Nav.ToAbsoluteUri($"/post/{Post.Id}").ToString());
+        await JS.InvokeVoidAsync("halalbook.copy", Nav.ToAbsoluteUri($"/p/{Post.SharedPost?.Id ?? Post.Id}").ToString());
         sharing = false;
         Toasts.Show("Link copied");
     }

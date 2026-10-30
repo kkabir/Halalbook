@@ -36,6 +36,12 @@ window.halalbook = {
 
     copy: (text) => navigator.clipboard?.writeText(text),
 
+    // The phone's own share sheet (Instagram, Snapchat, Signal...). Returns false where unsupported.
+    nativeShare: async (title, url) => {
+        if (!navigator.share) return false;
+        try { await navigator.share({ title, text: title, url }); return true; } catch { return true; }
+    },
+
     // TikTok-style reels: play the video that is on screen, pause the rest.
     observeReels: (container) => {
         if (!container) return;

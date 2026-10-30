@@ -265,6 +265,11 @@ public class Message
     public string Content { get; set; } = "";
     public string? MediaUrl { get; set; }
     public DateTime SentAt { get; set; } = DateTime.UtcNow;
+    /// <summary>A post shared into the chat; the preview is stored so the card still shows if the post changes.</summary>
+    public Guid? SharedPostId { get; set; }
+    public string? SharedPreview { get; set; }
+    public string? SharedImageUrl { get; set; }
+    public string? SharedAuthorName { get; set; }
 }
 
 public class Notification

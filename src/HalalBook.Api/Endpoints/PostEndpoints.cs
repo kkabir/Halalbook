@@ -23,6 +23,16 @@ public static class PostEndpoints
             return await svc.PageAsync(visible.Where(p => p.Kind == PostKind.Reel), cp.UserId(), Math.Max(1, page ?? 1), 5);
         }).WithTags("Posts").RequireAuthorization();
 
+        // Public view of a public post, used by share links and link previews (WhatsApp, Facebook...).
+        app.MapGet("/api/public/posts/{id:guid}", async (Guid id, AppDbContext db, PostService svc) =>
+        {
+            var privateGroups = db.Groups.Where(g => g.Privacy == GroupPrivacy.Private).Select(g => g.Id);
+            var q = db.Posts.Where(p => p.Id == id && !p.IsDeleted && p.Visibility == Visibility.Public && p.Moderation == ModerationStatus.Approved
+                && !p.Author.IsSuspended && (p.GroupId == null || !privateGroups.Contains(p.GroupId.Value)));
+            var list = await svc.BuildAsync(q, Guid.Empty);
+            return list.Count == 1 ? Results.Ok(list[0]) : Results.NotFound();
+        }).WithTags("Posts");
+
         posts.MapGet("/{id:guid}", async (Guid id, ClaimsPrincipal cp, PostService svc) =>
         {
             var visible = await svc.VisibleToAsync(cp.UserId(), cp.IsModerator());

@@ -1,0 +1,80 @@
+@page "/p/{Id:guid}"
+@attribute [ExcludeFromInteractiveRouting]
+@layout PublicLayout
+@inject IHttpClientFactory Http
+@inject NavigationManager Nav
+
+@* Server-rendered public view of a shared post, with Open Graph tags for rich link previews. *@
+
+<PageTitle>@(post is null ? "HalalBook" : $"{post.Author.DisplayName} on HalalBook")</PageTitle>
+<HeadContent>
+    <meta property="og:site_name" content="HalalBook" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="@Nav.Uri" />
+    <meta property="og:title" content="@(post is null ? "HalalBook" : $"{post.Author.DisplayName} on HalalBook")" />
+    <meta property="og:description" content="@Description" />
+    @if (Image is { } img) { <meta property="og:image" content="@img" /> }
+    <meta name="twitter:card" content="@(Image is null ? "summary" : "summary_large_image")" />
+</HeadContent>
+
+<div class="public-post">
+    @if (post is null)
+    {
+        <div class="card center">
+            <h2>This post isn't public</h2>
+            <p class="muted">It may be shared with friends only, or it was removed. Sign in to see posts shared with you.</p>
+            <a class="btn btn-primary" href="/post/@Id">Sign in to view</a>
+        </div>
+    }
+    else
+    {
+        <article class="card post">
+            <header class="post-head">
+                <span class="avatar" style="--size:44px">@if (post.Author.AvatarUrl is { } a) { <img src="@a" alt="" /> } else { @Ui.Initials(post.Author.DisplayName) }</span>
+                <div><b>@post.Author.DisplayName</b><div class="subtle">@post.CreatedAt.ToString("MMMM d, yyyy")</div></div>
+            </header>
+            @if (!string.IsNullOrWhiteSpace(post.Content)) { <div class="post-body">@post.Content</div> }
+            @if (post.Media.Count > 0)
+            {
+                <div class="media-grid n@(Math.Min(post.Media.Count, 4))">
+                    @foreach (var m in post.Media.Take(4))
+                    {
+                        <div class="media-tile">
+                            @if (m.Type == MediaType.Video) { <video src="@m.Url" controls preload="metadata" playsinline></video> }
+                            else { <img src="@m.Url" alt="@(m.AltText ?? "")" /> }
+                        </div>
+                    }
+                </div>
+            }
+            <div class="post-stats"><span>@post.TotalReactions reactions</span><span>@post.CommentCount comments</span></div>
+        </article>
+        <div class="card center mt">
+            <h3>Join the conversation</h3>
+            <p class="muted">React, comment and share on HalalBook, a beautiful home for the Ummah.</p>
+            <div class="row" style="justify-content:center">
+                <a class="btn btn-primary" href="/post/@Id">Open in HalalBook</a>
+                <a class="btn btn-gold" href="/register">Join free</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private PostDto? post;
+
+    private string Description => post is null ? "A beautiful, intelligent social home for the Muslim community."
+        : post.Content.Length > 200 ? post.Content[..200] + "…" : post.Content.Length > 0 ? post.Content : "Shared on HalalBook";
+    private string? Image => post?.Media.FirstOrDefault(m => m.Type == MediaType.Image)?.Url;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            using var http = Http.CreateClient("api");
+            var res = await http.GetAsync($"api/public/posts/{Id}");
+            if (res.IsSuccessStatusCode) post = await res.Content.ReadFromJsonAsync<PostDto>(ApiClient.Json);
+        }
+        catch (HttpRequestException) { }
+    }
+}

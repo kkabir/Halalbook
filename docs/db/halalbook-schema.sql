@@ -1098,3 +1098,48 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030041641_SharedPostsInChat'
+)
+BEGIN
+    ALTER TABLE [Messages] ADD [SharedAuthorName] nvarchar(max) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030041641_SharedPostsInChat'
+)
+BEGIN
+    ALTER TABLE [Messages] ADD [SharedImageUrl] nvarchar(max) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030041641_SharedPostsInChat'
+)
+BEGIN
+    ALTER TABLE [Messages] ADD [SharedPostId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030041641_SharedPostsInChat'
+)
+BEGIN
+    ALTER TABLE [Messages] ADD [SharedPreview] nvarchar(max) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030041641_SharedPostsInChat'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261030041641_SharedPostsInChat', N'10.0.14');
+END;
+
+COMMIT;
+GO
+

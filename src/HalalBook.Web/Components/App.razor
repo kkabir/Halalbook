@@ -17,11 +17,11 @@
     <ImportMap />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <HeadOutlet @rendermode="new InteractiveServerRenderMode(prerender: false)" />
+    <HeadOutlet @rendermode="PageRenderMode" />
 </head>
 
 <body>
-    <Routes @rendermode="new InteractiveServerRenderMode(prerender: false)" />
+    <Routes @rendermode="PageRenderMode" />
     <ReconnectModal />
     <script>window.halalbookApi = "@ApiBase";</script>
     <script src="js/app.js"></script>
@@ -33,5 +33,12 @@
 </html>
 
 @code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+
     private string ApiBase => (Config["Api:BaseUrl"] ?? "https://api.halalbook.app/").TrimEnd('/') + "/";
+
+    // Public share pages (/p/{id}) render on the server so WhatsApp, Facebook and others can read their link previews;
+    // everything else is the interactive app.
+    private IComponentRenderMode? PageRenderMode =>
+        HttpContext.AcceptsInteractiveRouting() ? new InteractiveServerRenderMode(prerender: false) : null;
 }

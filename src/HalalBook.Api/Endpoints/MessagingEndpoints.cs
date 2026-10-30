@@ -76,17 +76,18 @@ public static class MessagingEndpoints
         });
 
         chats.MapPost("/{id:guid}/messages", async (Guid id, SendMessageRequest req, ClaimsPrincipal cp, AppDbContext db,
-            IHubContext<RealtimeHub> hub, ContentModerator moderator) =>
+            IHubContext<RealtimeHub> hub, ContentModerator moderator, PostService svc) =>
         {
             var me = cp.UserId();
             var conv = await db.Conversations.Include(c => c.Participants).FirstOrDefaultAsync(c => c.Id == id);
             if (conv is null || conv.Participants.All(p => p.UserId != me)) return Results.NotFound();
             var content = (req.Content ?? "").Trim();
-            if (content.Length == 0 && string.IsNullOrEmpty(req.MediaUrl)) return Results.BadRequest();
+            if (content.Length == 0 && string.IsNullOrEmpty(req.MediaUrl) && req.SharedPostId is null) return Results.BadRequest();
             var mod = moderator.Check(content);
             if (!mod.Allowed) return Results.Problem(string.Join(" ", mod.Reasons), statusCode: 422);
 
             var msg = new Message { ConversationId = id, SenderId = me, Content = content, MediaUrl = req.MediaUrl };
+            if (req.SharedPostId is Guid shared && !await AttachPostAsync(msg, shared, me, svc)) return Results.NotFound();
             db.Messages.Add(msg);
             conv.LastActivityAt = msg.SentAt;
             conv.Participants.First(p => p.UserId == me).LastReadAt = msg.SentAt;
@@ -95,6 +96,38 @@ public static class MessagingEndpoints
             var dto = ToDto(msg);
             await hub.Clients.Users(conv.Participants.Select(p => p.UserId.ToString())).SendAsync("message", dto);
             return Results.Ok(dto);
+        });
+
+        chats.MapPost("/send-post", async (SendPostRequest req, ClaimsPrincipal cp, AppDbContext db, PostService svc, PrivacyService privacy,
+            IHubContext<RealtimeHub> hub, ContentModerator moderator) =>
+        {
+            var me = cp.UserId();
+            var note = (req.Note ?? "").Trim();
+            if (!moderator.Check(note).Allowed) return Results.Problem("That message isn't allowed.", statusCode: 422);
+            var blocked = await svc.BlockedIdsAsync(me);
+            var sent = 0;
+            foreach (var uid in req.UserIds.Distinct().Where(u => u != me && !blocked.Contains(u)).Take(50))
+            {
+                var conv = await db.Conversations.Include(c => c.Participants)
+                    .FirstOrDefaultAsync(c => !c.IsGroup && c.Participants.Any(p => p.UserId == me) && c.Participants.Any(p => p.UserId == uid));
+                if (conv is null)
+                {
+                    var other = await db.Users.FindAsync(uid);
+                    if (other is null || !PrivacyService.Allows(other.WhoCanMessage, await privacy.RelationAsync(me, uid))) continue;
+                    conv = new Conversation();
+                    conv.Participants.AddRange([new ConversationParticipant { UserId = me }, new ConversationParticipant { UserId = uid }]);
+                    db.Conversations.Add(conv);
+                }
+                var msg = new Message { ConversationId = conv.Id, SenderId = me, Content = note };
+                if (!await AttachPostAsync(msg, req.PostId, me, svc)) return Results.NotFound();
+                db.Messages.Add(msg);
+                conv.LastActivityAt = msg.SentAt;
+                await db.SaveChangesAsync();
+                msg.Sender = (await db.Users.FindAsync(me))!;
+                await hub.Clients.Users([me.ToString(), uid.ToString()]).SendAsync("message", ToDto(msg));
+                sent++;
+            }
+            return Results.Ok(sent);
         });
 
         chats.MapPost("/{id:guid}/read", async (Guid id, ClaimsPrincipal cp, AppDbContext db) =>
@@ -145,5 +178,19 @@ public static class MessagingEndpoints
         return new ConversationDto(c.Id, title, c.IsGroup, others, last is null ? null : ToDto(last), unread);
     }
 
-    private static MessageDto ToDto(Message m) => new(m.Id, m.ConversationId, m.Sender.ToSummary(), m.Content, m.MediaUrl, m.SentAt);
+    private static MessageDto ToDto(Message m) => new(m.Id, m.ConversationId, m.Sender.ToSummary(), m.Content, m.MediaUrl, m.SentAt,
+        m.SharedPostId is Guid pid ? new SharedPostPreview(pid, m.SharedAuthorName ?? "", m.SharedPreview, m.SharedImageUrl) : null);
+
+    /// <summary>Attaches a preview of a post the sender is allowed to see.</summary>
+    private static async Task<bool> AttachPostAsync(Message msg, Guid postId, Guid me, PostService svc)
+    {
+        var visible = await svc.VisibleToAsync(me);
+        var post = await visible.Include(p => p.Author).Include(p => p.Media).FirstOrDefaultAsync(p => p.Id == postId);
+        if (post is null) return false;
+        msg.SharedPostId = post.Id;
+        msg.SharedAuthorName = post.Author.DisplayName;
+        msg.SharedPreview = post.Content.Length > 200 ? post.Content[..200] + "…" : post.Content;
+        msg.SharedImageUrl = post.Media.OrderBy(m => m.SortOrder).FirstOrDefault(m => m.Type == MediaType.Image)?.Url;
+        return true;
+    }
 }

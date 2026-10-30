@@ -714,3 +714,16 @@ label.field { display: flex; flex-direction: column; gap: .35rem; font-weight: 6
 @media (max-width: 860px) { .admin-split { grid-template-columns: 1fr; } .admin-detail { position: static; } .admin-list { max-height: none; } }
 
 .privacy-row { padding: .45rem 0; border-top: 1px solid var(--border); gap: .5rem; }
+
+/* ---------- Share sheet ---------- */
+.share-sheet { width: min(520px, 100%); }
+.share-list { max-height: 300px; overflow-y: auto; }
+.share-apps { display: grid; grid-template-columns: repeat(4, 1fr); gap: .8rem .4rem; margin-top: .4rem; }
+.share-app { display: flex; flex-direction: column; align-items: center; gap: .35rem; font: 600 .75rem var(--font); color: var(--text); background: none; border: 0; cursor: pointer; text-decoration: none !important; text-align: center; }
+.share-app span { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 1.3rem; font-weight: 800; box-shadow: var(--shadow-sm); }
+.share-app:hover span { transform: translateY(-2px); }
+.chat-post { display: flex; flex-direction: column; gap: .2rem; margin-bottom: .35rem; padding: .5rem; border-radius: 12px; background: rgba(255, 255, 255, .85); color: #17241f; text-decoration: none !important; max-width: 260px; }
+.chat-post img { width: 100%; max-height: 140px; object-fit: cover; border-radius: 8px; }
+.chat-post span { font-size: .82rem; color: #4b5d55; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 420px) { .share-apps { grid-template-columns: repeat(3, 1fr); } }
+.public-main { max-width: 680px; margin: 0 auto; padding: 1.25rem .75rem 3rem; }

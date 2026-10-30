@@ -579,6 +579,18 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<DateTime>("SentAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("SharedAuthorName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SharedImageUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("SharedPostId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SharedPreview")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("SenderId");
