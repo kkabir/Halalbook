@@ -62,12 +62,12 @@
         <hr class="divider" />
         <label class="row spread" style="cursor:pointer">
             <div><b>Two-step sign-in</b><div class="subtle">We'll email you a code each time you sign in.</div></div>
-            <input type="checkbox" style="width:22px;height:22px" checked="@(Session.User?.TwoFactorEnabled == true)" @onchange="ToggleTwoFactor" />
+            <input type="checkbox" role="switch" class="switch" checked="@(Session.User?.TwoFactorEnabled == true)" @onchange="ToggleTwoFactor" />
         </label>
         <hr class="divider" />
         <label class="row spread" style="cursor:pointer">
             <div><b>Show when I'm active</b><div class="subtle">Friends and others can see a green dot when you're online. If you turn this off, you won't see other people's status either.</div></div>
-            <input type="checkbox" style="width:22px;height:22px" checked="@(Session.User?.ShowOnlineStatus != false)" @onchange="ToggleOnlineStatus" />
+            <input type="checkbox" role="switch" class="switch" checked="@(Session.User?.ShowOnlineStatus != false)" @onchange="ToggleOnlineStatus" />
         </label>
         <hr class="divider" />
         <label class="row spread">
@@ -93,7 +93,7 @@
         <div class="card-title">🕌 @T("Islamic features")</div>
         <label class="row spread privacy-row" style="border-top:0;cursor:pointer">
             <div class="grow"><b>@T("Show Islamic tools")</b><div class="subtle">@T("Prayer times, Qibla, Hijri dates, verse of the day, dua wall, Quran khatm, Zakat, Tasbeeh and nearby masjids. Turn off to keep HalalBook general.")</div></div>
-            <input type="checkbox" style="width:22px;height:22px" checked="@Session.ShowFaith" @onchange="ToggleFaith" />
+            <input type="checkbox" role="switch" class="switch" checked="@Session.ShowFaith" @onchange="ToggleFaith" />
         </label>
     </div>
 
@@ -105,7 +105,7 @@
         </label>
         <label class="row spread privacy-row" style="cursor:pointer">
             <div class="grow"><b>@T("Show posts translated into my language")</b><div class="subtle">@T("Posts written in other languages appear translated, with a link to the original.")</div></div>
-            <input type="checkbox" style="width:22px;height:22px" checked="@(Session.User?.AutoTranslate != false)" @onchange="ToggleAutoTranslate" />
+            <input type="checkbox" role="switch" class="switch" checked="@(Session.User?.AutoTranslate != false)" @onchange="ToggleAutoTranslate" />
         </label>
     </div>
 
