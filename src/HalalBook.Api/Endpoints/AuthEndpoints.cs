@@ -31,6 +31,7 @@ public static partial class AuthEndpoints
             if (!EmailRegex().IsMatch(req.Email?.Trim() ?? "")) errors["email"] = ["Enter a valid email."];
             if ((req.Password ?? "").Length < MinPassword) errors["password"] = [$"Use at least {MinPassword} characters."];
             if (string.IsNullOrWhiteSpace(req.DisplayName)) errors["displayName"] = ["Enter your name."];
+            if (req.AcceptedTermsVersion != Terms.Version) errors["terms"] = ["Please read and accept the Community Agreement."];
             if (errors.Count > 0) return Results.ValidationProblem(errors);
 
             var nu = req.UserName!.ToUpperInvariant();
@@ -44,6 +45,7 @@ public static partial class AuthEndpoints
                 DisplayName = req.DisplayName.Trim(),
                 Role = await db.Users.AnyAsync() ? UserRole.User : UserRole.Admin, // first account administers the site
                 EmailConfirmed = !options.RequireConfirmedEmail,
+                AcceptedTermsVersion = Terms.Version, AcceptedTermsAt = DateTime.UtcNow,
             };
             user.PasswordHash = hasher.HashPassword(user, req.Password!);
             db.Users.Add(user);
@@ -152,6 +154,17 @@ public static partial class AuthEndpoints
             await db.SaveChangesAsync();
             await mailer.SendAsync(t => t.PasswordChanged(user.Email, user.DisplayName));
             return Results.Ok();
+        });
+
+        me.MapPost("/accept-terms", async (AcceptTermsRequest req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            if (req.Version != Terms.Version) return Results.Problem("Please read the latest Community Agreement.", statusCode: 400);
+            var user = await db.Users.FindAsync(cp.UserId());
+            if (user is null) return Results.Unauthorized();
+            user.AcceptedTermsVersion = Terms.Version;
+            user.AcceptedTermsAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return Results.Ok(user.ToDto());
         });
 
         me.MapPut("/two-factor", async (TwoFactorRequest req, ClaimsPrincipal cp, AppDbContext db) =>

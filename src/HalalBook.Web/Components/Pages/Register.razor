@@ -6,6 +6,17 @@
 
 <PageTitle>Join · HalalBook</PageTitle>
 
+@if (showTerms)
+{
+    <div class="card agreement-card">
+        <div class="center"><h1 style="font-family:var(--font-display);font-weight:700">Community Agreement</h1><p class="muted">Please read each page to the end.</p></div>
+        <AgreementReader Busy="busy" AgreeText="I agree and create my account" OnAgree="CreateAccount" />
+        @if (error is not null) { <div class="error mt">@error</div> }
+        <button class="btn btn-ghost btn-block mt" @onclick="() => showTerms = false">← Back to the form</button>
+    </div>
+}
+else
+{
 <div class="card">
     <div class="center" style="margin-bottom:1.25rem">
         <div class="arabic" style="font-size:1.6rem;color:var(--gold-600)">أَهْلًا وَسَهْلًا</div>
@@ -17,27 +28,42 @@
         <label class="field">Username<input class="input" @bind="userName" autocomplete="username" required placeholder="letters, numbers, dots or _" /></label>
         <label class="field">Email<input class="input" type="email" @bind="email" autocomplete="email" required /></label>
         <label class="field">Password<input class="input" type="password" @bind="password" autocomplete="new-password" required minlength="8" /></label>
-        <label class="row" style="font-size:.85rem;color:var(--text-2)"><input type="checkbox" @bind="agree" /> I'll keep my posts kind, modest and halal.</label>
         @if (error is not null) { <div class="error">@error</div> }
-        <button class="btn btn-gold btn-block" type="submit" disabled="@(busy || !agree)">@(busy ? "Creating account…" : "Create account")</button>
+        <button class="btn btn-gold btn-block" type="submit">Continue</button>
+        <p class="subtle center" style="margin:0">Next, you'll read and accept the Community Agreement.</p>
     </form>
     <hr class="ornament" style="margin:1.25rem 0" />
     <p class="center muted">Already have an account? <a href="/login">Sign in</a></p>
 </div>
 
+}
+
 @code {
     private string? name, userName, email, password, error;
-    private bool busy, agree;
+    private bool busy;
 
-    private async Task Submit()
+    private bool showTerms;
+
+    private void Submit()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(email) || (password?.Length ?? 0) < 8)
+        {
+            error = "Fill in every field. Passwords need at least 8 characters.";
+            return;
+        }
+        showTerms = true;
+    }
+
+    private async Task CreateAccount()
     {
         busy = true; error = null;
         try
         {
-            var result = await Api.PostAsync<AuthResult>("api/auth/register", new RegisterRequest(userName ?? "", email ?? "", password ?? "", name ?? ""));
+            var result = await Api.PostAsync<AuthResult>("api/auth/register", new RegisterRequest(userName ?? "", email ?? "", password ?? "", name ?? "", Terms.Version));
             await AuthFlow.ContinueAsync(result, Session, Nav, null);
         }
-        catch (ApiException ex) { error = ex.Message; }
+        catch (ApiException ex) { error = ex.Message; showTerms = false; }
         catch (Exception) { error = "We couldn't reach HalalBook. Please try again."; }
         finally { busy = false; }
     }

@@ -1,0 +1,85 @@
+@* The Community Agreement, one page at a time. Each page must be scrolled to the end before moving on,
+   and "I agree" unlocks only after every page has been read. *@
+@inject IJSRuntime JS
+
+<div class="agreement">
+    <div class="agreement-steps">
+        @for (int i = 0; i < Terms.Pages.Count; i++)
+        {
+            var n = i;
+            <button class="agreement-dot @(n == page ? "active" : "") @(read.Contains(n) ? "read" : "")" disabled="@(!ReadOnly && n > MaxReachable)" @onclick="() => Go(n)" title="@Terms.Pages[n].Title">@(read.Contains(n) ? "✓" : (n + 1).ToString())</button>
+        }
+    </div>
+    <h2 class="agreement-title">@(page + 1). @Terms.Pages[page].Title</h2>
+    <div class="agreement-body" @ref="body" @onscroll="CheckScroll">
+        @foreach (var line in Lines(Terms.Pages[page].Body))
+        {
+            @if (line.StartsWith("- ")) { <div class="agreement-bullet">@line[2..]</div> }
+            else { <p>@line</p> }
+        }
+        <div class="agreement-end">— End of page @(page + 1) of @Terms.Pages.Count —</div>
+    </div>
+    @if (!ReadOnly && !read.Contains(page)) { <div class="subtle center">Scroll to the end of this page to continue ↓</div> }
+
+    <div class="row spread mt">
+        <button class="btn btn-ghost" disabled="@(page == 0)" @onclick="() => Go(page - 1)">← Back</button>
+        <span class="subtle">Page @(page + 1) of @Terms.Pages.Count</span>
+        @if (page < Terms.Pages.Count - 1)
+        {
+            <button class="btn btn-primary" disabled="@(!ReadOnly && !read.Contains(page))" @onclick="() => Go(page + 1)">Next →</button>
+        }
+        else { <span style="width:90px"></span> }
+    </div>
+
+    @if (!ReadOnly)
+    {
+        <label class="agreement-check @(AllRead ? "" : "locked")">
+            <input type="checkbox" disabled="@(!AllRead)" checked="@agreed" @onchange="e => agreed = e.Value is true" />
+            <span>I have read every page of the HalalBook Community Agreement (version @Terms.Version) and I agree to follow it.</span>
+        </label>
+        <button class="btn btn-gold btn-block mt" disabled="@(!AllRead || !agreed || Busy)" @onclick="() => OnAgree.InvokeAsync()">@(Busy ? "Please wait…" : AgreeText)</button>
+        @if (!AllRead) { <p class="subtle center">You've read @read.Count of @Terms.Pages.Count pages.</p> }
+    }
+</div>
+
+@code {
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string AgreeText { get; set; } = "I agree";
+    [Parameter] public EventCallback OnAgree { get; set; }
+
+    private int page;
+    private bool agreed;
+    private readonly HashSet<int> read = [];
+    private ElementReference body;
+
+    private bool AllRead => read.Count == Terms.Pages.Count;
+    private int MaxReachable => Enumerable.Range(0, Terms.Pages.Count).FirstOrDefault(i => !read.Contains(i), Terms.Pages.Count - 1);
+
+    private static IEnumerable<string> Lines(string body) =>
+        body.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0);
+
+    private async Task Go(int n)
+    {
+        page = Math.Clamp(n, 0, Terms.Pages.Count - 1);
+        StateHasChanged();
+        await JS.InvokeVoidAsync("halalbook.scrollTop", body);
+        await CheckScroll();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await CheckScroll();
+    }
+
+    /// <summary>A page counts as read once its end has been scrolled into view (or it fits without scrolling).</summary>
+    private async Task CheckScroll()
+    {
+        if (read.Contains(page)) return;
+        if (await JS.InvokeAsync<bool>("halalbook.scrolledToEnd", body))
+        {
+            read.Add(page);
+            StateHasChanged();
+        }
+    }
+}

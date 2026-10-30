@@ -19,7 +19,8 @@ public enum ReportTarget { Post, Comment, User, Story, Message }
 public enum NotificationType { FriendRequest, FriendAccepted, Follow, Reaction, Comment, Mention, Share, GroupInvite, EventInvite, Message, Moderation, System, Live }
 
 // ---------- Auth ----------
-public record RegisterRequest(string UserName, string Email, string Password, string DisplayName);
+public record RegisterRequest(string UserName, string Email, string Password, string DisplayName, string? AcceptedTermsVersion = null);
+public record AcceptTermsRequest(string Version);
 public record LoginRequest(string UserNameOrEmail, string Password);
 public record AuthResponse(string Token, DateTime ExpiresAt, UserDto User);
 
@@ -42,7 +43,7 @@ public record UserDto(
     Guid Id, string UserName, string Email, string DisplayName, string? Bio, string? AvatarUrl, string? CoverUrl,
     string? Location, string? Website, UserRole Role, bool IsVerified, DateTime JoinedAt,
     double? Latitude, double? Longitude, string PrayerMethod, string AsrSchool, bool EmailConfirmed = false, bool TwoFactorEnabled = false, bool ShowOnlineStatus = true,
-    ProfilePostPermission WhoCanPost = ProfilePostPermission.Friends);
+    ProfilePostPermission WhoCanPost = ProfilePostPermission.Friends, string? AcceptedTermsVersion = null);
 
 public record ProfileDto(
     UserSummaryDto User, string? Bio, string? CoverUrl, string? Location, string? Website, DateTime JoinedAt,

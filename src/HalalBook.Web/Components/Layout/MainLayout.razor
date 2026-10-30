@@ -168,6 +168,8 @@ else
             return;
         }
         await Clock.LoadAsync();
+        // Everyone must have read and accepted the current Community Agreement.
+        if (Session.User?.AcceptedTermsVersion != Terms.Version && Path != "agreement") Nav.NavigateTo("/agreement");
         ready = true;
         await Realtime.StartAsync();
         try
@@ -178,7 +180,12 @@ else
         catch (Exception) { }
     }
 
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) { menuOpen = false; InvokeAsync(StateHasChanged); }
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        menuOpen = false;
+        if (Session.User is { } u && u.AcceptedTermsVersion != Terms.Version && Path != "agreement") Nav.NavigateTo("/agreement");
+        InvokeAsync(StateHasChanged);
+    }
     private void Refresh() => InvokeAsync(StateHasChanged);
     private void OnSessionChanged()
     {

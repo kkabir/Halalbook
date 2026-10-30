@@ -1,0 +1,10 @@
+@page "/terms"
+@layout AuthLayout
+
+<PageTitle>Community Agreement · HalalBook</PageTitle>
+
+<div class="card agreement-card">
+    <div class="center"><h1 style="font-family:var(--font-display);font-weight:700">Community Agreement</h1><p class="subtle">Version @Terms.Version</p></div>
+    <AgreementReader ReadOnly="true" />
+    <a class="btn btn-ghost btn-block mt" href="/register">Join HalalBook</a>
+</div>

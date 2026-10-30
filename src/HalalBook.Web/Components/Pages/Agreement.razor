@@ -1,0 +1,37 @@
+@page "/agreement"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject NavigationManager Nav
+@inject Toasts Toasts
+
+<PageTitle>Community Agreement · HalalBook</PageTitle>
+
+<div class="feed-column">
+    <div class="card agreement-card">
+        <div class="center">
+            <h1 style="font-family:var(--font-display);font-weight:700">Community Agreement</h1>
+            <p class="muted">@(Session.User?.AcceptedTermsVersion is null
+                ? "Before you continue, please read our Community Agreement to the end of every page."
+                : "We've updated our Community Agreement. Please read it again and accept to continue.")</p>
+        </div>
+        <AgreementReader Busy="busy" AgreeText="I agree" OnAgree="Accept" />
+    </div>
+</div>
+
+@code {
+    private bool busy;
+
+    private async Task Accept()
+    {
+        busy = true;
+        try
+        {
+            var u = await Api.PostAsync<UserDto>("api/users/me/accept-terms", new AcceptTermsRequest(Terms.Version));
+            await Session.UpdateUserAsync(u);
+            Toasts.Show("JazakAllahu khayran! Welcome to HalalBook.");
+            Nav.NavigateTo("/");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+}

@@ -24,6 +24,9 @@ public class User
     public bool ShowOnlineStatus { get; set; } = true;
     public DateTime? LastSeenAt { get; set; }
     public ProfilePostPermission WhoCanPost { get; set; }
+    /// <summary>Which version of the Community Agreement the person last read and accepted, and when.</summary>
+    public string? AcceptedTermsVersion { get; set; }
+    public DateTime? AcceptedTermsAt { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
     public string PrayerMethod { get; set; } = "MWL";

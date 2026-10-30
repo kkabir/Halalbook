@@ -907,3 +907,32 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030035906_CommunityAgreement'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [AcceptedTermsAt] datetime2 NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030035906_CommunityAgreement'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [AcceptedTermsVersion] nvarchar(max) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030035906_CommunityAgreement'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261030035906_CommunityAgreement', N'10.0.14');
+END;
+
+COMMIT;
+GO
+

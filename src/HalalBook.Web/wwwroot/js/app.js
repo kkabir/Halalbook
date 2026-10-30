@@ -12,6 +12,8 @@ window.halalbook = {
     utcOffset: () => -new Date().getTimezoneOffset(),
 
     scrollToBottom: (el) => { if (el) el.scrollTop = el.scrollHeight; },
+    scrollTop: (el) => { if (el) el.scrollTop = 0; },
+    scrolledToEnd: (el) => !!el && el.scrollTop + el.clientHeight >= el.scrollHeight - 24,
 
     // Streams compass heading to .NET for the Qibla page (mobile devices).
     watchHeading: (dotnet) => {

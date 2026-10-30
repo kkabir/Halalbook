@@ -56,7 +56,7 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
     {
         var client = factory.CreateClient();
         var email = $"{name}@example.com";
-        var res = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(name, email, "Bismillah-123", name));
+        var res = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(name, email, "Bismillah-123", name, Terms.Version));
         res.EnsureSuccessStatusCode();
         var step = (await res.Content.ReadFromJsonAsync<AuthResult>(Json))!;
         Assert.Equal(AuthStep.VerifyEmail, step.Step);
@@ -128,7 +128,7 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
     {
         var client = factory.CreateClient();
         var name = "dawud_" + Random.Shared.Next(9999);
-        await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(name, $"{name}@example.com", "Bismillah-123", name));
+        await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(name, $"{name}@example.com", "Bismillah-123", name, Terms.Version));
         var login = (await (await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(name, "Bismillah-123"))).Content.ReadFromJsonAsync<AuthResult>(Json))!;
         Assert.Equal(AuthStep.VerifyEmail, login.Step);
         Assert.Null(login.Auth);
@@ -372,5 +372,13 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
             (await r.PostAsJsonAsync("/api/reports", new ReportRequest(ReportTarget.Post, post.Id, "Inappropriate"), Json)).EnsureSuccessStatusCode();
         }
         Assert.Equal(HttpStatusCode.NotFound, (await viewer.Client.GetAsync($"/api/posts/{post.Id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Register_RequiresTheAgreement()
+    {
+        var name = "noterms_" + Random.Shared.Next(9999);
+        var res = await factory.CreateClient().PostAsJsonAsync("/api/auth/register", new RegisterRequest(name, $"{name}@example.com", "Bismillah-123", name), Json);
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
     }
 }

@@ -795,6 +795,12 @@ namespace HalalBook.Api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("AcceptedTermsAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AcceptedTermsVersion")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("AsrSchool")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
