@@ -1,0 +1,152 @@
+@page "/call/{Id:guid}"
+@implements IAsyncDisposable
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Realtime Realtime
+@inject Toasts Toasts
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<PageTitle>@(call?.Title ?? "Call") · HalalBook</PageTitle>
+
+@if (call is null) { <div class="spinner"></div> }
+else
+{
+    <div class="call-screen @(call.IsVideo ? "video" : "audio")">
+        <div class="call-top">
+            <div><b>@call.Title</b><div class="call-status">@StatusText</div></div>
+            <span class="chip">@(call.IsVideo ? "🎥 Video" : "📞 Voice")</span>
+        </div>
+
+        <div class="live-stage-wrap call-stage">
+            <div class="live-stage @(call.IsVideo ? "" : "podcast")" @ref="stage"></div>
+            @if (!joined || connected <= 1)
+            {
+                <div class="call-waiting">
+                    <div class="call-avatars">@foreach (var p in call.Participants.Where(p => p.Id != Session.User?.Id).Take(4)) { <Avatar User="p" Size="96" Link="false" /> }</div>
+                    <h2>@(ended ? EndedText : joined ? (call.Status == CallStatus.Ringing ? "Ringing…" : "Waiting for others…") : "Connecting…")</h2>
+                </div>
+            }
+        </div>
+
+        @if (!ended)
+        {
+            <div class="call-controls">
+                <button class="call-btn @(micOn ? "" : "off")" title="Microphone" @onclick="ToggleMic">@(micOn ? "🎙️" : "🔇")</button>
+                @if (call.IsVideo)
+                {
+                    <button class="call-btn @(camOn ? "" : "off")" title="Camera" @onclick="ToggleCam">@(camOn ? "📷" : "🚫")</button>
+                    <button class="call-btn" title="Share screen" @onclick="ShareScreen">🖥️</button>
+                }
+                <button class="call-btn hangup" title="End call" @onclick="Hangup">📵</button>
+            </div>
+        }
+        else
+        {
+            <div class="center mt"><a class="btn btn-gold" href="/messages/@call.ConversationId">Back to chat</a></div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private CallDto? call;
+    private ElementReference stage;
+    private DotNetObjectReference<CallRoom>? self;
+    private bool joined, ended, micOn = true, camOn = true;
+    private int connected;
+    private string? endedReason;
+    private DateTime? answeredAt;
+    private System.Threading.Timer? ticker, ringTimeout;
+
+    private string StatusText => ended ? EndedText
+        : answeredAt is { } a ? (DateTime.UtcNow - a).ToString(@"m\:ss")
+        : call?.Caller.Id == Session.User?.Id ? "Ringing…" : "Connecting…";
+
+    private string EndedText => endedReason switch { "Declined" => "Call declined", "Missed" => "No answer", _ => "Call ended" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Realtime.CallUpdated += OnCallUpdated;
+        try
+        {
+            call = await Api.GetAsync<CallDto>($"api/calls/{Id}");
+            if (call.Status is CallStatus.Ended or CallStatus.Missed or CallStatus.Declined) { ended = true; endedReason = call.Status.ToString(); }
+            answeredAt = call.AnsweredAt;
+        }
+        catch (Exception ex) { Toasts.Error(ex); Nav.NavigateTo("/messages"); }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || call is null || ended) return;
+        self = DotNetObjectReference.Create(this);
+        ticker = new System.Threading.Timer(_ => InvokeAsync(StateHasChanged), null, 1000, 1000);
+        try
+        {
+            await JS.InvokeVoidAsync("halalbookLive.start", new
+            {
+                api = Api.BaseAddress.ToString(),
+                hub = "hubs/call",
+                token = Session.Token,
+                sessionId = Id,
+                sends = true,
+                isHost = false,
+                conference = true,
+                audioOnly = !call.IsVideo,
+                name = Session.User?.DisplayName,
+            }, stage, self);
+            joined = true;
+        }
+        catch (JSException ex) { Toasts.Show(ex.Message.Split('\n')[0], true); }
+        // The caller stops ringing after 45 seconds with no answer.
+        if (call.Caller.Id == Session.User?.Id && call.Status == CallStatus.Ringing)
+            ringTimeout = new System.Threading.Timer(_ => InvokeAsync(async () => { if (answeredAt is null && !ended) await Hangup(); }), null, 45_000, Timeout.Infinite);
+        StateHasChanged();
+    }
+
+    private void OnCallUpdated(Guid callId, string status, Guid by) => InvokeAsync(async () =>
+    {
+        if (callId != Id) return;
+        if (status == "Active") answeredAt ??= DateTime.UtcNow;
+        if (status is "Ended" or "Missed" or "Declined" && !(call!.IsGroup && status == "Declined"))
+        {
+            ended = true; endedReason = status;
+            await LeaveMediaAsync();
+        }
+        StateHasChanged();
+    });
+
+    [JSInvokable] public void OnParticipants(List<LiveParticipantDto> list) => InvokeAsync(() => { connected = list.Count + 1; if (list.Count > 0) answeredAt ??= DateTime.UtcNow; StateHasChanged(); });
+    [JSInvokable] public void OnViewers(int n) => InvokeAsync(() => { connected = n; StateHasChanged(); });
+    [JSInvokable] public void OnError(string text) => InvokeAsync(() => Toasts.Show(text, true));
+    [JSInvokable] public void OnChat(LiveChatDto m) { }
+    [JSInvokable] public void OnEnded() { }
+    [JSInvokable] public void OnScreenShareEnded() { }
+
+    private async Task ToggleMic() => micOn = await JS.InvokeAsync<bool>("halalbookLive.toggleMic", !micOn);
+    private async Task ToggleCam() => camOn = await JS.InvokeAsync<bool>("halalbookLive.toggleCam", !camOn);
+    private async Task ShareScreen() { try { await JS.InvokeAsync<bool>("halalbookLive.shareScreen"); } catch (JSException) { } }
+
+    private async Task Hangup()
+    {
+        try { await Api.PostAsync($"api/calls/{Id}/end"); } catch (Exception) { }
+        ended = true; endedReason ??= "Ended";
+        await LeaveMediaAsync();
+        Nav.NavigateTo($"/messages/{call!.ConversationId}");
+    }
+
+    private async Task LeaveMediaAsync()
+    {
+        ticker?.Dispose(); ringTimeout?.Dispose();
+        if (joined) { joined = false; try { await JS.InvokeVoidAsync("halalbookLive.leave"); } catch (JSDisconnectedException) { } }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Realtime.CallUpdated -= OnCallUpdated;
+        if (joined && !ended) { try { await Api.PostAsync($"api/calls/{Id}/end"); } catch (Exception) { } }
+        await LeaveMediaAsync();
+        self?.Dispose();
+    }
+}

@@ -55,6 +55,7 @@ builder.Services.AddHostedService<ErrorLogWriter>();
 builder.Services.AddExceptionHandler<DbExceptionHandler>();
 builder.Logging.Services.AddSingleton<ILoggerProvider, DbLoggerProvider>();
 builder.Services.AddSingleton<HalalBook.Api.Hubs.LiveRoomTracker>();
+builder.Services.AddSingleton<HalalBook.Api.Hubs.CallRoomTracker>();
 builder.Services.AddSingleton(config.GetSection("Live").Get<LiveOptions>() ?? new LiveOptions());
 builder.Services.AddScoped<Mailer>();
 
@@ -171,8 +172,10 @@ app.MapPresenceEndpoints();
 app.MapLiveEndpoints();
 app.MapAdminEndpoints();
 app.MapFriendListEndpoints();
+app.MapCallEndpoints();
 app.MapHub<RealtimeHub>("/hubs/realtime");
 app.MapHub<LiveHub>("/hubs/live");
+app.MapHub<CallHub>("/hubs/call");
 
 app.Run();
 

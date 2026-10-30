@@ -33,6 +33,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PostAudience> PostAudiences => Set<PostAudience>();
     public DbSet<Feedback> Feedback => Set<Feedback>();
     public DbSet<FriendList> FriendLists => Set<FriendList>();
+    public DbSet<Call> Calls => Set<Call>();
     public DbSet<FriendListMember> FriendListMembers => Set<FriendListMember>();
     public DbSet<ErrorLog> ErrorLogs => Set<ErrorLog>();
 
@@ -69,6 +70,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(x => x.TargetUser).WithMany().HasForeignKey(x => x.TargetUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(x => x.Media).WithOne().HasForeignKey(x => x.PostId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Hashtags).WithOne().HasForeignKey(x => x.PostId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<Call>(e =>
+        {
+            e.HasIndex(x => new { x.ConversationId, x.CreatedAt });
+            e.HasOne(x => x.Caller).WithMany().HasForeignKey(x => x.CallerId).OnDelete(DeleteBehavior.Restrict);
         });
 
         b.Entity<FriendList>(e =>

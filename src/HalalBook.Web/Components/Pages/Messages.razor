@@ -37,7 +37,9 @@
             <div class="chat-head">
                 <a href="/messages" class="icon-btn" title="Back">←</a>
                 @if (current.Participants.FirstOrDefault() is { } o) { <Avatar User="o" Size="40" /> }
-                <div class="grow"><b>@current.Title</b>@if (typing) { <div class="subtle">typing…</div> } else if (!current.IsGroup && current.Participants.FirstOrDefault() is { } other2 && Realtime.IsOnline(other2.Id)) { <div class="active-text">Active now</div> }</div>
+                <button class="icon-btn" title="Voice call" @onclick="() => StartCall(false)">📞</button>
+                <button class="icon-btn" title="Video call" @onclick="() => StartCall(true)">🎥</button>
+                <div class="grow" style="order:-1"><b>@current.Title</b>@if (typing) { <div class="subtle">typing…</div> } else if (!current.IsGroup && current.Participants.FirstOrDefault() is { } other2 && Realtime.IsOnline(other2.Id)) { <div class="active-text">Active now</div> }</div>
             </div>
             <div class="chat-body" @ref="body">
                 @foreach (var m in messages)
@@ -159,6 +161,18 @@
             scroll = true;
         }
         catch (Exception ex) { text = content; Toasts.Error(ex); }
+    }
+
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    private async Task StartCall(bool video)
+    {
+        try
+        {
+            var call = await Api.PostAsync<CallDto>("api/calls", new StartCallRequest(current!.Id, video));
+            Nav.NavigateTo($"/call/{call.Id}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
     }
 
     private async Task SendPhoto(InputFileChangeEventArgs e)

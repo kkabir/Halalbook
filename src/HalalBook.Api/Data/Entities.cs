@@ -405,3 +405,17 @@ public class FriendListMember
     public Guid UserId { get; set; }
     public User User { get; set; } = null!;
 }
+
+/// <summary>An audio or video call in a conversation (1:1 or group).</summary>
+public class Call
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ConversationId { get; set; }
+    public Guid CallerId { get; set; }
+    public User Caller { get; set; } = null!;
+    public bool IsVideo { get; set; }
+    public CallStatus Status { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? AnsweredAt { get; set; }
+    public DateTime? EndedAt { get; set; }
+}

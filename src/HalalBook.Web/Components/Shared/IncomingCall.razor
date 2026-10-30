@@ -1,0 +1,78 @@
+@* Full-screen ringing card for incoming calls, wherever you are in the app. *@
+@implements IDisposable
+@inject Realtime Realtime
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject Toasts Toasts
+
+@if (ringing is { } c)
+{
+    <div class="overlay incoming-call">
+        <div class="incoming-card">
+            <div class="call-pulse"><Avatar User="c.Caller" Size="110" Link="false" /></div>
+            <h2>@c.Caller.DisplayName</h2>
+            <p>@(c.IsVideo ? "🎥 Incoming video call" : "📞 Incoming voice call")@(c.IsGroup ? $" · {c.Title}" : "")</p>
+            <div class="row" style="justify-content:center;gap:2.5rem;margin-top:1.5rem">
+                <button class="call-btn hangup" title="Decline" @onclick="Decline">📵</button>
+                <button class="call-btn accept" title="Accept" @onclick="Accept">@(c.IsVideo ? "🎥" : "📞")</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private CallDto? ringing;
+    private System.Threading.Timer? timeout;
+
+    protected override void OnInitialized()
+    {
+        Realtime.IncomingCall += OnIncoming;
+        Realtime.CallUpdated += OnUpdated;
+    }
+
+    private void OnIncoming(CallDto c) => InvokeAsync(async () =>
+    {
+        ringing = c;
+        StateHasChanged();
+        try { await JS.InvokeVoidAsync("halalbook.ring", true); } catch (JSException) { }
+        timeout?.Dispose();
+        timeout = new System.Threading.Timer(_ => InvokeAsync(StopRinging), null, 50_000, Timeout.Infinite);
+    });
+
+    private void OnUpdated(Guid id, string status, Guid by) => InvokeAsync(async () =>
+    {
+        // Stop ringing if the caller hung up or someone else answered a 1:1 call on another device.
+        if (ringing?.Id == id && status is "Ended" or "Missed" or "Declined" or "Active") await StopRinging();
+    });
+
+    private async Task StopRinging()
+    {
+        ringing = null;
+        timeout?.Dispose();
+        try { await JS.InvokeVoidAsync("halalbook.ring", false); } catch (JSException) { }
+        StateHasChanged();
+    }
+
+    private async Task Accept()
+    {
+        var c = ringing!;
+        await StopRinging();
+        try { await Api.PostAsync<CallDto>($"api/calls/{c.Id}/accept"); Nav.NavigateTo($"/call/{c.Id}"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Decline()
+    {
+        var c = ringing!;
+        await StopRinging();
+        try { await Api.PostAsync($"api/calls/{c.Id}/decline"); } catch (Exception) { }
+    }
+
+    public void Dispose()
+    {
+        Realtime.IncomingCall -= OnIncoming;
+        Realtime.CallUpdated -= OnUpdated;
+        timeout?.Dispose();
+    }
+}

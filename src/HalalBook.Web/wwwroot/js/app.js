@@ -110,6 +110,24 @@ window.halalbook = {
         v.src = url;
     }),
 
+    // A gentle two-tone ringtone for incoming calls (no audio file needed).
+    ring: (on) => {
+        clearInterval(window.__hbRing);
+        if (!on) return;
+        const ctx = window.__hbAudio ||= new (window.AudioContext || window.webkitAudioContext)();
+        const beep = (f, t) => {
+            const o = ctx.createOscillator(), g = ctx.createGain();
+            o.frequency.value = f; o.type = 'sine';
+            g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
+            g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + t + 0.03);
+            g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.35);
+            o.connect(g).connect(ctx.destination); o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.4);
+        };
+        const play = () => { beep(660, 0); beep(880, 0.45); if (navigator.vibrate) navigator.vibrate([300, 150, 300]); };
+        play();
+        window.__hbRing = setInterval(play, 2200);
+    },
+
     toggleTheme: () => {
         const root = document.documentElement;
         const dark = root.dataset.theme === 'dark' || (!root.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);

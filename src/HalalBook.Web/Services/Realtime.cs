@@ -23,6 +23,8 @@ public sealed class Realtime(AuthSession session, ApiClient api, ILogger<Realtim
     public event Action<NotificationDto>? NotificationReceived;
     public event Action<Guid, Guid>? Typing;
     public event Action? CountsChanged;
+    public event Action<CallDto>? IncomingCall;
+    public event Action<Guid, string, Guid>? CallUpdated;
 
     public async Task StartAsync()
     {
@@ -47,6 +49,8 @@ public sealed class Realtime(AuthSession session, ApiClient api, ILogger<Realtim
             NotificationReceived?.Invoke(n);
         });
         _hub.On<Guid, Guid>("typing", (c, u) => Typing?.Invoke(c, u));
+        _hub.On<CallDto>("incomingCall", c => IncomingCall?.Invoke(c));
+        _hub.On<Guid, string, Guid>("callUpdated", (id, status, by) => CallUpdated?.Invoke(id, status, by));
         _hub.On<Guid, bool>("presence", async (userId, online) =>
         {
             if (online && !_online.Contains(userId)) await RefreshOnlineAsync(); // fetch name/avatar, respecting privacy

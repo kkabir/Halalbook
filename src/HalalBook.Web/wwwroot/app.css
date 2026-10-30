@@ -734,3 +734,26 @@ label.field { display: flex; flex-direction: column; gap: .35rem; font-weight: 6
 .list-icon { font-size: 1.8rem; }
 .avatar-stack { display: flex; margin-top: .3rem; }
 .avatar-stack .avatar { margin-right: -8px; box-shadow: 0 0 0 2px var(--surface); }
+@media (max-width: 860px) { .list-cards { grid-template-columns: 1fr 1fr; } .list-tile { padding: .75rem; } }
+
+/* ---------- Calls ---------- */
+.call-screen { max-width: 960px; margin: 0 auto; }
+.call-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem; }
+.call-status { color: var(--text-3); font-size: .9rem; }
+.call-stage { min-height: 60dvh; }
+.call-stage .live-stage { height: min(70dvh, 640px); }
+.call-waiting { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; color: #fff; gap: 1rem; text-align: center; }
+.call-avatars { display: flex; gap: .5rem; }
+.call-controls { display: flex; justify-content: center; gap: 1rem; margin-top: 1rem; }
+.call-btn { width: 64px; height: 64px; border-radius: 50%; border: 0; font-size: 1.6rem; cursor: pointer; background: var(--surface-2); box-shadow: var(--shadow); }
+.call-btn.off { background: #4b5d55; color: #fff; }
+.call-btn.hangup { background: #e0263a; color: #fff; }
+.call-btn.accept { background: #22a35a; color: #fff; animation: breathe 1.2s ease-in-out infinite; }
+.incoming-call { z-index: 300; background: radial-gradient(circle at 50% 30%, rgba(13, 74, 57, .97), rgba(2, 16, 12, .98)); }
+.incoming-card { text-align: center; color: #fff; }
+.incoming-card h2 { margin-top: 1rem; font-size: 1.6rem; }
+.incoming-card p { color: rgba(255, 255, 255, .8); }
+.call-pulse { display: inline-block; border-radius: 50%; box-shadow: 0 0 0 0 rgba(201, 162, 39, .6); animation: callPulse 1.6s infinite; }
+@keyframes callPulse { 70% { box-shadow: 0 0 0 28px rgba(201, 162, 39, 0); } 100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0); } }
+.chat-head .icon-btn { flex: none; }
+.overlay.incoming-call { place-items: center !important; align-items: center !important; background: radial-gradient(circle at 50% 30%, #0d4a39, #02100c) !important; }

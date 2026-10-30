@@ -1,4 +1,4 @@
-// HalalBook Live: WebRTC peer-to-peer media with SignalR signaling through the API's /hubs/live.
+// HalalBook Live and Calls: WebRTC peer-to-peer media with SignalR signaling through the API's /hubs/live or /hubs/call.
 // Shows, events and podcasts: the host sends, viewers receive. Conferences: everyone sends to everyone.
 window.halalbookLive = (() => {
     let hub, dotnet, stage, opts, iceServers = [], localStream = null, cameraTrack = null;
@@ -91,7 +91,7 @@ window.halalbookLive = (() => {
         }
 
         hub = new signalR.HubConnectionBuilder()
-            .withUrl(`${opts.api}hubs/live`, { accessTokenFactory: () => opts.token })
+            .withUrl(`${opts.api}${opts.hub || 'hubs/live'}`, { accessTokenFactory: () => opts.token })
             .withAutomaticReconnect()
             .build();
         hub.on('signal', onSignal);

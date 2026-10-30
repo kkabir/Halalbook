@@ -54,6 +54,42 @@ namespace HalalBook.Api.Data.Migrations
                     b.ToTable("Bookmarks");
                 });
 
+            modelBuilder.Entity("HalalBook.Api.Data.Call", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("AnsweredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CallerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsVideo")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CallerId");
+
+                    b.HasIndex("ConversationId", "CreatedAt");
+
+                    b.ToTable("Calls");
+                });
+
             modelBuilder.Entity("HalalBook.Api.Data.Comment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1113,6 +1149,17 @@ namespace HalalBook.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("HalalBook.Api.Data.Call", b =>
+                {
+                    b.HasOne("HalalBook.Api.Data.User", "Caller")
+                        .WithMany()
+                        .HasForeignKey("CallerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Caller");
                 });
 
             modelBuilder.Entity("HalalBook.Api.Data.Comment", b =>

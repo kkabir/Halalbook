@@ -202,3 +202,9 @@ public record AdminStatsDto(int NewFeedback, int OpenFeedback, int OpenErrors, i
 public enum FriendListKind { Family, CloseFriends, BestFriends, Custom }
 public record FriendListDto(Guid Id, string Name, FriendListKind Kind, string Icon, List<UserSummaryDto> Members);
 public record SaveFriendListRequest(string Name, string? Icon);
+
+// ---------- Calls ----------
+public enum CallStatus { Ringing, Active, Ended, Missed, Declined }
+public record CallDto(Guid Id, Guid ConversationId, string Title, bool IsVideo, bool IsGroup, CallStatus Status, UserSummaryDto Caller,
+    List<UserSummaryDto> Participants, DateTime CreatedAt, DateTime? AnsweredAt, DateTime? EndedAt);
+public record StartCallRequest(Guid ConversationId, bool Video);

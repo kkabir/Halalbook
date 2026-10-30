@@ -513,4 +513,34 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.All(feed.Items, p => Assert.Equal(mumId, p.Author.Id));
         Assert.NotEmpty(feed.Items);
     }
+
+    [Fact]
+    public async Task Calls_RingAnswerEndAndLogInChat()
+    {
+        var (a, aId) = await SignUpWithId("caller");
+        var (b, bId) = await SignUpWithId("callee");
+        await MakeFriends(a, aId, b, bId);
+        var conv = (await (await a.PostAsJsonAsync("/api/conversations", new StartConversationRequest([bId], null), Json)).Content.ReadFromJsonAsync<ConversationDto>(Json))!;
+
+        var call = (await (await a.PostAsJsonAsync("/api/calls", new StartCallRequest(conv.Id, true), Json)).Content.ReadFromJsonAsync<CallDto>(Json))!;
+        Assert.Equal(CallStatus.Ringing, call.Status);
+        // Starting again while it rings returns the same call.
+        var again = (await (await b.PostAsJsonAsync("/api/calls", new StartCallRequest(conv.Id, true), Json)).Content.ReadFromJsonAsync<CallDto>(Json))!;
+        Assert.Equal(call.Id, again.Id);
+
+        var accepted = (await (await b.PostAsync($"/api/calls/{call.Id}/accept", null)).Content.ReadFromJsonAsync<CallDto>(Json))!;
+        Assert.Equal(CallStatus.Active, accepted.Status);
+        (await a.PostAsync($"/api/calls/{call.Id}/end", null)).EnsureSuccessStatusCode();
+
+        var history = (await b.GetFromJsonAsync<List<CallDto>>("/api/calls/history", Json))!;
+        Assert.Equal(CallStatus.Ended, history.First(c => c.Id == call.Id).Status);
+        var messages = (await b.GetFromJsonAsync<List<MessageDto>>($"/api/conversations/{conv.Id}/messages", Json))!;
+        Assert.Contains(messages, m => m.Content.StartsWith("🎥 Video call ·"));
+
+        // A call nobody answers is logged as missed.
+        var missed = (await (await a.PostAsJsonAsync("/api/calls", new StartCallRequest(conv.Id, false), Json)).Content.ReadFromJsonAsync<CallDto>(Json))!;
+        (await a.PostAsync($"/api/calls/{missed.Id}/end", null)).EnsureSuccessStatusCode();
+        messages = (await b.GetFromJsonAsync<List<MessageDto>>($"/api/conversations/{conv.Id}/messages", Json))!;
+        Assert.Contains(messages, m => m.Content == "📵 Missed voice call");
+    }
 }

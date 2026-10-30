@@ -1210,3 +1210,51 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030042742_Calls'
+)
+BEGIN
+    CREATE TABLE [Calls] (
+        [Id] uniqueidentifier NOT NULL,
+        [ConversationId] uniqueidentifier NOT NULL,
+        [CallerId] uniqueidentifier NOT NULL,
+        [IsVideo] bit NOT NULL,
+        [Status] int NOT NULL,
+        [CreatedAt] datetime2 NOT NULL,
+        [AnsweredAt] datetime2 NULL,
+        [EndedAt] datetime2 NULL,
+        CONSTRAINT [PK_Calls] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_Calls_Users_CallerId] FOREIGN KEY ([CallerId]) REFERENCES [Users] ([Id]) ON DELETE NO ACTION
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030042742_Calls'
+)
+BEGIN
+    CREATE INDEX [IX_Calls_CallerId] ON [Calls] ([CallerId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030042742_Calls'
+)
+BEGIN
+    CREATE INDEX [IX_Calls_ConversationId_CreatedAt] ON [Calls] ([ConversationId], [CreatedAt]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030042742_Calls'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261030042742_Calls', N'10.0.14');
+END;
+
+COMMIT;
+GO
+
