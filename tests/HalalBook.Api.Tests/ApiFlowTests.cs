@@ -487,4 +487,30 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.OK, (await anon.GetAsync($"/api/public/posts/{pub.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await anon.GetAsync($"/api/public/posts/{priv.Id}")).StatusCode);
     }
+
+    [Fact]
+    public async Task FriendLists_WorkAsAudiencesAndFeeds()
+    {
+        var (me, meId) = await SignUpWithId("listowner");
+        var (mum, mumId) = await SignUpWithId("mum");
+        var (coworker, coId) = await SignUpWithId("coworker");
+        await MakeFriends(me, meId, mum, mumId);
+        await MakeFriends(me, meId, coworker, coId);
+
+        var lists = (await me.GetFromJsonAsync<List<FriendListDto>>("/api/friend-lists", Json))!;
+        Assert.Equal(["Family", "Close friends", "Best friends"], lists.Select(l => l.Name).ToArray());
+        var family = lists.First(l => l.Kind == FriendListKind.Family);
+        (await me.PostAsync($"/api/friend-lists/{family.Id}/members/{mumId}", null)).EnsureSuccessStatusCode();
+
+        var post = (await (await me.PostAsJsonAsync("/api/posts", new CreatePostRequest("Family dinner tonight", Visibility.FriendList, FriendListId: family.Id), Json))
+            .Content.ReadFromJsonAsync<PostDto>(Json))!;
+        Assert.Equal(HttpStatusCode.OK, (await mum.GetAsync($"/api/posts/{post.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await coworker.GetAsync($"/api/posts/{post.Id}")).StatusCode);
+
+        // Mum's posts show up in my Family feed.
+        await mum.PostAsJsonAsync("/api/posts", new CreatePostRequest("Love you all"), Json);
+        var feed = (await me.GetFromJsonAsync<PagedResult<PostDto>>($"/api/feed?list={family.Id}", Json))!;
+        Assert.All(feed.Items, p => Assert.Equal(mumId, p.Author.Id));
+        Assert.NotEmpty(feed.Items);
+    }
 }

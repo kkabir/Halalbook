@@ -1143,3 +1143,70 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030042315_FriendLists'
+)
+BEGIN
+    ALTER TABLE [Posts] ADD [FriendListId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030042315_FriendLists'
+)
+BEGIN
+    CREATE TABLE [FriendLists] (
+        [Id] uniqueidentifier NOT NULL,
+        [OwnerId] uniqueidentifier NOT NULL,
+        [Name] nvarchar(60) NOT NULL,
+        [Kind] int NOT NULL,
+        [Icon] nvarchar(16) NOT NULL,
+        [CreatedAt] datetime2 NOT NULL,
+        CONSTRAINT [PK_FriendLists] PRIMARY KEY ([Id])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030042315_FriendLists'
+)
+BEGIN
+    CREATE TABLE [FriendListMembers] (
+        [ListId] uniqueidentifier NOT NULL,
+        [UserId] uniqueidentifier NOT NULL,
+        CONSTRAINT [PK_FriendListMembers] PRIMARY KEY ([ListId], [UserId]),
+        CONSTRAINT [FK_FriendListMembers_FriendLists_ListId] FOREIGN KEY ([ListId]) REFERENCES [FriendLists] ([Id]) ON DELETE CASCADE,
+        CONSTRAINT [FK_FriendListMembers_Users_UserId] FOREIGN KEY ([UserId]) REFERENCES [Users] ([Id]) ON DELETE NO ACTION
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030042315_FriendLists'
+)
+BEGIN
+    CREATE INDEX [IX_FriendListMembers_UserId] ON [FriendListMembers] ([UserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030042315_FriendLists'
+)
+BEGIN
+    CREATE INDEX [IX_FriendLists_OwnerId] ON [FriendLists] ([OwnerId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030042315_FriendLists'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261030042315_FriendLists', N'10.0.14');
+END;
+
+COMMIT;
+GO
+

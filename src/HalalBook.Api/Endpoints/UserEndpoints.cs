@@ -182,6 +182,8 @@ public static partial class UserEndpoints
                 (x.RequesterId == me && x.AddresseeId == userId) || (x.RequesterId == userId && x.AddresseeId == me));
             if (f is null) return Results.NotFound();
             db.Friendships.Remove(f);
+            await db.FriendListMembers.Where(m => (m.UserId == userId && db.FriendLists.Any(l => l.Id == m.ListId && l.OwnerId == me))
+                || (m.UserId == me && db.FriendLists.Any(l => l.Id == m.ListId && l.OwnerId == userId))).ExecuteDeleteAsync();
             await db.SaveChangesAsync();
             return Results.NoContent();
         });

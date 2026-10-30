@@ -80,6 +80,8 @@ public class Post
     public Page? Page { get; set; }
     public Guid? SharedPostId { get; set; }
     public Post? SharedPost { get; set; }
+    /// <summary>Set when the audience is one of the author's friend lists (Family, Close friends...).</summary>
+    public Guid? FriendListId { get; set; }
     /// <summary>Set when someone posts on another person's profile.</summary>
     public Guid? TargetUserId { get; set; }
     public User? TargetUser { get; set; }
@@ -383,4 +385,23 @@ public class ErrorLog
     public ErrorStatus Status { get; set; }
     public string? Note { get; set; }
     public Guid? ResolvedById { get; set; }
+}
+
+/// <summary>A personal list of friends (Family, Close friends, Best friends or custom), usable as a post audience and feed.</summary>
+public class FriendList
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid OwnerId { get; set; }
+    public string Name { get; set; } = "";
+    public FriendListKind Kind { get; set; }
+    public string Icon { get; set; } = "⭐";
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public List<FriendListMember> Members { get; set; } = [];
+}
+
+public class FriendListMember
+{
+    public Guid ListId { get; set; }
+    public Guid UserId { get; set; }
+    public User User { get; set; } = null!;
 }

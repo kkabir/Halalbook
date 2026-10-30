@@ -130,10 +130,12 @@
             {
                 Visibility.SpecificPeople => $"{audience.People.Count} friend{(audience.People.Count == 1 ? "" : "s")}",
                 Visibility.FriendsExcept when audience.People.Count > 0 => $"Friends except {audience.People.Count}",
+                Visibility.FriendList => audience.ListName ?? "Friend list",
                 _ => name,
             };
             var groups = audience.GroupIds.Count switch { 0 => "", 1 => audience.GroupNames.FirstOrDefault() ?? "1 group", var n => $"{n} groups" };
-            return !audience.OnProfile ? $"🕌 {groups}" : groups.Length > 0 ? $"{icon} {who} + 🕌 {groups}" : $"{icon} {who}";
+            if (audience.Visibility == Visibility.FriendList) icon = "";
+            return !audience.OnProfile ? $"🕌 {groups}" : groups.Length > 0 ? $"{icon} {who} + 🕌 {groups}".Trim() : $"{icon} {who}".Trim();
         }
     }
     private bool uploading, posting, aiBusy, showExtras, asReel;
@@ -195,7 +197,7 @@
             var kind = (ReelMode || asReel) && media.FirstOrDefault()?.Type == MediaType.Video ? PostKind.Reel : PostKind.Standard;
             var post = await Api.PostAsync<PostDto>("api/posts",
                 new CreatePostRequest(text ?? "", audience.Visibility, media.ToList(), GroupId, PageId, null, kind, feeling, location, TargetUserId,
-                    audience.People, audience.GroupIds.Count > 0 ? audience.GroupIds : null, audience.OnProfile));
+                    audience.People, audience.GroupIds.Count > 0 ? audience.GroupIds : null, audience.OnProfile, audience.ListId));
             var postedTo = audience.GroupIds.Count;
             text = feeling = location = moderationNote = null;
             audience = audience with { GroupIds = [], GroupNames = [], OnProfile = true };

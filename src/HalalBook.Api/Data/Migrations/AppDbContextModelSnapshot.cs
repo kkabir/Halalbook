@@ -398,6 +398,53 @@ namespace HalalBook.Api.Data.Migrations
                     b.ToTable("Follows");
                 });
 
+            modelBuilder.Entity("HalalBook.Api.Data.FriendList", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("FriendLists");
+                });
+
+            modelBuilder.Entity("HalalBook.Api.Data.FriendListMember", b =>
+                {
+                    b.Property<Guid>("ListId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("ListId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("FriendListMembers");
+                });
+
             modelBuilder.Entity("HalalBook.Api.Data.Friendship", b =>
                 {
                     b.Property<Guid>("Id")
@@ -720,6 +767,9 @@ namespace HalalBook.Api.Data.Migrations
 
                     b.Property<string>("Feeling")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("FriendListId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("GroupId")
                         .HasColumnType("uniqueidentifier");
@@ -1143,6 +1193,23 @@ namespace HalalBook.Api.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("HalalBook.Api.Data.FriendListMember", b =>
+                {
+                    b.HasOne("HalalBook.Api.Data.FriendList", null)
+                        .WithMany("Members")
+                        .HasForeignKey("ListId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("HalalBook.Api.Data.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("HalalBook.Api.Data.Friendship", b =>
                 {
                     b.HasOne("HalalBook.Api.Data.User", "Addressee")
@@ -1291,6 +1358,11 @@ namespace HalalBook.Api.Data.Migrations
             modelBuilder.Entity("HalalBook.Api.Data.Conversation", b =>
                 {
                     b.Navigation("Participants");
+                });
+
+            modelBuilder.Entity("HalalBook.Api.Data.FriendList", b =>
+                {
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("HalalBook.Api.Data.Post", b =>

@@ -190,6 +190,7 @@
         Visibility.OnlyMe => "🔒 Only me",
         Visibility.SpecificPeople => Post.Audience is { } a ? $"👤 {string.Join(", ", a.Take(2).Select(x => x.DisplayName.Split(' ')[0]))}{(a.Count > 2 ? $" +{a.Count - 2}" : "")}" : "👤 Specific friends",
         Visibility.FriendsExcept => Post.Audience is { Count: > 0 } ex ? $"👥 Friends except {ex.Count}" : "👥 Friends except…",
+        Visibility.FriendList => Post.FriendListName ?? "📋 Friend list",
         _ => "🌐 Public",
     };
 

@@ -12,8 +12,15 @@ public static class PostEndpoints
     {
         var posts = app.MapGroup("/api/posts").WithTags("Posts").RequireAuthorization();
 
-        app.MapGet("/api/feed", async (int? page, ClaimsPrincipal cp, PostService svc) =>
-            await svc.FeedAsync(cp.UserId(), Math.Max(1, page ?? 1), 10, cp.IsModerator()))
+        app.MapGet("/api/feed", async (int? page, Guid? list, ClaimsPrincipal cp, AppDbContext db, PostService svc) =>
+        {
+            var me = cp.UserId();
+            if (list is not Guid listId) return await svc.FeedAsync(me, Math.Max(1, page ?? 1), 10, cp.IsModerator());
+            // A list feed: newest posts from the people in one of your lists (like Facebook's Favorites feed).
+            var members = db.FriendListMembers.Where(m => m.ListId == listId && db.FriendLists.Any(l => l.Id == listId && l.OwnerId == me)).Select(m => m.UserId);
+            var visible = await svc.VisibleToAsync(me, cp.IsModerator());
+            return await svc.PageAsync(visible.Where(p => members.Contains(p.AuthorId) && p.Kind == PostKind.Standard), me, Math.Max(1, page ?? 1), 10);
+        })
             .WithTags("Posts").RequireAuthorization();
 
         // Short vertical videos.
@@ -56,6 +63,9 @@ public static class PostEndpoints
             var onProfile = groupIds.Count == 0 || req.AlsoOnProfile;
             if (groupIds.Count > 0 && (req.PageId is not null || req.TargetUserId is not null)) return Results.BadRequest();
 
+            if (req.Visibility == Visibility.FriendList && (req.FriendListId is not Guid listId || !await db.FriendLists.AnyAsync(l => l.Id == listId && l.OwnerId == me)))
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["audience"] = ["Choose one of your friend lists."] });
+
             // Custom audiences can only name your friends.
             var audience = new List<Guid>();
             if (req.Visibility is Visibility.SpecificPeople or Visibility.FriendsExcept)
@@ -86,6 +96,7 @@ public static class PostEndpoints
                 AuthorId = me, Content = content, Kind = req.Kind,
                 // Group posts follow the group's privacy; custom audiences apply to your profile.
                 Visibility = groupId is null ? req.Visibility : Visibility.Public,
+                FriendListId = groupId is null && req.Visibility == Visibility.FriendList ? req.FriendListId : null,
                 GroupId = groupId, PageId = groupId is null ? req.PageId : null, SharedPostId = req.SharedPostId,
                 TargetUserId = groupId is null ? target : null,
                 Feeling = req.Feeling, Location = req.Location,

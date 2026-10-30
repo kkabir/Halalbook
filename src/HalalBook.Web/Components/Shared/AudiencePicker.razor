@@ -24,7 +24,7 @@
             <div>
                 <h2>Who can see your post?</h2>
                 <p class="subtle" style="margin-top:-.3rem">Your post will show in feed, on your profile and in search results for this audience.</p>
-                @foreach (var (v, icon, name, hint) in Options)
+                @foreach (var (v, icon, name, hint) in Options.Where(o => o.Item1 != Visibility.FriendList))
                 {
                     <label class="audience-row @(visibility == v ? "active" : "")">
                         <input type="radio" name="aud" checked="@(visibility == v)" @onchange="() => Pick(v)" />
@@ -32,6 +32,18 @@
                     </label>
                 }
             </div>
+
+            @if (lists is { Count: > 0 })
+            {
+                <div class="subtle" style="margin:.4rem 0 .2rem">Your lists</div>
+                @foreach (var l in lists)
+                {
+                    <label class="audience-row @(visibility == Visibility.FriendList && listId == l.Id ? "active" : "")">
+                        <input type="radio" name="aud" checked="@(visibility == Visibility.FriendList && listId == l.Id)" @onchange="() => PickList(l)" />
+                        <span class="aud-ico">@l.Icon</span><div><b>@l.Name</b><small>@l.Members.Count @(l.Members.Count == 1 ? "person" : "people")</small></div>
+                    </label>
+                }
+            }
 
             @if (visibility is Visibility.SpecificPeople or Visibility.FriendsExcept)
             {
@@ -62,7 +74,8 @@
 </div>
 
 @code {
-    public record Choice(Visibility Visibility, List<Guid> People, bool OnProfile, List<Guid> GroupIds, List<string> GroupNames);
+    public record Choice(Visibility Visibility, List<Guid> People, bool OnProfile, List<Guid> GroupIds, List<string> GroupNames,
+        Guid? ListId = null, string? ListName = null);
 
     [Parameter] public Choice Value { get; set; } = new(Visibility.Public, [], true, [], []);
     [Parameter] public bool ShowDestinations { get; set; } = true;
@@ -76,6 +89,7 @@
         (Visibility.FriendsExcept, "👥", "Friends except…", "Don't show to some friends"),
         (Visibility.SpecificPeople, "👤", "Specific friends", "Only show to some friends"),
         (Visibility.OnlyMe, "🔒", "Only me", "Only you can see it"),
+        (Visibility.FriendList, "📋", "Friend list", "Only people in one of your lists"),
     ];
 
     private Visibility visibility;
@@ -83,6 +97,11 @@
     private HashSet<Guid> people = [], groupIds = [];
     private List<UserSummaryDto>? friends;
     private List<GroupDto>? groups;
+    private List<FriendListDto>? lists;
+    private Guid? listId;
+    private string? listName;
+
+    private void PickList(FriendListDto l) { visibility = Visibility.FriendList; listId = l.Id; listName = $"{l.Icon} {l.Name}"; }
     private string? search, error;
 
     protected override async Task OnInitializedAsync()
@@ -91,6 +110,8 @@
         onProfile = Value.OnProfile;
         people = [.. Value.People];
         groupIds = [.. Value.GroupIds];
+        listId = Value.ListId; listName = Value.ListName;
+        try { lists = await Api.GetAsync<List<FriendListDto>>("api/friend-lists"); } catch (Exception) { lists = []; }
         if (ShowDestinations)
         {
             try { groups = await Api.GetAsync<List<GroupDto>>("api/groups?filter=mine"); } catch (Exception) { groups = []; }
@@ -120,6 +141,8 @@
         if (ShowDestinations && !onProfile && groupIds.Count == 0) { error = "Choose where to post."; return; }
         if (visibility == Visibility.SpecificPeople && onProfile && people.Count == 0) { error = "Choose at least one friend."; return; }
         var names = (groups ?? []).Where(g => groupIds.Contains(g.Id)).Select(g => g.Name).ToList();
-        await OnDone.InvokeAsync(new Choice(visibility, [.. people], onProfile, [.. groupIds], names));
+        if (visibility == Visibility.FriendList && listId is null) { error = "Choose a list."; return; }
+        await OnDone.InvokeAsync(new Choice(visibility, [.. people], onProfile, [.. groupIds], names,
+            visibility == Visibility.FriendList ? listId : null, visibility == Visibility.FriendList ? listName : null));
     }
 }

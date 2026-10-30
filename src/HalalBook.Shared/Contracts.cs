@@ -3,7 +3,7 @@ namespace HalalBook.Shared;
 // ---------- Enums ----------
 public enum UserRole { User, Moderator, Admin }
 /// <summary>Who can see a post. SpecificPeople and FriendsExcept use the post's audience list.</summary>
-public enum Visibility { Public, Friends, OnlyMe, SpecificPeople, FriendsExcept }
+public enum Visibility { Public, Friends, OnlyMe, SpecificPeople, FriendsExcept, FriendList }
 /// <summary>Who may post on someone's profile (their timeline).</summary>
 public enum ProfilePostPermission { Friends, Everyone, OnlyMe }
 /// <summary>Facebook-style privacy audiences for contact and discovery settings.</summary>
@@ -69,7 +69,7 @@ public record CreatePostRequest(
     string Content, Visibility Visibility = Visibility.Public, List<MediaDto>? Media = null,
     Guid? GroupId = null, Guid? PageId = null, Guid? SharedPostId = null, PostKind Kind = PostKind.Standard,
     string? Feeling = null, string? Location = null, Guid? TargetUserId = null,
-    List<Guid>? AudienceUserIds = null, List<Guid>? GroupIds = null, bool AlsoOnProfile = false);
+    List<Guid>? AudienceUserIds = null, List<Guid>? GroupIds = null, bool AlsoOnProfile = false, Guid? FriendListId = null);
 
 public record UpdatePostRequest(string Content, Visibility Visibility, List<Guid>? AudienceUserIds = null);
 
@@ -78,7 +78,7 @@ public record PostDto(
     List<MediaDto> Media, List<string> Hashtags, int CommentCount, int ShareCount,
     Dictionary<ReactionType, int> Reactions, ReactionType? MyReaction, bool IsBookmarked,
     ModerationStatus Moderation, string? Feeling, string? Location,
-    GroupSummaryDto? Group, PageSummaryDto? Page, PostDto? SharedPost, UserSummaryDto? TargetUser = null, List<UserSummaryDto>? Audience = null)
+    GroupSummaryDto? Group, PageSummaryDto? Page, PostDto? SharedPost, UserSummaryDto? TargetUser = null, List<UserSummaryDto>? Audience = null, string? FriendListName = null)
 {
     public int TotalReactions => Reactions.Values.Sum();
 }
@@ -197,3 +197,8 @@ public record ErrorLogDto(Guid Id, string Source, string Level, string Message, 
 public record UpdateErrorRequest(ErrorStatus Status, string? Note);
 public record AdminStatsDto(int NewFeedback, int OpenFeedback, int OpenErrors, int ErrorsLast24h, int Users, int UsersLast7d,
     int Posts, int PostsLast24h, int PendingReview, int OpenReports);
+
+// ---------- Friend lists ----------
+public enum FriendListKind { Family, CloseFriends, BestFriends, Custom }
+public record FriendListDto(Guid Id, string Name, FriendListKind Kind, string Icon, List<UserSummaryDto> Members);
+public record SaveFriendListRequest(string Name, string? Icon);

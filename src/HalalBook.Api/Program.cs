@@ -170,6 +170,7 @@ app.MapPlatformEndpoints();
 app.MapPresenceEndpoints();
 app.MapLiveEndpoints();
 app.MapAdminEndpoints();
+app.MapFriendListEndpoints();
 app.MapHub<RealtimeHub>("/hubs/realtime");
 app.MapHub<LiveHub>("/hubs/live");
 

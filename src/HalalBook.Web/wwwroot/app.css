@@ -727,3 +727,10 @@ label.field { display: flex; flex-direction: column; gap: .35rem; font-weight: 6
 .chat-post span { font-size: .82rem; color: #4b5d55; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 @media (max-width: 420px) { .share-apps { grid-template-columns: repeat(3, 1fr); } }
 .public-main { max-width: 680px; margin: 0 auto; padding: 1.25rem .75rem 3rem; }
+
+/* ---------- Friend lists ---------- */
+.list-cards { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.list-tile { padding: 1rem; align-items: flex-start; gap: .2rem; }
+.list-icon { font-size: 1.8rem; }
+.avatar-stack { display: flex; margin-top: .3rem; }
+.avatar-stack .avatar { margin-right: -8px; box-shadow: 0 0 0 2px var(--surface); }

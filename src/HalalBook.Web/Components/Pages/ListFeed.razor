@@ -1,0 +1,22 @@
+@page "/lists/{Id:guid}"
+@inject ApiClient Api
+
+<PageTitle>@(list?.Name ?? "List") · HalalBook</PageTitle>
+
+<div class="feed-column">
+    <div class="page-hero">
+        <h1>@list?.Icon @list?.Name</h1>
+        <p>The latest posts from @(list?.Members.Count ?? 0) @(list?.Members.Count == 1 ? "person" : "people") in this list.</p>
+    </div>
+    <PostList Url="@($"api/feed?list={Id}")" EmptyTitle="Nothing from this list yet" EmptyText="Add people to the list from the Friends page." />
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private FriendListDto? list;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try { list = (await Api.GetAsync<List<FriendListDto>>("api/friend-lists")).FirstOrDefault(l => l.Id == Id); } catch (Exception) { }
+    }
+}

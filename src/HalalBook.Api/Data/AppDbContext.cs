@@ -32,6 +32,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<LiveSession> LiveSessions => Set<LiveSession>();
     public DbSet<PostAudience> PostAudiences => Set<PostAudience>();
     public DbSet<Feedback> Feedback => Set<Feedback>();
+    public DbSet<FriendList> FriendLists => Set<FriendList>();
+    public DbSet<FriendListMember> FriendListMembers => Set<FriendListMember>();
     public DbSet<ErrorLog> ErrorLogs => Set<ErrorLog>();
 
     protected override void OnModelCreating(ModelBuilder b)
@@ -67,6 +69,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(x => x.TargetUser).WithMany().HasForeignKey(x => x.TargetUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(x => x.Media).WithOne().HasForeignKey(x => x.PostId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Hashtags).WithOne().HasForeignKey(x => x.PostId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<FriendList>(e =>
+        {
+            e.HasIndex(x => x.OwnerId);
+            e.Property(x => x.Name).HasMaxLength(60);
+            e.Property(x => x.Icon).HasMaxLength(16);
+            e.HasMany(x => x.Members).WithOne().HasForeignKey(x => x.ListId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<FriendListMember>(e =>
+        {
+            e.HasKey(x => new { x.ListId, x.UserId });
+            e.HasIndex(x => x.UserId);
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         b.Entity<Feedback>(e =>
