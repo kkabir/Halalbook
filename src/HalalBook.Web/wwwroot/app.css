@@ -1121,3 +1121,11 @@ input.switch:focus-visible { outline: 2px solid var(--gold-500); outline-offset:
 .urgent-toggle.on { opacity: 1; background: #ffe3e0; box-shadow: 0 0 0 2px #e74c3c; }
 .chat-input .input.urgent { box-shadow: 0 0 0 2px #e74c3c; }
 .bubble-urgent { display: inline-block; font-size: .7rem; font-weight: 800; color: #fff; background: #e74c3c; border-radius: 999px; padding: .05rem .5rem; margin-bottom: .25rem; }
+
+/* ---------- Muted & blocked ---------- */
+.mb-tabs { display: flex; gap: .35rem; flex-wrap: wrap; }
+.mb-row { display: flex; align-items: center; gap: .6rem; padding: .35rem 0; border-top: 1px solid var(--border); }
+.mb-pick { position: relative; }
+.mb-options { position: absolute; left: 0; right: 0; top: 100%; z-index: 5; background: var(--surface); border-radius: 12px; box-shadow: var(--shadow-lg); padding: .3rem; }
+.mb-options button { display: flex; align-items: center; gap: .5rem; width: 100%; border: 0; background: none; padding: .45rem .5rem; border-radius: 8px; font: inherit; cursor: pointer; text-align: start; }
+.mb-options button:hover { background: var(--emerald-50, #eef7f3); }

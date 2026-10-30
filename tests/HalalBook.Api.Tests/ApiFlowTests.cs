@@ -796,4 +796,20 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var u = (await (await c.PutAsJsonAsync("/api/users/me/faith", new FaithSettingsRequest(false), Json)).Content.ReadFromJsonAsync<UserDto>(Json))!;
         Assert.False(u.FaithFeatures);
     }
+
+    [Fact]
+    public async Task MutedPeople_SendNoNotifications()
+    {
+        var (a, aId) = await SignUpWithId("muteA");
+        var (b, bId) = await SignUpWithId("muteB");
+        (await a.PostAsync($"/api/users/{bId}/mute", null)).EnsureSuccessStatusCode();
+        Assert.Contains((await a.GetFromJsonAsync<List<UserSummaryDto>>("/api/users/me/muted", Json))!, u => u.Id == bId);
+
+        await b.PostAsync($"/api/users/{aId}/follow", null);
+        var notes = await a.GetStringAsync("/api/notifications");
+        Assert.DoesNotContain(bId.ToString(), notes);
+
+        (await a.DeleteAsync($"/api/users/{bId}/mute")).EnsureSuccessStatusCode();
+        Assert.Empty((await a.GetFromJsonAsync<List<UserSummaryDto>>("/api/users/me/muted", Json))!);
+    }
 }

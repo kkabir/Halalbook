@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PageStat> PageStats => Set<PageStat>();
     public DbSet<Follow> Follows => Set<Follow>();
     public DbSet<Block> Blocks => Set<Block>();
+    public DbSet<MutedUser> MutedUsers => Set<MutedUser>();
     public DbSet<Post> Posts => Set<Post>();
     public DbSet<PostMedia> PostMedia => Set<PostMedia>();
     public DbSet<Hashtag> Hashtags => Set<Hashtag>();
@@ -45,6 +46,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<MutedUser>().HasKey(x => new { x.OwnerId, x.MutedId });
         b.Entity<Khatm>(e =>
         {
             e.Property(x => x.Title).HasMaxLength(120);

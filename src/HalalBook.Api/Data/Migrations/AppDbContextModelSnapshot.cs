@@ -782,6 +782,22 @@ namespace HalalBook.Api.Data.Migrations
                     b.ToTable("MessageReactions");
                 });
 
+            modelBuilder.Entity("HalalBook.Api.Data.MutedUser", b =>
+                {
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("MutedId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("OwnerId", "MutedId");
+
+                    b.ToTable("MutedUsers");
+                });
+
             modelBuilder.Entity("HalalBook.Api.Data.Notification", b =>
                 {
                     b.Property<Guid>("Id")

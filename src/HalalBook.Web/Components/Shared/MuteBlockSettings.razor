@@ -1,0 +1,112 @@
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject IJSRuntime JS
+
+@* Choose people, chats and groups to silence or block, and undo it any time. *@
+
+<div class="card stack mt mute-block">
+    <div class="card-title">🔕 @T("Muted & blocked")</div>
+    <div class="mb-tabs">
+        <button class="chip @(tab == "people" ? "active" : "")" @onclick='() => tab = "people"'>🔕 @T("Muted people") (@(muted?.Count ?? 0))</button>
+        <button class="chip @(tab == "chats" ? "active" : "")" @onclick='() => tab = "chats"'>💬 @T("Chats & groups") (@(chats?.Count(c => c.Muted) ?? 0))</button>
+        <button class="chip @(tab == "blocked" ? "active" : "")" @onclick='() => tab = "blocked"'>⛔ @T("Blocked") (@(blocked?.Count ?? 0))</button>
+    </div>
+
+    @if (tab == "chats")
+    {
+        <p class="subtle" style="margin:0">@T("Muted chats and group chats keep working, but stay silent: no notifications or sounds.")</p>
+        @foreach (var c in chats ?? [])
+        {
+            <div class="mb-row">
+                @if (c.IsGroup) { <span class="avatar group-avatar" style="--size:36px">👥</span> }
+                else if (c.Participants.FirstOrDefault() is { } o) { <Avatar User="o" Size="36" Link="false" ShowStatus="false" /> }
+                <span class="grow">@c.Title@(c.IsGroup ? $" · {T("group")}" : "")</span>
+                <input type="checkbox" role="switch" class="switch" title="@T("Mute")" checked="@c.Muted" @onchange="e => MuteChat(c, e.Value is true)" />
+            </div>
+        }
+        @if (chats is { Count: 0 }) { <p class="muted">@T("No chats yet.")</p> }
+    }
+    else
+    {
+        <p class="subtle" style="margin:0">@(tab == "people"
+            ? T("Muted people can still message you and you'll see their posts, but you won't be notified. They aren't told.")
+            : T("Blocked people can't message, call, follow or find you, and you won't see each other's posts."))</p>
+        <div class="mb-pick">
+            <input class="input" placeholder="🔍 @T("Choose a friend")" @bind="filter" @bind:event="oninput" />
+            @if (!string.IsNullOrWhiteSpace(filter))
+            {
+                <div class="mb-options">
+                    @foreach (var f in (friends ?? []).Where(f => f.DisplayName.Contains(filter, StringComparison.OrdinalIgnoreCase) && !Current.Any(x => x.Id == f.Id)).Take(6))
+                    {
+                        <button @onclick="() => Add(f)"><Avatar User="f" Size="28" Link="false" ShowStatus="false" /> @f.DisplayName</button>
+                    }
+                </div>
+            }
+        </div>
+        @foreach (var u in Current)
+        {
+            <div class="mb-row">
+                <Avatar User="u" Size="36" ShowStatus="false" />
+                <span class="grow">@u.DisplayName</span>
+                <button class="btn btn-ghost btn-sm" @onclick="() => Remove(u)">@(tab == "people" ? T("Unmute") : T("Unblock"))</button>
+            </div>
+        }
+        @if (Current.Count == 0) { <p class="muted" style="margin:0">@(tab == "people" ? T("You haven't muted anyone.") : T("You haven't blocked anyone."))</p> }
+    }
+</div>
+
+@code {
+    private string tab = "people";
+    private string? filter;
+    private List<UserSummaryDto>? muted, blocked, friends;
+    private List<ConversationDto>? chats;
+
+    private List<UserSummaryDto> Current => (tab == "people" ? muted : blocked) ?? [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            muted = await Api.GetAsync<List<UserSummaryDto>>("api/users/me/muted");
+            blocked = await Api.GetAsync<List<UserSummaryDto>>("api/users/me/blocked");
+            friends = await Api.GetAsync<List<UserSummaryDto>>("api/friends");
+            chats = await Api.GetAsync<List<ConversationDto>>("api/conversations");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Add(UserSummaryDto u)
+    {
+        filter = null;
+        try
+        {
+            if (tab == "people") { await Api.PostAsync($"api/users/{u.Id}/mute"); muted!.Add(u); Toasts.Show($"{u.DisplayName} {T("is muted")}"); }
+            else
+            {
+                if (!await JS.InvokeAsync<bool>("confirm", $"{T("Block")} {u.DisplayName}?")) return;
+                await Api.PostAsync($"api/users/{u.Id}/block"); blocked!.Add(u); Toasts.Show($"{u.DisplayName} {T("is blocked")}");
+            }
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Remove(UserSummaryDto u)
+    {
+        try
+        {
+            if (tab == "people") { await Api.DeleteAsync($"api/users/{u.Id}/mute"); muted!.RemoveAll(x => x.Id == u.Id); }
+            else { await Api.DeleteAsync($"api/users/{u.Id}/block"); blocked!.RemoveAll(x => x.Id == u.Id); }
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task MuteChat(ConversationDto c, bool on)
+    {
+        try
+        {
+            await Api.PutAsync($"api/conversations/{c.Id}/mute", new MuteRequest(on));
+            chats = chats!.Select(x => x.Id == c.Id ? x with { Muted = on } : x).ToList();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

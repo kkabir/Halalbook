@@ -73,6 +73,8 @@ public class PushWorker(PushQueue queue, VapidKeys vapid, PresenceTracker presen
                 if (subs.Count == 0) continue;
                 var user = await db.Users.FindAsync([item.UserId], stoppingToken);
                 if (user is null) continue;
+                if (item.SenderId is Guid muted && !item.IsCall
+                    && await db.MutedUsers.AnyAsync(m => m.OwnerId == item.UserId && m.MutedId == muted, stoppingToken)) continue;
                 var vip = item.SenderId is Guid from && await IsVipAsync(db, item.UserId, from, stoppingToken);
                 var plan = Plan(item, user.NotifyShowPreview, user.NotifyDisappearing, user.DoNotDisturb, user.VipsBreakThrough, vip);
                 if (plan is null) continue;

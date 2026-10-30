@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -51,6 +52,8 @@ public class Notifier(AppDbContext db, IHubContext<RealtimeHub> hub, PushQueue p
     public async Task SendAsync(Guid userId, Guid? actorId, NotificationType type, string message, string? link)
     {
         if (actorId == userId) return;
+        // Muted people: nothing to notify about.
+        if (actorId is Guid a && await db.MutedUsers.AnyAsync(m => m.OwnerId == userId && m.MutedId == a)) return;
         var n = new Notification { UserId = userId, ActorId = actorId, Type = type, Message = message, Link = link };
         db.Notifications.Add(n);
         await db.SaveChangesAsync();

@@ -320,6 +320,31 @@ public static partial class UserEndpoints
             return Results.Ok(u.ToDto());
         });
 
+        // Muted people: no notifications from them (calls still ring); they aren't told.
+        users.MapGet("/me/muted", async (ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var me = cp.UserId();
+            return await db.MutedUsers.Where(m => m.OwnerId == me)
+                .Join(db.Users, m => m.MutedId, u => u.Id, (m, u) => u)
+                .OrderBy(u => u.DisplayName).Select(u => u.ToSummary()).ToListAsync();
+        });
+        users.MapPost("/{userId:guid}/mute", async (Guid userId, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var me = cp.UserId();
+            if (userId == me || !await db.Users.AnyAsync(u => u.Id == userId)) return Results.BadRequest();
+            if (!await db.MutedUsers.AnyAsync(m => m.OwnerId == me && m.MutedId == userId))
+            {
+                db.MutedUsers.Add(new MutedUser { OwnerId = me, MutedId = userId });
+                await db.SaveChangesAsync();
+            }
+            return Results.NoContent();
+        });
+        users.MapDelete("/{userId:guid}/mute", async (Guid userId, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            await db.MutedUsers.Where(m => m.OwnerId == cp.UserId() && m.MutedId == userId).ExecuteDeleteAsync();
+            return Results.NoContent();
+        });
+
         users.MapGet("/me/blocked", async (ClaimsPrincipal cp, AppDbContext db) =>
         {
             var me = cp.UserId();

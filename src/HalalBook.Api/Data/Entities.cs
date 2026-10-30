@@ -72,6 +72,14 @@ public class Follow
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+/// <summary>Silenced, not blocked: their messages and posts still arrive, but without notifications.</summary>
+public class MutedUser
+{
+    public Guid OwnerId { get; set; }
+    public Guid MutedId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
 public class Block
 {
     public Guid BlockerId { get; set; }
