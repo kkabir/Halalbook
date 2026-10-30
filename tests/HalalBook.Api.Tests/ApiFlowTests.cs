@@ -185,4 +185,28 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var meDto = (await me.GetFromJsonAsync<UserDto>("/api/users/me", Json))!;
         Assert.False(meDto.ShowOnlineStatus);
     }
+
+    [Fact]
+    public async Task LiveSession_Lifecycle()
+    {
+        var host = await SignUp("hamza_" + Random.Shared.Next(9999));
+        var viewer = await SignUp("ibrahim_" + Random.Shared.Next(9999));
+
+        var scheduled = (await (await host.PostAsJsonAsync("/api/live",
+            new CreateLiveRequest("Friday halaqa", null, LiveKind.Event, DateTime.UtcNow.AddDays(1), StartNow: false), Json))
+            .Content.ReadFromJsonAsync<LiveSessionDto>(Json))!;
+        Assert.Equal(LiveStatus.Scheduled, scheduled.Status);
+        Assert.True(scheduled.IsHost);
+        Assert.Contains((await viewer.GetFromJsonAsync<List<LiveSessionDto>>("/api/live?filter=upcoming", Json))!, s => s.Id == scheduled.Id);
+
+        // Only the host can start or end it.
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsync($"/api/live/{scheduled.Id}/start", null)).StatusCode);
+        var started = (await (await host.PostAsync($"/api/live/{scheduled.Id}/start", null)).Content.ReadFromJsonAsync<LiveSessionDto>(Json))!;
+        Assert.Equal(LiveStatus.Live, started.Status);
+        Assert.Contains((await viewer.GetFromJsonAsync<List<LiveSessionDto>>("/api/live", Json))!, s => s.Id == scheduled.Id);
+
+        var ended = (await (await host.PostAsync($"/api/live/{scheduled.Id}/end", null)).Content.ReadFromJsonAsync<LiveSessionDto>(Json))!;
+        Assert.Equal(LiveStatus.Ended, ended.Status);
+        Assert.NotEmpty((await viewer.GetFromJsonAsync<List<IceServerDto>>("/api/live/ice-servers", Json))!);
+    }
 }

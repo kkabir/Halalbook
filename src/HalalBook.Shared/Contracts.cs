@@ -13,7 +13,7 @@ public enum MemberRole { Member, Admin }
 public enum RsvpStatus { Going, Interested, NotGoing }
 public enum ReportStatus { Open, Resolved, Dismissed }
 public enum ReportTarget { Post, Comment, User, Story, Message }
-public enum NotificationType { FriendRequest, FriendAccepted, Follow, Reaction, Comment, Mention, Share, GroupInvite, EventInvite, Message, Moderation, System }
+public enum NotificationType { FriendRequest, FriendAccepted, Follow, Reaction, Comment, Mention, Share, GroupInvite, EventInvite, Message, Moderation, System, Live }
 
 // ---------- Auth ----------
 public record RegisterRequest(string UserName, string Email, string Password, string DisplayName);
@@ -142,3 +142,15 @@ public record AiTranslateRequest(string Text, string TargetLanguage);
 public record AiTextResponse(string Text, bool UsedAi);
 public record AiAskRequest(string Question, List<AiChatTurn>? History = null);
 public record AiChatTurn(string Role, string Content);
+
+// ---------- Live ----------
+public enum LiveKind { Show, Event, Podcast, Conference }
+public enum LiveStatus { Scheduled, Live, Ended }
+public record LiveSessionDto(Guid Id, string Title, string? Description, LiveKind Kind, LiveStatus Status, UserSummaryDto Host,
+    DateTime? ScheduledFor, DateTime? StartedAt, DateTime? EndedAt, int ViewerCount, int PeakViewers,
+    GroupSummaryDto? Group, Guid? EventId, string? CoverUrl, bool IsHost);
+public record CreateLiveRequest(string Title, string? Description, LiveKind Kind, DateTime? ScheduledFor = null,
+    Guid? GroupId = null, Guid? EventId = null, string? CoverUrl = null, bool StartNow = true);
+public record LiveParticipantDto(string ConnectionId, UserSummaryDto User, bool IsHost, bool Sends);
+public record LiveChatDto(UserSummaryDto User, string Text, DateTime At);
+public record IceServerDto(string[] Urls, string? Username, string? Credential);

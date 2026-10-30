@@ -29,6 +29,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<EmailCode> EmailCodes => Set<EmailCode>();
+    public DbSet<LiveSession> LiveSessions => Set<LiveSession>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -111,6 +112,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasIndex(x => new { x.UserId, x.CreatedAt });
             e.HasOne(x => x.Actor).WithMany().HasForeignKey(x => x.ActorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<LiveSession>(e =>
+        {
+            e.HasIndex(x => new { x.Status, x.ScheduledFor });
+            e.Property(x => x.Title).HasMaxLength(140);
+            e.HasOne(x => x.Host).WithMany().HasForeignKey(x => x.HostId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Group).WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Restrict);
         });
 
         b.Entity<EmailCode>(e =>

@@ -292,3 +292,23 @@ public class EmailCode
     public DateTime ExpiresAt { get; set; }
     public DateTime? ConsumedAt { get; set; }
 }
+
+public class LiveSession
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid HostId { get; set; }
+    public User Host { get; set; } = null!;
+    public string Title { get; set; } = "";
+    public string? Description { get; set; }
+    public LiveKind Kind { get; set; }
+    public LiveStatus Status { get; set; }
+    public string? CoverUrl { get; set; }
+    public Guid? GroupId { get; set; }
+    public Group? Group { get; set; }
+    public Guid? EventId { get; set; }
+    public DateTime? ScheduledFor { get; set; }
+    public DateTime? StartedAt { get; set; }
+    public DateTime? EndedAt { get; set; }
+    public int PeakViewers { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}

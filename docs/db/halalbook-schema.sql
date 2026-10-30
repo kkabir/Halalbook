@@ -737,3 +737,66 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030024529_LiveSessions'
+)
+BEGIN
+    CREATE TABLE [LiveSessions] (
+        [Id] uniqueidentifier NOT NULL,
+        [HostId] uniqueidentifier NOT NULL,
+        [Title] nvarchar(140) NOT NULL,
+        [Description] nvarchar(max) NULL,
+        [Kind] int NOT NULL,
+        [Status] int NOT NULL,
+        [CoverUrl] nvarchar(max) NULL,
+        [GroupId] uniqueidentifier NULL,
+        [EventId] uniqueidentifier NULL,
+        [ScheduledFor] datetime2 NULL,
+        [StartedAt] datetime2 NULL,
+        [EndedAt] datetime2 NULL,
+        [PeakViewers] int NOT NULL,
+        [CreatedAt] datetime2 NOT NULL,
+        CONSTRAINT [PK_LiveSessions] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_LiveSessions_Groups_GroupId] FOREIGN KEY ([GroupId]) REFERENCES [Groups] ([Id]) ON DELETE NO ACTION,
+        CONSTRAINT [FK_LiveSessions_Users_HostId] FOREIGN KEY ([HostId]) REFERENCES [Users] ([Id]) ON DELETE NO ACTION
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030024529_LiveSessions'
+)
+BEGIN
+    CREATE INDEX [IX_LiveSessions_GroupId] ON [LiveSessions] ([GroupId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030024529_LiveSessions'
+)
+BEGIN
+    CREATE INDEX [IX_LiveSessions_HostId] ON [LiveSessions] ([HostId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030024529_LiveSessions'
+)
+BEGIN
+    CREATE INDEX [IX_LiveSessions_Status_ScheduledFor] ON [LiveSessions] ([Status], [ScheduledFor]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030024529_LiveSessions'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261030024529_LiveSessions', N'10.0.14');
+END;
+
+COMMIT;
+GO
+

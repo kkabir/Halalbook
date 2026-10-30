@@ -1,0 +1,226 @@
+@page "/live/{Id:guid}"
+@implements IAsyncDisposable
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject ClientClock Clock
+
+<PageTitle>@(session?.Title ?? "Live") · HalalBook</PageTitle>
+
+@if (session is null) { <div class="spinner"></div> }
+else
+{
+    <div class="live-room">
+        <div class="live-main">
+            <div class="live-head row spread wrap">
+                <div class="row" style="gap:.6rem">
+                    <Avatar User="session.Host" Size="42" Ring="true" />
+                    <div>
+                        <b style="font-size:1.1rem">@session.Title</b>
+                        <div class="subtle">@Live.KindIcon(session.Kind) @Live.KindName(session.Kind) · @session.Host.DisplayName</div>
+                    </div>
+                </div>
+                <div class="row">
+                    @if (session.Status == LiveStatus.Live) { <span class="live-badge static">LIVE</span> }
+                    <span class="chip">👁 @viewers</span>
+                </div>
+            </div>
+
+            <div class="live-stage-wrap">
+                <div class="live-stage @(session.Kind == LiveKind.Podcast ? "podcast" : "")" @ref="stage"></div>
+                @if (!joined)
+                {
+                    <div class="live-lobby">
+                        @if (session.Status == LiveStatus.Ended)
+                        {
+                            <h2>This live has ended</h2>
+                            <p>@session.PeakViewers people joined. JazakAllahu khayran for watching.</p>
+                            <a class="btn btn-gold" href="/live">See what's live</a>
+                        }
+                        else if (session.Status == LiveStatus.Scheduled && !session.IsHost)
+                        {
+                            <h2>Starting soon</h2>
+                            <p>@(session.ScheduledFor is { } at ? Clock.Local(at).ToString("dddd, MMMM d · h:mm tt") : "The host hasn't started yet.")</p>
+                        }
+                        else
+                        {
+                            <div style="font-size:3rem">@Live.KindIcon(session.Kind)</div>
+                            <h2>@(session.IsHost ? (session.Status == LiveStatus.Scheduled ? "Ready when you are" : "You're the host") : "Join the live")</h2>
+                            <p>@(Sends ? "Your browser will ask to use your microphone" + (session.Kind == LiveKind.Podcast ? "." : " and camera.") : "You'll watch and listen. You can chat and react.")</p>
+                            <button class="btn btn-gold" disabled="@busy" @onclick="Join">@(session.IsHost && session.Status == LiveStatus.Scheduled ? "🔴 Go live now" : "Join")</button>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (joined)
+            {
+                <div class="live-controls">
+                    @if (Sends)
+                    {
+                        <button class="icon-btn @(micOn ? "" : "off")" title="Microphone" @onclick="ToggleMic">@(micOn ? "🎙️" : "🔇")</button>
+                        @if (session.Kind != LiveKind.Podcast)
+                        {
+                            <button class="icon-btn @(camOn ? "" : "off")" title="Camera" @onclick="ToggleCam">@(camOn ? "📷" : "🚫")</button>
+                            <button class="icon-btn @(sharing ? "on" : "")" title="Share screen" @onclick="ShareScreen">🖥️</button>
+                        }
+                    }
+                    @foreach (var e in Reactions)
+                    {
+                        <button class="icon-btn" title="React" @onclick="() => React(e)">@e</button>
+                    }
+                    <button class="btn btn-outline btn-sm" @onclick="Copy">🔗 Invite</button>
+                    @if (session.IsHost)
+                    {
+                        <button class="btn btn-danger btn-sm" @onclick="End">End live</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-danger btn-sm" @onclick="Leave">Leave</button>
+                    }
+                </div>
+            }
+            @if (session.Description is { Length: > 0 }) { <p class="muted" style="margin-top:.75rem">@session.Description</p> }
+        </div>
+
+        <aside class="live-side card">
+            <div class="card-title">Live chat</div>
+            <div class="live-chat" @ref="chatBox">
+                @if (chat.Count == 0) { <p class="subtle">Say salaam 👋</p> }
+                @foreach (var m in chat)
+                {
+                    <div class="live-msg"><Avatar User="m.User" Size="26" /><div><b>@m.User.DisplayName</b> @m.Text</div></div>
+                }
+            </div>
+            <form class="comment-input" @onsubmit="SendChat">
+                <input class="input" placeholder="@(joined ? "Write a message…" : "Join to chat")" disabled="@(!joined)" @bind="message" />
+                <button class="btn btn-primary btn-sm" type="submit" disabled="@(!joined || string.IsNullOrWhiteSpace(message))">Send</button>
+            </form>
+            @if (participants.Count > 0)
+            {
+                <hr class="divider" />
+                <div class="card-title">In the room (@participants.Count)</div>
+                @foreach (var p in participants.Take(30))
+                {
+                    <div class="list-item"><Avatar User="p.User" Size="28" /><span class="grow">@p.User.DisplayName</span>@if (p.IsHost) { <span class="chip gold">Host</span> }</div>
+                }
+            }
+        </aside>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private LiveSessionDto? session;
+    private ElementReference stage, chatBox;
+    private DotNetObjectReference<LiveRoom>? self;
+    private readonly List<LiveChatDto> chat = [];
+    private List<LiveParticipantDto> participants = [];
+    private string? message;
+    private int viewers;
+    private bool joined, busy, micOn = true, camOn = true, sharing, scrollChat;
+
+    private static readonly string[] Reactions = ["❤️", "✨", "🤲", "👍"];
+    private bool Sends => session is not null && (session.IsHost || session.Kind == LiveKind.Conference);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try { session = await Api.GetAsync<LiveSessionDto>($"api/live/{Id}"); viewers = session.ViewerCount; }
+        catch (Exception ex) { Toasts.Error(ex); Nav.NavigateTo("/live"); }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (scrollChat) { scrollChat = false; await JS.InvokeVoidAsync("halalbook.scrollToBottom", chatBox); }
+    }
+
+    private async Task Join()
+    {
+        busy = true;
+        try
+        {
+            if (session!.IsHost && session.Status == LiveStatus.Scheduled)
+                session = await Api.PostAsync<LiveSessionDto>($"api/live/{Id}/start");
+            self ??= DotNetObjectReference.Create(this);
+            joined = true;
+            StateHasChanged();
+            await JS.InvokeVoidAsync("halalbookLive.start", new
+            {
+                api = Api.BaseAddress.ToString(),
+                token = Session.Token,
+                sessionId = Id,
+                sends = Sends,
+                isHost = session.IsHost,
+                conference = session.Kind == LiveKind.Conference,
+                audioOnly = session.Kind == LiveKind.Podcast,
+                name = Session.User?.DisplayName,
+            }, stage, self);
+        }
+        catch (Exception ex) { joined = false; Toasts.Show(ex is JSException js ? js.Message.Split('\n')[0] : "Couldn't join the live.", true); }
+        finally { busy = false; }
+    }
+
+    [JSInvokable] public void OnChat(LiveChatDto m) => InvokeAsync(() => { chat.Add(m); if (chat.Count > 300) chat.RemoveAt(0); scrollChat = true; StateHasChanged(); });
+    [JSInvokable] public void OnViewers(int n) => InvokeAsync(() => { viewers = n; StateHasChanged(); });
+    [JSInvokable] public void OnParticipants(List<LiveParticipantDto> list) => InvokeAsync(() => { participants = list; StateHasChanged(); });
+    [JSInvokable] public void OnError(string text) => InvokeAsync(() => Toasts.Show(text, true));
+    [JSInvokable] public void OnScreenShareEnded() => InvokeAsync(() => { sharing = false; StateHasChanged(); });
+    [JSInvokable] public void OnEnded() => InvokeAsync(async () =>
+    {
+        joined = false;
+        session = await Api.GetAsync<LiveSessionDto>($"api/live/{Id}");
+        StateHasChanged();
+    });
+
+    private async Task ToggleMic() => micOn = await JS.InvokeAsync<bool>("halalbookLive.toggleMic", !micOn);
+    private async Task ToggleCam() => camOn = await JS.InvokeAsync<bool>("halalbookLive.toggleCam", !camOn);
+
+    private async Task ShareScreen()
+    {
+        try { sharing = await JS.InvokeAsync<bool>("halalbookLive.shareScreen"); }
+        catch (JSException) { sharing = false; }
+    }
+
+    private async Task React(string e) => await JS.InvokeVoidAsync("halalbookLive.react", e);
+
+    private async Task SendChat()
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+        var text = message; message = null;
+        try { await JS.InvokeVoidAsync("halalbookLive.chat", text); }
+        catch (JSException ex) { message = text; Toasts.Show(ex.Message.Contains("isn't allowed") ? "That message isn't allowed here." : "Message not sent.", true); }
+    }
+
+    private async Task Copy()
+    {
+        await JS.InvokeVoidAsync("halalbook.copy", Nav.ToAbsoluteUri($"/live/{Id}").ToString());
+        Toasts.Show("Invite link copied");
+    }
+
+    private async Task Leave()
+    {
+        await JS.InvokeVoidAsync("halalbookLive.leave");
+        joined = false;
+        Nav.NavigateTo("/live");
+    }
+
+    private async Task End()
+    {
+        try
+        {
+            session = await Api.PostAsync<LiveSessionDto>($"api/live/{Id}/end");
+            await JS.InvokeVoidAsync("halalbookLive.leave");
+            joined = false;
+            Toasts.Show("Your live has ended");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (joined) { try { await JS.InvokeVoidAsync("halalbookLive.leave"); } catch (JSDisconnectedException) { } }
+        self?.Dispose();
+    }
+}

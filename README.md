@@ -1,4 +1,4 @@
-﻿# HalalBook
+# HalalBook
 
 A beautiful, intelligent social network for the Muslim community: Facebook-style social features, an Islamic
 architecture design system (emerald and gold, eight-point star geometry, mihrab arches), AI help powered by Claude,
@@ -33,6 +33,13 @@ comment threads. Every AI feature falls back gracefully when no key is configure
 
 **Deen tools**: prayer times (9 calculation methods, Hanafi or standard Asr, high-latitude fallback), monthly timetable,
 Qibla compass with live device heading, Hijri (Umm al-Qura) calendar with Islamic occasions and white days.
+
+**Live**: live shows, live events (halaqas, talks, classes), audio-only live podcasts and video calls where everyone is on
+camera. Hosts can go live now or schedule, share their screen, mute and turn off the camera. Viewers get live chat,
+reactions and a viewer count, and friends and followers are notified when someone goes live. Media is peer-to-peer
+WebRTC with SignalR signaling (`/hubs/live`), which suits video calls of up to about 6 people and broadcasts of up to about
+25 viewers. For bigger audiences, plug in a media server (SFU) such as LiveKit. Add a TURN server under `Live:IceServers`
+so people behind strict firewalls can connect.
 
 **Safety**: blocked content is rejected, borderline content waits in a moderator queue, user reports, suspensions;
 the first account registered becomes Admin.

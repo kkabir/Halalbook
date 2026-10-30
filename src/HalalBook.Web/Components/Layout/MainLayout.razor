@@ -22,6 +22,7 @@ else
         <nav class="topbar-actions">
             <a class="icon-btn hide-sm @Active("")" href="/" title="Home">🏠</a>
             <a class="icon-btn hide-sm @Active("reels")" href="/reels" title="Reels">🎬</a>
+            <a class="icon-btn hide-sm @Active("live")" href="/live" title="Live">🔴</a>
             <a class="icon-btn hide-sm @Active("noor")" href="/noor" title="Ask Noor AI">✨</a>
             <a class="icon-btn @Active("messages")" href="/messages" title="Messages">💬@if (Realtime.UnreadMessages > 0) { <span class="badge">@Realtime.UnreadMessages</span> }</a>
             <a class="icon-btn @Active("notifications")" href="/notifications" title="Notifications">🔔@if (Realtime.UnreadNotifications > 0) { <span class="badge">@Realtime.UnreadNotifications</span> }</a>
@@ -54,6 +55,7 @@ else
                 <li><a href="/pages" class="@Active("pages")"><span class="nav-ico">📜</span>Pages</a></li>
                 <li><a href="/events" class="@Active("events")"><span class="nav-ico">📅</span>Events</a></li>
                 <li><a href="/reels" class="@Active("reels")"><span class="nav-ico">🎬</span>Reels</a></li>
+                <li><a href="/live" class="@Active("live")"><span class="nav-ico">🔴</span>Live</a></li>
                 <li><a href="/messages" class="@Active("messages")"><span class="nav-ico">💬</span>Messages</a></li>
                 <li><a href="/bookmarks" class="@Active("bookmarks")"><span class="nav-ico">🔖</span>Saved</a></li>
             </ul>
@@ -127,6 +129,7 @@ else
     <nav class="bottom-nav">
         <a href="/" class="@Active("")"><span>🏠</span>Home</a>
         <a href="/reels" class="@Active("reels")"><span>🎬</span>Reels</a>
+        <a href="/live" class="@Active("live")"><span>🔴</span>Live</a>
         <a href="/prayer" class="@Active("prayer")"><span>🕋</span>Prayer</a>
         <a href="/groups" class="@Active("groups")"><span>🕌</span>Groups</a>
         <a href="/noor" class="@Active("noor")"><span>✨</span>Noor</a>

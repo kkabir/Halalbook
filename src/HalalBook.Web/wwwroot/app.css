@@ -528,3 +528,45 @@ label.field { display: flex; flex-direction: column; gap: .35rem; font-weight: 6
 .active-text { color: #22a35a; font-weight: 600; font-size: .85rem; }
 .online-list .list-item { padding: .35rem 0; border: 0 !important; cursor: pointer; }
 .online-list .list-item:hover b { color: var(--primary); }
+
+/* ---------- Live ---------- */
+.live-badge { position: absolute; top: .6rem; left: .6rem; background: #e0263a; color: #fff; font-weight: 800; font-size: .72rem; letter-spacing: .06em; padding: .25rem .55rem; border-radius: 6px; box-shadow: 0 2px 8px rgba(224, 38, 58, .5); }
+.live-badge.static { position: static; }
+.live-kind { position: absolute; bottom: .6rem; left: .6rem; background: rgba(4, 32, 26, .7); color: var(--gold-300); font-weight: 700; font-size: .75rem; padding: .25rem .6rem; border-radius: 999px; }
+.live-kinds { display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem; }
+.live-kind-option { display: flex; flex-direction: column; align-items: center; gap: .15rem; padding: .8rem; border-radius: 16px; border: 2px solid var(--border); background: var(--surface); cursor: pointer; font-family: var(--font); color: var(--text); }
+.live-kind-option small { color: var(--text-3); }
+.live-kind-option.active { border-color: var(--gold-500); background: var(--gold-100); }
+.live-room { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 1rem; }
+.live-head { margin-bottom: .75rem; }
+.live-stage-wrap { position: relative; border-radius: 24px; overflow: hidden; background: radial-gradient(circle at 50% 30%, var(--emerald-800), var(--emerald-950)); min-height: 420px; border: 3px solid var(--gold-500); }
+.live-stage-wrap::before { content: ""; position: absolute; inset: 0; background: var(--pattern); background-size: 90px; opacity: .35; pointer-events: none; }
+.live-stage { position: relative; display: grid; gap: 8px; padding: 8px; height: min(68vh, 640px); grid-template-columns: 1fr; }
+.live-stage[data-count="2"] { grid-template-columns: 1fr 1fr; }
+.live-stage[data-count="3"], .live-stage[data-count="4"] { grid-template-columns: 1fr 1fr; }
+.live-stage[data-count="5"], .live-stage[data-count="6"] { grid-template-columns: repeat(3, 1fr); }
+.live-tile { position: relative; border-radius: 18px; overflow: hidden; background: #02140f; min-height: 0; }
+.live-tile video { width: 100%; height: 100%; object-fit: cover; }
+.live-tile.local video { transform: scaleX(-1); }
+.live-tile .live-avatar { display: none; }
+.live-tile.audio-only video { display: none; }
+.live-tile.audio-only .live-avatar, .live-stage.podcast .live-avatar {
+    display: grid; place-items: center; position: absolute; inset: 0; margin: auto; width: 120px; height: 120px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold-300), var(--gold-600)); color: #2b2205; font-size: 2.6rem; font-weight: 800;
+    box-shadow: 0 0 0 10px rgba(201, 162, 39, .2), 0 0 0 22px rgba(201, 162, 39, .08); animation: breathe 2.4s ease-in-out infinite;
+}
+.live-stage.podcast video { display: none; }
+.live-name { position: absolute; left: .6rem; bottom: .6rem; background: rgba(0, 0, 0, .55); color: #fff; padding: .2rem .6rem; border-radius: 999px; font-size: .8rem; font-weight: 600; }
+.live-lobby { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; text-align: center; color: #fff; padding: 2rem; gap: .5rem; }
+.live-lobby p { color: rgba(255, 255, 255, .8); max-width: 420px; }
+.live-controls { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; align-items: center; margin-top: .75rem; }
+.live-controls .icon-btn { width: 48px; height: 48px; font-size: 1.3rem; }
+.live-controls .icon-btn.off { background: var(--danger); color: #fff; }
+.live-controls .icon-btn.on { background: var(--gold-300); }
+.live-side { display: flex; flex-direction: column; max-height: calc(100vh - 120px); }
+.live-chat { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: .5rem; min-height: 200px; margin-bottom: .6rem; }
+.live-msg { display: flex; gap: .45rem; align-items: flex-start; font-size: .9rem; }
+.live-float { position: absolute; bottom: 10%; font-size: 2.2rem; animation: floatUp 2.6s ease-out forwards; pointer-events: none; z-index: 5; }
+@keyframes floatUp { from { transform: translateY(0) scale(.8); opacity: 1; } to { transform: translateY(-320px) scale(1.4); opacity: 0; } }
+@media (max-width: 1000px) { .live-room { grid-template-columns: 1fr; } .live-stage { height: 52vh; } }
+.live-stage:empty::after { content: "Waiting for the host's video…"; margin: auto; color: rgba(255, 255, 255, .75); font-weight: 600; }

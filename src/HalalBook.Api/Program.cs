@@ -44,6 +44,8 @@ builder.Services.AddSingleton<EmailTemplates>();
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<OtpService>();
 builder.Services.AddSingleton<PresenceTracker>();
+builder.Services.AddSingleton<HalalBook.Api.Hubs.LiveRoomTracker>();
+builder.Services.AddSingleton(config.GetSection("Live").Get<LiveOptions>() ?? new LiveOptions());
 builder.Services.AddScoped<Mailer>();
 
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -150,7 +152,9 @@ app.MapCommunityEndpoints();
 app.MapMessagingEndpoints();
 app.MapPlatformEndpoints();
 app.MapPresenceEndpoints();
+app.MapLiveEndpoints();
 app.MapHub<RealtimeHub>("/hubs/realtime");
+app.MapHub<LiveHub>("/hubs/live");
 
 app.Run();
 
