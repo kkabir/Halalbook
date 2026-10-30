@@ -21,6 +21,8 @@ public class User
     public bool IsSuspended { get; set; }
     public bool EmailConfirmed { get; set; }
     public bool TwoFactorEnabled { get; set; }
+    public bool ShowOnlineStatus { get; set; } = true;
+    public DateTime? LastSeenAt { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
     public string PrayerMethod { get; set; } = "MWL";

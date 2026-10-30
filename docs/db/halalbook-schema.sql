@@ -708,3 +708,32 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030023815_OnlineStatus'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [LastSeenAt] datetime2 NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030023815_OnlineStatus'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [ShowOnlineStatus] bit NOT NULL DEFAULT CAST(1 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030023815_OnlineStatus'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261030023815_OnlineStatus', N'10.0.14');
+END;
+
+COMMIT;
+GO
+

@@ -37,7 +37,7 @@
             <div class="chat-head">
                 <a href="/messages" class="icon-btn" title="Back">←</a>
                 @if (current.Participants.FirstOrDefault() is { } o) { <Avatar User="o" Size="40" /> }
-                <div class="grow"><b>@current.Title</b>@if (typing) { <div class="subtle">typing…</div> }</div>
+                <div class="grow"><b>@current.Title</b>@if (typing) { <div class="subtle">typing…</div> } else if (!current.IsGroup && current.Participants.FirstOrDefault() is { } other2 && Realtime.IsOnline(other2.Id)) { <div class="active-text">Active now</div> }</div>
             </div>
             <div class="chat-body" @ref="body">
                 @foreach (var m in messages)
@@ -70,7 +70,10 @@
     {
         Realtime.MessageReceived += OnMessage;
         Realtime.Typing += OnTyping;
+        Realtime.PresenceChanged += OnPresence;
     }
+
+    private void OnPresence() => InvokeAsync(StateHasChanged);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -153,6 +156,7 @@
     {
         Realtime.MessageReceived -= OnMessage;
         Realtime.Typing -= OnTyping;
+        Realtime.PresenceChanged -= OnPresence;
         typingTimer?.Dispose();
     }
 }

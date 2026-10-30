@@ -746,6 +746,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<bool>("IsVerified")
                         .HasColumnType("bit");
 
+                    b.Property<DateTime?>("LastSeenAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<double?>("Latitude")
                         .HasColumnType("float");
 
@@ -775,6 +778,9 @@ namespace HalalBook.Api.Data.Migrations
 
                     b.Property<int>("Role")
                         .HasColumnType("int");
+
+                    b.Property<bool>("ShowOnlineStatus")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");

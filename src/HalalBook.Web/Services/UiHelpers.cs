@@ -62,5 +62,8 @@ public static class Ui
         _ => "linear-gradient(135deg,#13866a,#0b3d2e)",
     };
 
+    public static string LastSeen(bool online, DateTime? lastSeen) =>
+        online ? "Active now" : lastSeen is { } t ? $"Active {TimeAgo(t)}{(TimeAgo(t) == "just now" ? "" : " ago")}" : "";
+
     public static string Time(TimeOnly t) => t.ToString("h:mm tt");
 }

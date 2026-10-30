@@ -37,7 +37,7 @@ public static partial class UserEndpoints
             return Results.Ok(u.ToDto());
         });
 
-        users.MapGet("/{userName}", async (string userName, ClaimsPrincipal cp, AppDbContext db, PostService posts) =>
+        users.MapGet("/{userName}", async (string userName, ClaimsPrincipal cp, AppDbContext db, PostService posts, PresenceTracker presence) =>
         {
             var me = cp.UserId();
             var key = userName.ToUpperInvariant();
@@ -58,7 +58,9 @@ public static partial class UserEndpoints
                 await db.Posts.CountAsync(p => p.AuthorId == u.Id && !p.IsDeleted && p.GroupId == null && p.PageId == null),
                 status,
                 await db.Follows.AnyAsync(x => x.FollowerId == me && x.FolloweeId == u.Id),
-                await db.Blocks.AnyAsync(x => x.BlockerId == me && x.BlockedId == u.Id)));
+                await db.Blocks.AnyAsync(x => x.BlockerId == me && x.BlockedId == u.Id),
+                await PresenceEndpoints.CanSeePresence(db, me, u) && presence.IsOnline(u.Id),
+                await PresenceEndpoints.CanSeePresence(db, me, u) ? u.LastSeenAt : null));
         });
 
         users.MapGet("/{userName}/posts", async (string userName, int? page, ClaimsPrincipal cp, AppDbContext db, PostService posts) =>

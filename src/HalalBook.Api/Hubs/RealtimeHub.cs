@@ -7,12 +7,37 @@ using Microsoft.EntityFrameworkCore;
 namespace HalalBook.Api.Hubs;
 
 /// <summary>
-/// Pushes live events to clients: "message" (new chat message), "notification", and "typing".
+/// Pushes live events to clients: "message" (new chat message), "notification", "typing" and "presence".
 /// Users are addressed by their user id (the JWT NameIdentifier claim).
 /// </summary>
 [Authorize]
-public class RealtimeHub(AppDbContext db) : Hub
+public class RealtimeHub(AppDbContext db, PresenceTracker presence) : Hub
 {
+    public override async Task OnConnectedAsync()
+    {
+        var me = Context.User!.UserId();
+        if (presence.Connect(me)) await BroadcastAsync(me, online: true);
+        await base.OnConnectedAsync();
+    }
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        var me = Context.User!.UserId();
+        if (presence.Disconnect(me))
+        {
+            await db.Users.Where(u => u.Id == me).ExecuteUpdateAsync(s => s.SetProperty(u => u.LastSeenAt, DateTime.UtcNow));
+            await BroadcastAsync(me, online: false);
+        }
+        await base.OnDisconnectedAsync(exception);
+    }
+
+    /// <summary>Tells everyone this person came online or went offline, unless they hide their active status.</summary>
+    private async Task BroadcastAsync(Guid userId, bool online)
+    {
+        if (!await db.Users.AnyAsync(u => u.Id == userId && u.ShowOnlineStatus)) return;
+        await Clients.Others.SendAsync("presence", userId, online);
+    }
+
     public async Task Typing(Guid conversationId)
     {
         var me = Context.User!.UserId();

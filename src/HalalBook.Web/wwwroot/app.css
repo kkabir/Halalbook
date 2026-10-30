@@ -517,3 +517,14 @@ label.field { display: flex; flex-direction: column; gap: .35rem; font-weight: 6
     .reel { height: calc(100vh - 150px); border-radius: 120px 120px 18px 18px; }
     .reels { height: calc(100vh - 130px); }
 }
+
+/* ---------- Online status ---------- */
+.avatar { overflow: visible; }
+.avatar img { border-radius: inherit; }
+.online-dot {
+    position: absolute; right: 0; bottom: 0; width: max(10px, 26%); height: max(10px, 26%); border-radius: 50%;
+    background: #31c46c; border: 2px solid var(--surface); box-shadow: 0 0 0 1px rgba(0, 0, 0, .05); z-index: 1;
+}
+.active-text { color: #22a35a; font-weight: 600; font-size: .85rem; }
+.online-list .list-item { padding: .35rem 0; border: 0 !important; cursor: pointer; }
+.online-list .list-item:hover b { color: var(--primary); }

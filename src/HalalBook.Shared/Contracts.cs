@@ -29,6 +29,8 @@ public record ResendCodeRequest(string Email, AuthStep Step);
 public record ResetPasswordRequest(string Email, string Code, string NewPassword);
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 public record TwoFactorRequest(bool Enabled);
+public record OnlineStatusRequest(bool Visible);
+public record OnlineUserDto(UserSummaryDto User, bool IsFriend);
 
 // ---------- Users ----------
 public record UserSummaryDto(Guid Id, string UserName, string DisplayName, string? AvatarUrl, bool IsVerified);
@@ -36,12 +38,12 @@ public record UserSummaryDto(Guid Id, string UserName, string DisplayName, strin
 public record UserDto(
     Guid Id, string UserName, string Email, string DisplayName, string? Bio, string? AvatarUrl, string? CoverUrl,
     string? Location, string? Website, UserRole Role, bool IsVerified, DateTime JoinedAt,
-    double? Latitude, double? Longitude, string PrayerMethod, string AsrSchool, bool EmailConfirmed = false, bool TwoFactorEnabled = false);
+    double? Latitude, double? Longitude, string PrayerMethod, string AsrSchool, bool EmailConfirmed = false, bool TwoFactorEnabled = false, bool ShowOnlineStatus = true);
 
 public record ProfileDto(
     UserSummaryDto User, string? Bio, string? CoverUrl, string? Location, string? Website, DateTime JoinedAt,
     int FriendCount, int FollowerCount, int FollowingCount, int PostCount,
-    FriendshipStatus Friendship, bool IsFollowing, bool IsBlocked);
+    FriendshipStatus Friendship, bool IsFollowing, bool IsBlocked, bool IsOnline = false, DateTime? LastSeenAt = null);
 
 public record UpdateProfileRequest(
     string? DisplayName, string? Bio, string? AvatarUrl, string? CoverUrl, string? Location, string? Website,

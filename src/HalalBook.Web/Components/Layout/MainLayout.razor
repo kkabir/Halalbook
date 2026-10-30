@@ -81,6 +81,25 @@ else
         {
             <aside class="rail">
                 <PrayerWidget />
+                <div class="card online-list">
+                    <div class="card-title">Online now <span class="subtle" style="margin-left:auto">@Realtime.OnlineUsers.Count</span></div>
+                    @if (Session.User?.ShowOnlineStatus == false)
+                    {
+                        <p class="subtle">Your active status is off, so you can't see who's online. <a href="/settings">Turn it on</a></p>
+                    }
+                    else if (Realtime.OnlineUsers.Count == 0)
+                    {
+                        <p class="subtle">No one else is online right now.</p>
+                    }
+                    @foreach (var o in Realtime.OnlineUsers.Take(12))
+                    {
+                        <div class="list-item" @onclick="() => Chat(o.User)">
+                            <Avatar User="o.User" Size="36" Link="false" />
+                            <b class="grow" style="font-weight:600">@o.User.DisplayName</b>
+                            @if (o.IsFriend) { <span class="subtle">Friend</span> }
+                        </div>
+                    }
+                </div>
                 <div class="card">
                     <div class="card-title">Trending</div>
                     @if (trending.Count == 0) { <p class="subtle">No trends yet. Start one with a #hashtag!</p> }
@@ -138,6 +157,7 @@ else
         Nav.LocationChanged += OnLocationChanged;
         Session.Changed += OnSessionChanged;
         Realtime.CountsChanged += Refresh;
+        Realtime.PresenceChanged += Refresh;
         await Session.LoadAsync();
         if (!Session.IsAuthenticated)
         {
@@ -169,6 +189,16 @@ else
         Nav.NavigateTo(query.StartsWith('#') && !query.Contains(' ') ? $"/hashtag/{query[1..]}" : $"/search?q={Uri.EscapeDataString(query)}");
     }
 
+    private async Task Chat(UserSummaryDto u)
+    {
+        try
+        {
+            var conv = await Api.PostAsync<ConversationDto>("api/conversations", new StartConversationRequest([u.Id], null));
+            Nav.NavigateTo($"/messages/{conv.Id}");
+        }
+        catch (Exception) { Nav.NavigateTo($"/u/{u.UserName}"); }
+    }
+
     private async Task AddFriend(UserSummaryDto p)
     {
         try { await Api.PostAsync($"api/friends/{p.Id}"); suggestions.Remove(p); } catch (Exception) { }
@@ -179,5 +209,6 @@ else
         Nav.LocationChanged -= OnLocationChanged;
         Session.Changed -= OnSessionChanged;
         Realtime.CountsChanged -= Refresh;
+        Realtime.PresenceChanged -= Refresh;
     }
 }

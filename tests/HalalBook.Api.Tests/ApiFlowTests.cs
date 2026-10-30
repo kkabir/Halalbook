@@ -174,4 +174,15 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(AuthStep.Done, done.Step);
         Assert.NotNull(done.Auth);
     }
+
+    [Fact]
+    public async Task OnlineStatus_CanBeHidden()
+    {
+        var me = await SignUp("ghazi_" + Random.Shared.Next(9999));
+        Assert.Empty((await me.GetFromJsonAsync<List<OnlineUserDto>>("/api/presence/online", Json))!);
+        var hidden = await me.PutAsJsonAsync("/api/users/me/online-status", new OnlineStatusRequest(false), Json);
+        Assert.False((await hidden.Content.ReadFromJsonAsync<UserDto>(Json))!.ShowOnlineStatus);
+        var meDto = (await me.GetFromJsonAsync<UserDto>("/api/users/me", Json))!;
+        Assert.False(meDto.ShowOnlineStatus);
+    }
 }

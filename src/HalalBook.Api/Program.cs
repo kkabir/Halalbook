@@ -43,6 +43,7 @@ builder.Services.AddSingleton(config.GetSection("Auth").Get<AuthOptions>() ?? ne
 builder.Services.AddSingleton<EmailTemplates>();
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<OtpService>();
+builder.Services.AddSingleton<PresenceTracker>();
 builder.Services.AddScoped<Mailer>();
 
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -148,6 +149,7 @@ app.MapPostEndpoints();
 app.MapCommunityEndpoints();
 app.MapMessagingEndpoints();
 app.MapPlatformEndpoints();
+app.MapPresenceEndpoints();
 app.MapHub<RealtimeHub>("/hubs/realtime");
 
 app.Run();

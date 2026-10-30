@@ -3,6 +3,7 @@
 @inject AuthSession Session
 @inject Toasts Toasts
 @inject NavigationManager Nav
+@inject Realtime Realtime
 
 <PageTitle>@(profile?.User.DisplayName ?? UserName) · HalalBook</PageTitle>
 
@@ -21,6 +22,10 @@ else
             <div class="grow" style="padding-bottom:.5rem">
                 <div class="profile-name">@p.User.DisplayName @if (p.User.IsVerified) { <span class="verified">✦</span> }</div>
                 <div class="muted">@@@p.User.UserName · @p.FriendCount friends · @p.FollowerCount followers</div>
+                @if (p.Friendship != FriendshipStatus.Self && Ui.LastSeen(p.IsOnline || Realtime.IsOnline(p.User.Id), p.LastSeenAt) is { Length: > 0 } seen)
+                {
+                    <div class="active-text">● @seen</div>
+                }
             </div>
             <div class="row wrap" style="padding-bottom:.75rem">
                 @switch (p.Friendship)

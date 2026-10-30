@@ -65,6 +65,11 @@
             <input type="checkbox" style="width:22px;height:22px" checked="@(Session.User?.TwoFactorEnabled == true)" @onchange="ToggleTwoFactor" />
         </label>
         <hr class="divider" />
+        <label class="row spread" style="cursor:pointer">
+            <div><b>Show when I'm active</b><div class="subtle">Friends and others can see a green dot when you're online. If you turn this off, you won't see other people's status either.</div></div>
+            <input type="checkbox" style="width:22px;height:22px" checked="@(Session.User?.ShowOnlineStatus != false)" @onchange="ToggleOnlineStatus" />
+        </label>
+        <hr class="divider" />
         <b>Change password</b>
         <div class="row wrap">
             <input class="input grow" type="password" placeholder="Current password" autocomplete="current-password" @bind="currentPassword" />
@@ -112,6 +117,20 @@
             var u = await Api.PutAsync<UserDto>("api/users/me/two-factor", new TwoFactorRequest(e.Value is true));
             await Session.UpdateUserAsync(u);
             Toasts.Show(u.TwoFactorEnabled ? "Two-step sign-in is on" : "Two-step sign-in is off");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    [Inject] private Realtime Realtime { get; set; } = default!;
+
+    private async Task ToggleOnlineStatus(ChangeEventArgs e)
+    {
+        try
+        {
+            var u = await Api.PutAsync<UserDto>("api/users/me/online-status", new OnlineStatusRequest(e.Value is true));
+            await Session.UpdateUserAsync(u);
+            await Realtime.RefreshOnlineAsync();
+            Toasts.Show(u.ShowOnlineStatus ? "Your active status is visible" : "Your active status is hidden");
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }
