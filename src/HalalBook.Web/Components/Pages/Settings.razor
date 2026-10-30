@@ -90,6 +90,14 @@
     <div class="mt"><AppSetupCard InSettings="true" /></div>
 
     <div class="card stack mt">
+        <div class="card-title">🕌 @T("Islamic features")</div>
+        <label class="row spread privacy-row" style="border-top:0;cursor:pointer">
+            <div class="grow"><b>@T("Show Islamic tools")</b><div class="subtle">@T("Prayer times, Qibla, Hijri dates, verse of the day, dua wall, Quran khatm, Zakat, Tasbeeh and nearby masjids. Turn off to keep HalalBook general.")</div></div>
+            <input type="checkbox" style="width:22px;height:22px" checked="@Session.ShowFaith" @onchange="ToggleFaith" />
+        </label>
+    </div>
+
+    <div class="card stack mt">
         <div class="card-title">@T("Language")</div>
         <label class="row spread wrap privacy-row" style="border-top:0">
             <div class="grow"><b>@T("App language")</b><div class="subtle">@T("Menus, buttons and messages appear in this language.")</div></div>
@@ -234,6 +242,16 @@
             var u = await Api.PutAsync<UserDto>("api/users/me", new UpdateProfileRequest(null, null, null, null, null, null, null, null, null, null, who));
             await Session.UpdateUserAsync(u);
             Toasts.Show("Saved");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task ToggleFaith(ChangeEventArgs e)
+    {
+        try
+        {
+            await Session.UpdateUserAsync(await Api.PutAsync<UserDto>("api/users/me/faith", new FaithSettingsRequest(e.Value is true)));
+            Toasts.Show(e.Value is true ? T("Islamic features are on") : T("Islamic features are hidden"));
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }

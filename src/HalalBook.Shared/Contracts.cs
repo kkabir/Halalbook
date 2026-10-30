@@ -25,7 +25,7 @@ public enum NotificationType { FriendRequest, FriendAccepted, Follow, Reaction, 
 
 // ---------- Auth ----------
 public record RegisterRequest(string UserName, string Email, string Password, string DisplayName, string? AcceptedTermsVersion = null,
-    string? InviteCode = null);
+    string? InviteCode = null, bool FaithFeatures = true);
 /// <summary>A member's personal invite link and the people who joined through it.</summary>
 /// <summary>A browser's Web Push subscription (from PushSubscription.toJSON()).</summary>
 public record PushSubscribeRequest(string Endpoint, string P256dh, string Auth);
@@ -54,7 +54,9 @@ public record UserDto(
     string? Location, string? Website, UserRole Role, bool IsVerified, DateTime JoinedAt,
     double? Latitude, double? Longitude, string PrayerMethod, string AsrSchool, bool EmailConfirmed = false, bool TwoFactorEnabled = false, bool ShowOnlineStatus = true,
     ProfilePostPermission WhoCanPost = ProfilePostPermission.Friends, string? AcceptedTermsVersion = null,
-    PrivacySettingsDto? Privacy = null, string Language = "en", bool AutoTranslate = true);
+    PrivacySettingsDto? Privacy = null, string Language = "en", bool AutoTranslate = true, bool FaithFeatures = true);
+/// <summary>Turns the Islamic tools (prayer times, Qibla, Hijri dates, dua wall, khatm, zakat, tasbeeh...) on or off for this member.</summary>
+public record FaithSettingsRequest(bool FaithFeatures);
 
 public record ProfileDto(
     UserSummaryDto User, string? Bio, string? CoverUrl, string? Location, string? Website, DateTime JoinedAt,

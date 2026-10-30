@@ -93,7 +93,7 @@
                 </label>
             }
             <button class="btn btn-ghost btn-sm" @onclick="() => showExtras = !showExtras">😊 @T("Feeling")</button>
-            @if (!ReelMode && PageId is null)
+            @if (!ReelMode && PageId is null && Session.ShowFaith)
             {
                 <button class="btn btn-ghost btn-sm dua-toggle @(asDua ? "on" : "")" @onclick="() => asDua = !asDua"
                         title="@T("Ask friends and the community to make dua for you")">🤲 @T("Ask for dua")</button>

@@ -1096,3 +1096,10 @@ select.lang-picker { width: auto; }
 .tasbeeh-today { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; }
 .tasbeeh-today b { display: block; font-size: 1.5rem; color: var(--emerald-800); }
 .tasbeeh-today span { font-size: .78rem; color: var(--text-3); }
+
+/* ---------- Faith choice at sign-up ---------- */
+.faith-choice { display: flex; flex-direction: column; gap: .35rem; padding: .7rem .8rem; border: 1px solid var(--border); border-radius: 14px; background: var(--bg); }
+.faith-choice > span { font-weight: 700; font-size: .9rem; }
+.faith-choice label { display: flex; align-items: center; gap: .5rem; padding: .45rem .6rem; border-radius: 10px; cursor: pointer; font-size: .9rem; }
+.faith-choice label.on { background: var(--emerald-50, #eef7f3); font-weight: 600; }
+.faith-choice input { width: 18px; height: 18px; }

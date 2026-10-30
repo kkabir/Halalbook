@@ -278,6 +278,15 @@ public static partial class UserEndpoints
                 await joined.CountAsync(), recent.Select(x => x.ToSummary()).ToList()));
         });
 
+        users.MapPut("/me/faith", async (FaithSettingsRequest req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var u = await db.Users.FindAsync(cp.UserId());
+            if (u is null) return Results.Unauthorized();
+            u.FaithFeatures = req.FaithFeatures;
+            await db.SaveChangesAsync();
+            return Results.Ok(u.ToDto());
+        });
+
         users.MapPut("/me/language", async (LanguageSettingsRequest req, ClaimsPrincipal cp, AppDbContext db) =>
         {
             var u = await db.Users.FindAsync(cp.UserId());

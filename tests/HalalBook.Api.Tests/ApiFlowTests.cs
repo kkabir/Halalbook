@@ -784,4 +784,16 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(ids[0], row.Items[0].Id);
         Assert.All(row.Items, p => Assert.Contains(tag, p.Hashtags));
     }
+
+    [Fact]
+    public async Task FaithFeatures_ChosenAtSignUpAndSwitchable()
+    {
+        var anon = factory.CreateClient();
+        var name = "general" + Random.Shared.Next(99999);
+        (await anon.PostAsJsonAsync("/api/auth/register", new RegisterRequest(name, $"{name}@example.test", "General-Pass-123", "General Person", Terms.Version, null, false), Json)).EnsureSuccessStatusCode();
+        var (c, _) = await SignUpWithId("faithful");
+        Assert.True((await c.GetFromJsonAsync<UserDto>("/api/users/me", Json))!.FaithFeatures);
+        var u = (await (await c.PutAsJsonAsync("/api/users/me/faith", new FaithSettingsRequest(false), Json)).Content.ReadFromJsonAsync<UserDto>(Json))!;
+        Assert.False(u.FaithFeatures);
+    }
 }

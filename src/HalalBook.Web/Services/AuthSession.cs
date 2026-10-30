@@ -17,6 +17,8 @@ public class AuthSession(ProtectedLocalStorage storage, IHttpClientFactory facto
     public UserDto? User { get; private set; }
     public bool IsAuthenticated => Token is not null && User is not null;
     public bool IsModerator => User?.Role is UserRole.Moderator or UserRole.Admin;
+    /// <summary>Show the Islamic tools (on unless the member turned them off).</summary>
+    public bool ShowFaith => User?.FaithFeatures != false;
 
     public event Action? Changed;
 

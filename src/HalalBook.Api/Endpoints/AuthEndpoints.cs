@@ -45,7 +45,7 @@ public static partial class AuthEndpoints
                 DisplayName = req.DisplayName.Trim(),
                 Role = await db.Users.AnyAsync() ? UserRole.User : UserRole.Admin, // first account administers the site
                 EmailConfirmed = !options.RequireConfirmedEmail,
-                AcceptedTermsVersion = Terms.Version, AcceptedTermsAt = DateTime.UtcNow,
+                AcceptedTermsVersion = Terms.Version, AcceptedTermsAt = DateTime.UtcNow, FaithFeatures = req.FaithFeatures,
             };
             user.PasswordHash = hasher.HashPassword(user, req.Password!);
             db.Users.Add(user);

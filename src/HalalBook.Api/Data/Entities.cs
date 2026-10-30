@@ -28,6 +28,8 @@ public class User
     /// <summary>Interface language (see <see cref="Languages"/>) and whether posts are shown translated into it.</summary>
     public string Language { get; set; } = "en";
     public bool AutoTranslate { get; set; } = true;
+    /// <summary>HalalBook is open to everyone: members who aren't Muslim can hide the Islamic tools.</summary>
+    public bool FaithFeatures { get; set; } = true;
     /// <summary>The post shown first on this person's profile.</summary>
     public Guid? PinnedPostId { get; set; }
     /// <summary>Code in this person's invite link (halalbook.app/join/{code}), and who invited them.</summary>

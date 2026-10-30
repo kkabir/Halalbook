@@ -1333,6 +1333,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("FaithFeatures")
+                        .HasColumnType("bit");
+
                     b.Property<string>("InviteCode")
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");

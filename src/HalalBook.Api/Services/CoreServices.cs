@@ -69,7 +69,7 @@ public static class Mapping
         u.Location, u.Website, u.Role, u.IsVerified, u.CreatedAt, u.Latitude, u.Longitude, u.PrayerMethod, u.AsrSchool,
         u.EmailConfirmed, u.TwoFactorEnabled, u.ShowOnlineStatus, u.WhoCanPost, u.AcceptedTermsVersion,
         new PrivacySettingsDto(u.WhoCanMessage, u.WhoCanSendFriendRequests, u.WhoCanSeeFriendsList, u.WhoCanFindMe, u.WhoCanFollow),
-        u.Language, u.AutoTranslate);
+        u.Language, u.AutoTranslate, u.FaithFeatures);
 
     public static GroupSummaryDto ToSummary(this Group g) => new(g.Id, g.Name, g.CoverUrl);
     public static PageSummaryDto ToSummary(this Page p) => new(p.Id, p.Name, p.Handle, p.AvatarUrl);

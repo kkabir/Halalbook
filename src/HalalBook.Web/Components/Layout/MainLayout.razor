@@ -62,6 +62,12 @@ else
                 <li><a href="/bookmarks" class="@Active("bookmarks")"><span class="nav-ico">🔖</span>@T("Saved")</a></li>
                 <li><a href="/invite" class="@Active("invite")"><span class="nav-ico">💌</span>@T("Invite friends")</a></li>
             </ul>
+            @if (!Session.ShowFaith)
+            {
+                <ul class="nav-list"><li><a href="/noor" class="@Active("noor")"><span class="nav-ico">✨</span>@T("Ask Noor AI")</a></li></ul>
+            }
+            else
+            {
             <div class="nav-section">@T("Deen")</div>
             <ul class="nav-list">
                 <li><a href="/prayer" class="@Active("prayer")"><span class="nav-ico">🕋</span>@T("Prayer times")</a></li>
@@ -74,6 +80,7 @@ else
                 <li><a href="/zakat" class="@Active("zakat")"><span class="nav-ico">💰</span>@T("Zakat calculator")</a></li>
                 <li><a href="/nearby" class="@Active("nearby")"><span class="nav-ico">🕌</span>@T("Masjids & halal food")</a></li>
             </ul>
+            }
             @if (Session.IsModerator)
             {
                 <div class="nav-section">Community</div>
@@ -93,7 +100,7 @@ else
         @if (ShowRail)
         {
             <aside class="rail">
-                <PrayerWidget />
+                @if (Session.ShowFaith) { <PrayerWidget /> }
                 <div class="card online-list">
                     <div class="card-title">@T("Online now") <span class="subtle" style="margin-left:auto">@Realtime.OnlineUsers.Count</span></div>
                     @if (Session.User?.ShowOnlineStatus == false)
@@ -141,7 +148,8 @@ else
         <a href="/" class="@Active("")"><span>🏠</span>@T("Home")</a>
         <a href="/reels" class="@Active("reels")"><span>🎬</span>@T("Reels")</a>
         <a href="/live" class="@Active("live")"><span>🔴</span>@T("Live")</a>
-        <a href="/prayer" class="@Active("prayer")"><span>🕋</span>@T("Prayer")</a>
+        @if (Session.ShowFaith) { <a href="/prayer" class="@Active("prayer")"><span>🕋</span>@T("Prayer")</a> }
+        else { <a href="/messages" class="@Active("messages")"><span>💬</span>@T("Chats")</a> }
         <a href="/noor" class="@Active("noor")"><span>✨</span>@T("Noor")</a>
         <a href="/menu" class="@Active("menu")"><span>☰</span>@T("Menu")</a>
     </nav>

@@ -10,7 +10,7 @@
 </a>
 
 <div class="menu-grid mt">
-    @foreach (var (href, icon, name) in Items)
+    @foreach (var (href, icon, name) in Items.Where(i => Session.ShowFaith || !FaithPages.Contains(i.Item1)))
     {
         <a class="card menu-tile" href="@href"><span>@icon</span><b>@T(name)</b></a>
     }
@@ -28,6 +28,9 @@
 </div>
 
 @code {
+    /// <summary>Islamic tools, hidden for members who turned faith features off.</summary>
+    private static readonly HashSet<string> FaithPages = ["/prayer", "/qibla", "/calendar", "/duas", "/khatm", "/tasbeeh", "/zakat", "/nearby"];
+
     private static readonly (string, string, string)[] Items =
     [
         ("/friends", "🤝", "Friends"), ("/groups", "🕌", "Groups"), ("/messages", "💬", "Messages"), ("/live", "🔴", "Live"),
