@@ -3,6 +3,8 @@ namespace HalalBook.Shared;
 // ---------- Enums ----------
 public enum UserRole { User, Moderator, Admin }
 public enum Visibility { Public, Friends, OnlyMe }
+/// <summary>Who may post on someone's profile (their timeline).</summary>
+public enum ProfilePostPermission { Friends, Everyone, OnlyMe }
 public enum PostKind { Standard, Reel }
 public enum MediaType { Image, Video }
 public enum ReactionType { Like, Love, MashaAllah, SubhanAllah, Ameen, Sad }
@@ -38,16 +40,17 @@ public record UserSummaryDto(Guid Id, string UserName, string DisplayName, strin
 public record UserDto(
     Guid Id, string UserName, string Email, string DisplayName, string? Bio, string? AvatarUrl, string? CoverUrl,
     string? Location, string? Website, UserRole Role, bool IsVerified, DateTime JoinedAt,
-    double? Latitude, double? Longitude, string PrayerMethod, string AsrSchool, bool EmailConfirmed = false, bool TwoFactorEnabled = false, bool ShowOnlineStatus = true);
+    double? Latitude, double? Longitude, string PrayerMethod, string AsrSchool, bool EmailConfirmed = false, bool TwoFactorEnabled = false, bool ShowOnlineStatus = true,
+    ProfilePostPermission WhoCanPost = ProfilePostPermission.Friends);
 
 public record ProfileDto(
     UserSummaryDto User, string? Bio, string? CoverUrl, string? Location, string? Website, DateTime JoinedAt,
     int FriendCount, int FollowerCount, int FollowingCount, int PostCount,
-    FriendshipStatus Friendship, bool IsFollowing, bool IsBlocked, bool IsOnline = false, DateTime? LastSeenAt = null);
+    FriendshipStatus Friendship, bool IsFollowing, bool IsBlocked, bool IsOnline = false, DateTime? LastSeenAt = null, bool CanPost = false);
 
 public record UpdateProfileRequest(
     string? DisplayName, string? Bio, string? AvatarUrl, string? CoverUrl, string? Location, string? Website,
-    double? Latitude, double? Longitude, string? PrayerMethod, string? AsrSchool);
+    double? Latitude, double? Longitude, string? PrayerMethod, string? AsrSchool, ProfilePostPermission? WhoCanPost = null);
 
 // ---------- Media ----------
 public record MediaDto(string Url, MediaType Type);
@@ -57,7 +60,7 @@ public record UploadResult(string Url, MediaType Type);
 public record CreatePostRequest(
     string Content, Visibility Visibility = Visibility.Public, List<MediaDto>? Media = null,
     Guid? GroupId = null, Guid? PageId = null, Guid? SharedPostId = null, PostKind Kind = PostKind.Standard,
-    string? Feeling = null, string? Location = null);
+    string? Feeling = null, string? Location = null, Guid? TargetUserId = null);
 
 public record UpdatePostRequest(string Content, Visibility Visibility);
 
@@ -66,16 +69,16 @@ public record PostDto(
     List<MediaDto> Media, List<string> Hashtags, int CommentCount, int ShareCount,
     Dictionary<ReactionType, int> Reactions, ReactionType? MyReaction, bool IsBookmarked,
     ModerationStatus Moderation, string? Feeling, string? Location,
-    GroupSummaryDto? Group, PageSummaryDto? Page, PostDto? SharedPost)
+    GroupSummaryDto? Group, PageSummaryDto? Page, PostDto? SharedPost, UserSummaryDto? TargetUser = null)
 {
     public int TotalReactions => Reactions.Values.Sum();
 }
 
 public record CommentDto(
     Guid Id, Guid PostId, Guid? ParentId, UserSummaryDto Author, string Content, DateTime CreatedAt,
-    int LikeCount, bool LikedByMe, List<CommentDto> Replies);
+    int LikeCount, bool LikedByMe, List<CommentDto> Replies, string? MediaUrl = null);
 
-public record CreateCommentRequest(string Content, Guid? ParentId = null);
+public record CreateCommentRequest(string Content, Guid? ParentId = null, string? MediaUrl = null);
 public record ReactRequest(ReactionType Type);
 public record PagedResult<T>(List<T> Items, int Page, int PageSize, bool HasMore);
 

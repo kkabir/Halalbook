@@ -79,13 +79,13 @@ public class ApiClient(HttpClient http, AuthSession session)
         using var _ = await SendAsync(Build(HttpMethod.Delete, url));
     }
 
-    public async Task<UploadResult> UploadAsync(IBrowserFile file, long maxBytes = 100_000_000)
+    public async Task<UploadResult> UploadAsync(IBrowserFile file, long maxBytes = 60_000_001, string purpose = "post")
     {
         using var content = new MultipartFormDataContent();
         var stream = new StreamContent(file.OpenReadStream(maxBytes));
         stream.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrEmpty(file.ContentType) ? "application/octet-stream" : file.ContentType);
         content.Add(stream, "file", file.Name);
-        var req = Build(HttpMethod.Post, "api/media");
+        var req = Build(HttpMethod.Post, $"api/media?purpose={Uri.EscapeDataString(purpose)}");
         req.Content = content;
         using var res = await SendAsync(req);
         return (await res.Content.ReadFromJsonAsync<UploadResult>(Json))!;

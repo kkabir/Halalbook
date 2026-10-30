@@ -81,3 +81,17 @@ public class MediaSignatureTests
         Assert.False(await HalalBook.Api.Endpoints.PlatformEndpoints.HasValidSignatureAsync(File(png), MediaType.Video));
     }
 }
+
+public class VideoDurationTests
+{
+    [Fact]
+    public void ReadsMp4MovieHeaderDuration()
+    {
+        // ... size | "mvhd" | version 0 | flags | created | modified | timescale=1000 | duration=125000 (125 s)
+        var bytes = new byte[64];
+        "mvhd"u8.CopyTo(bytes.AsSpan(8));
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(12 + 12), 1000);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(12 + 16), 125_000);
+        Assert.Equal(125, MediaPolicy.Mp4Duration(bytes));
+    }
+}

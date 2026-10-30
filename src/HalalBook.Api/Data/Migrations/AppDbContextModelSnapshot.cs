@@ -73,6 +73,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<string>("MediaUrl")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("Moderation")
                         .HasColumnType("int");
 
@@ -589,6 +592,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<Guid?>("SharedPostId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("TargetUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int>("Visibility")
                         .HasColumnType("int");
 
@@ -603,6 +609,8 @@ namespace HalalBook.Api.Data.Migrations
                     b.HasIndex("PageId");
 
                     b.HasIndex("SharedPostId");
+
+                    b.HasIndex("TargetUserId");
 
                     b.ToTable("Posts");
                 });
@@ -851,6 +859,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<string>("Website")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("WhoCanPost")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedEmail")
@@ -1004,6 +1015,11 @@ namespace HalalBook.Api.Data.Migrations
                         .HasForeignKey("SharedPostId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("HalalBook.Api.Data.User", "TargetUser")
+                        .WithMany()
+                        .HasForeignKey("TargetUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Author");
 
                     b.Navigation("Group");
@@ -1011,6 +1027,8 @@ namespace HalalBook.Api.Data.Migrations
                     b.Navigation("Page");
 
                     b.Navigation("SharedPost");
+
+                    b.Navigation("TargetUser");
                 });
 
             modelBuilder.Entity("HalalBook.Api.Data.PostHashtag", b =>

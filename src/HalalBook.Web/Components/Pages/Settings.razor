@@ -70,12 +70,32 @@
             <input type="checkbox" style="width:22px;height:22px" checked="@(Session.User?.ShowOnlineStatus != false)" @onchange="ToggleOnlineStatus" />
         </label>
         <hr class="divider" />
+        <label class="row spread">
+            <div><b>Who can post on my profile</b><div class="subtle">Posts others write on your profile appear there and in their friends' feeds.</div></div>
+            <select class="input" style="width:auto" value="@Session.User?.WhoCanPost" @onchange="ChangeWhoCanPost">
+                <option value="@ProfilePostPermission.Friends">Friends</option>
+                <option value="@ProfilePostPermission.Everyone">Everyone</option>
+                <option value="@ProfilePostPermission.OnlyMe">Only me</option>
+            </select>
+        </label>
+        <hr class="divider" />
         <b>Change password</b>
         <div class="row wrap">
             <input class="input grow" type="password" placeholder="Current password" autocomplete="current-password" @bind="currentPassword" />
             <input class="input grow" type="password" placeholder="New password (8+ characters)" autocomplete="new-password" @bind="newPassword" />
             <button class="btn btn-outline" disabled="@(string.IsNullOrEmpty(currentPassword) || (newPassword?.Length ?? 0) < 8)" @onclick="ChangePassword">Update password</button>
         </div>
+    </div>
+
+    <div class="card stack mt">
+        <div class="card-title">Blocked people</div>
+        <p class="subtle" style="margin:0">Blocked people can't see your posts or profile, message you, post on your profile or add you as a friend.</p>
+        @if (blocked is null) { <div class="spinner"></div> }
+        else if (blocked.Count == 0) { <p class="muted">You haven't blocked anyone.</p> }
+        @foreach (var b in blocked ?? [])
+        {
+            <div class="list-item"><Avatar User="b" Size="36" Link="false" /><b class="grow">@b.DisplayName</b><button class="btn btn-outline btn-sm" @onclick="() => Unblock(b)">Unblock</button></div>
+        }
     </div>
 </div>
 
@@ -97,7 +117,7 @@
     {
         try
         {
-            var r = await Api.UploadAsync(e.File, 10_000_000);
+            var r = await Api.UploadAsync(e.File, 8_000_001, isAvatar ? "profile" : "cover");
             if (isAvatar) avatar = r.Url; else cover = r.Url;
         }
         catch (Exception ex) { Toasts.Error(ex); }
@@ -122,6 +142,32 @@
     }
 
     [Inject] private Realtime Realtime { get; set; } = default!;
+
+    private List<UserSummaryDto>? blocked;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try { blocked = await Api.GetAsync<List<UserSummaryDto>>("api/users/me/blocked"); StateHasChanged(); } catch (Exception) { }
+    }
+
+    private async Task Unblock(UserSummaryDto u)
+    {
+        try { await Api.DeleteAsync($"api/users/{u.Id}/block"); blocked?.Remove(u); Toasts.Show($"Unblocked {u.DisplayName}"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task ChangeWhoCanPost(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<ProfilePostPermission>(e.Value?.ToString(), out var who)) return;
+        try
+        {
+            var u = await Api.PutAsync<UserDto>("api/users/me", new UpdateProfileRequest(null, null, null, null, null, null, null, null, null, null, who));
+            await Session.UpdateUserAsync(u);
+            Toasts.Show("Saved");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
 
     private async Task ToggleOnlineStatus(ChangeEventArgs e)
     {

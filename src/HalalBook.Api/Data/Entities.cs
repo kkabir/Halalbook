@@ -23,6 +23,7 @@ public class User
     public bool TwoFactorEnabled { get; set; }
     public bool ShowOnlineStatus { get; set; } = true;
     public DateTime? LastSeenAt { get; set; }
+    public ProfilePostPermission WhoCanPost { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
     public string PrayerMethod { get; set; } = "MWL";
@@ -71,6 +72,9 @@ public class Post
     public Page? Page { get; set; }
     public Guid? SharedPostId { get; set; }
     public Post? SharedPost { get; set; }
+    /// <summary>Set when someone posts on another person's profile.</summary>
+    public Guid? TargetUserId { get; set; }
+    public User? TargetUser { get; set; }
     public ModerationStatus Moderation { get; set; }
     public string? ModerationNote { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -111,6 +115,7 @@ public class Comment
     public User Author { get; set; } = null!;
     public Guid? ParentId { get; set; }
     public string Content { get; set; } = "";
+    public string? MediaUrl { get; set; }
     public ModerationStatus Moderation { get; set; }
     public bool IsDeleted { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

@@ -109,7 +109,7 @@ else { <div class="spinner"></div> }
 
     private async Task Upload(InputFileChangeEventArgs e)
     {
-        try { cover = (await Api.UploadAsync(e.File, 10_000_000)).Url; } catch (Exception ex) { Toasts.Error(ex); }
+        try { cover = (await Api.UploadAsync(e.File, 8_000_001, "cover")).Url; } catch (Exception ex) { Toasts.Error(ex); }
     }
 
     private async Task Create()

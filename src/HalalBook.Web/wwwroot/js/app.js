@@ -64,6 +64,17 @@ window.halalbook = {
     },
     togglePlay: (video) => { if (video) video.paused ? video.play() : video.pause(); },
 
+    // Lengths (seconds) of the videos picked in a file input; 0 for photos or unreadable files.
+    videoDurations: (input) => Promise.all([...(input?.files || [])].map((f) => new Promise((resolve) => {
+        if (!f.type.startsWith('video')) return resolve(0);
+        const v = document.createElement('video');
+        const url = URL.createObjectURL(f);
+        v.preload = 'metadata';
+        v.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(isFinite(v.duration) ? v.duration : 0); };
+        v.onerror = () => { URL.revokeObjectURL(url); resolve(0); };
+        v.src = url;
+    }))),
+
     toggleTheme: () => {
         const root = document.documentElement;
         const dark = root.dataset.theme === 'dark' || (!root.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);

@@ -29,6 +29,7 @@ public static partial class UserEndpoints
             u.CoverUrl = req.CoverUrl ?? u.CoverUrl;
             u.Location = req.Location ?? u.Location;
             u.Website = req.Website ?? u.Website;
+            if (req.WhoCanPost is { } who) u.WhoCanPost = who;
             u.Latitude = req.Latitude ?? u.Latitude;
             u.Longitude = req.Longitude ?? u.Longitude;
             if (req.PrayerMethod is not null) u.PrayerMethod = PrayerTimeCalculator.GetMethod(req.PrayerMethod).Key;
@@ -60,7 +61,8 @@ public static partial class UserEndpoints
                 await db.Follows.AnyAsync(x => x.FollowerId == me && x.FolloweeId == u.Id),
                 await db.Blocks.AnyAsync(x => x.BlockerId == me && x.BlockedId == u.Id),
                 await PresenceEndpoints.CanSeePresence(db, me, u) && presence.IsOnline(u.Id),
-                await PresenceEndpoints.CanSeePresence(db, me, u) ? u.LastSeenAt : null));
+                await PresenceEndpoints.CanSeePresence(db, me, u) ? u.LastSeenAt : null,
+                u.Id != me && await CanPostOnProfileAsync(db, me, u.Id) is null));
         });
 
         users.MapGet("/{userName}/posts", async (string userName, int? page, ClaimsPrincipal cp, AppDbContext db, PostService posts) =>
@@ -69,7 +71,7 @@ public static partial class UserEndpoints
             var u = await db.Users.FirstOrDefaultAsync(x => x.NormalizedUserName == key);
             if (u is null) return Results.NotFound();
             var visible = await posts.VisibleToAsync(cp.UserId(), cp.IsModerator());
-            return Results.Ok(await posts.PageAsync(visible.Where(p => p.AuthorId == u.Id && p.GroupId == null && p.PageId == null), cp.UserId(), page ?? 1, 15));
+            return Results.Ok(await posts.PageAsync(visible.Where(p => ((p.AuthorId == u.Id && p.TargetUserId == null) || p.TargetUserId == u.Id) && p.GroupId == null && p.PageId == null), cp.UserId(), page ?? 1, 15));
         });
 
         users.MapGet("/{userName}/friends", async (string userName, AppDbContext db, PostService posts) =>
@@ -208,6 +210,29 @@ public static partial class UserEndpoints
             await db.Blocks.Where(b => b.BlockerId == cp.UserId() && b.BlockedId == userId).ExecuteDeleteAsync();
             return Results.NoContent();
         });
+
+        users.MapGet("/me/blocked", async (ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var me = cp.UserId();
+            return await db.Blocks.Where(b => b.BlockerId == me)
+                .Join(db.Users, b => b.BlockedId, u => u.Id, (b, u) => u)
+                .OrderBy(u => u.DisplayName).Select(u => u.ToSummary()).ToListAsync();
+        });
     }
 
+    /// <summary>Returns why <paramref name="me"/> can't post on <paramref name="ownerId"/>'s profile, or null if they can.</summary>
+    public static async Task<string?> CanPostOnProfileAsync(AppDbContext db, Guid me, Guid ownerId)
+    {
+        var owner = await db.Users.FindAsync(ownerId);
+        if (owner is null) return "That person doesn't exist.";
+        if (await db.Blocks.AnyAsync(b => (b.BlockerId == me && b.BlockedId == ownerId) || (b.BlockerId == ownerId && b.BlockedId == me)))
+            return "You can't post on this profile.";
+        return owner.WhoCanPost switch
+        {
+            ProfilePostPermission.Everyone => null,
+            ProfilePostPermission.OnlyMe => $"{owner.DisplayName} doesn't allow posts on their profile.",
+            _ => await db.Friendships.AnyAsync(f => f.Accepted && ((f.RequesterId == me && f.AddresseeId == ownerId) || (f.RequesterId == ownerId && f.AddresseeId == me)))
+                ? null : $"Only {owner.DisplayName}'s friends can post on their profile.",
+        };
+    }
 }

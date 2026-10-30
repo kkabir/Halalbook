@@ -1,4 +1,4 @@
-# HalalBook
+﻿# HalalBook
 
 A beautiful, intelligent social network for the Muslim community: Facebook-style social features, an Islamic
 architecture design system (emerald and gold, eight-point star geometry, mihrab arches), AI help powered by Claude,
@@ -40,6 +40,8 @@ reactions and a viewer count, and friends and followers are notified when someon
 WebRTC with SignalR signaling (`/hubs/live`), which suits video calls of up to about 6 people and broadcasts of up to about
 25 viewers. For bigger audiences, plug in a media server (SFU) such as LiveKit. Add a TURN server under `Live:IceServers`
 so people behind strict firewalls can connect.
+
+**Media limits** (configurable under `Media`): photos up to 8 MB (2 MB for comment photos), videos up to 60 MB and 3 minutes for posts, 90 seconds for reels and 60 seconds for stories, and 20 uploads a minute per person. The browser checks size and length before uploading, and the server checks again.
 
 **Safety**: blocked content is rejected, borderline content waits in a moderator queue, user reports, suspensions;
 the first account registered becomes Admin.

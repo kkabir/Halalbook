@@ -40,6 +40,12 @@ public static class PostEndpoints
 
             if (req.GroupId is Guid gid && !await db.GroupMembers.AnyAsync(m => m.GroupId == gid && m.UserId == me && m.IsApproved))
                 return Results.Problem("Join the group to post in it.", statusCode: 403);
+            Guid? target = req.TargetUserId == me ? null : req.TargetUserId;
+            if (target is Guid tid)
+            {
+                if (req.GroupId is not null || req.PageId is not null) return Results.BadRequest();
+                if (await UserEndpoints.CanPostOnProfileAsync(db, me, tid) is { } why) return Results.Problem(why, statusCode: 403);
+            }
             if (req.PageId is Guid pid && !await db.Pages.AnyAsync(p => p.Id == pid && p.OwnerId == me))
                 return Results.Problem("Only the page owner can post as the page.", statusCode: 403);
             if (req.Kind == PostKind.Reel && req.Media?.FirstOrDefault()?.Type != MediaType.Video)
@@ -51,7 +57,7 @@ public static class PostEndpoints
             var post = new Post
             {
                 AuthorId = me, Content = content, Visibility = req.Visibility, Kind = req.Kind,
-                GroupId = req.GroupId, PageId = req.PageId, SharedPostId = req.SharedPostId,
+                GroupId = req.GroupId, PageId = req.PageId, SharedPostId = req.SharedPostId, TargetUserId = target,
                 Feeling = req.Feeling, Location = req.Location,
                 Moderation = moderation.NeedsReview ? ModerationStatus.PendingReview : ModerationStatus.Approved,
                 ModerationNote = moderation.NeedsReview ? string.Join(" ", moderation.Reasons) : null,
@@ -68,6 +74,8 @@ public static class PostEndpoints
                 if (await db.Users.FirstOrDefaultAsync(u => u.NormalizedUserName == key) is { } mentioned)
                     await notifier.SendAsync(mentioned.Id, me, NotificationType.Mention, $"{meUser.DisplayName} mentioned you in a post.", $"/post/{post.Id}");
             }
+            if (target is Guid wallOwner)
+                await notifier.SendAsync(wallOwner, me, NotificationType.Mention, $"{meUser.DisplayName} posted on your profile.", $"/post/{post.Id}");
             if (req.SharedPostId is Guid sid && await db.Posts.FindAsync(sid) is { } original)
                 await notifier.SendAsync(original.AuthorId, me, NotificationType.Share, $"{meUser.DisplayName} shared your post.", $"/post/{post.Id}");
 
@@ -95,7 +103,8 @@ public static class PostEndpoints
         {
             var post = await db.Posts.FindAsync(id);
             if (post is null) return Results.NotFound();
-            if (post.AuthorId != cp.UserId() && !cp.IsModerator()) return Results.Forbid();
+            // Authors, the owner of the profile it was posted on, and moderators can remove a post.
+            if (post.AuthorId != cp.UserId() && post.TargetUserId != cp.UserId() && !cp.IsModerator()) return Results.Forbid();
             post.IsDeleted = true;
             await db.SaveChangesAsync();
             return Results.NoContent();
@@ -147,7 +156,7 @@ public static class PostEndpoints
 
             CommentDto Map(Comment c) => new(c.Id, c.PostId, c.ParentId, c.Author.ToSummary(), c.Content, c.CreatedAt,
                 likes.Count(l => l.CommentId == c.Id), likes.Any(l => l.CommentId == c.Id && l.UserId == me),
-                comments.Where(r => r.ParentId == c.Id).Select(Map).ToList());
+                comments.Where(r => r.ParentId == c.Id).Select(Map).ToList(), c.MediaUrl);
 
             return comments.Where(c => c.ParentId == null).Select(Map).ToList();
         });
@@ -158,13 +167,15 @@ public static class PostEndpoints
             var post = await db.Posts.FindAsync(id);
             if (post is null || post.IsDeleted) return Results.NotFound();
             var content = (req.Content ?? "").Trim();
-            if (content.Length is 0 or > 3000) return Results.ValidationProblem(new Dictionary<string, string[]> { ["content"] = ["Comments must be 1-3000 characters."] });
+            var media = IsUploadedImage(req.MediaUrl) ? req.MediaUrl : null;
+            if ((content.Length == 0 && media is null) || content.Length > 3000)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["content"] = ["Write a comment (up to 3000 characters) or add a photo."] });
             var moderation = await ai.ModerateAsync(content, ct);
             if (!moderation.Allowed) return Results.Problem(string.Join(" ", moderation.Reasons), statusCode: 422, title: "Content not allowed");
 
             var comment = new Comment
             {
-                PostId = id, AuthorId = me, ParentId = req.ParentId, Content = content,
+                PostId = id, AuthorId = me, ParentId = req.ParentId, Content = content, MediaUrl = media,
                 Moderation = moderation.NeedsReview ? ModerationStatus.PendingReview : ModerationStatus.Approved,
             };
             db.Comments.Add(comment);
@@ -173,7 +184,7 @@ public static class PostEndpoints
             await notifier.SendAsync(post.AuthorId, me, NotificationType.Comment, $"{meUser.DisplayName} commented: \"{Short(content)}\"", $"/post/{id}");
             if (req.ParentId is Guid pid && await db.Comments.FindAsync(pid) is { } parent && parent.AuthorId != post.AuthorId)
                 await notifier.SendAsync(parent.AuthorId, me, NotificationType.Comment, $"{meUser.DisplayName} replied to your comment.", $"/post/{id}");
-            return Results.Ok(new CommentDto(comment.Id, id, comment.ParentId, meUser.ToSummary(), content, comment.CreatedAt, 0, false, []));
+            return Results.Ok(new CommentDto(comment.Id, id, comment.ParentId, meUser.ToSummary(), content, comment.CreatedAt, 0, false, [], media));
         });
 
         app.MapDelete("/api/comments/{id:guid}", async (Guid id, ClaimsPrincipal cp, AppDbContext db) =>
@@ -305,6 +316,11 @@ public static class PostEndpoints
             return n == 0 ? Results.NotFound() : Results.NoContent();
         });
     }
+
+    /// <summary>Comment photos must be images uploaded to HalalBook, not arbitrary links.</summary>
+    private static bool IsUploadedImage(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme is "https" or "http" && u.AbsolutePath.StartsWith("/uploads/")
+        && Path.GetExtension(u.AbsolutePath).ToLowerInvariant() is ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp";
 
     private static string Short(string s, int n = 60) => s.Length <= n ? s : s[..n] + "…";
 

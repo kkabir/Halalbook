@@ -570,3 +570,8 @@ label.field { display: flex; flex-direction: column; gap: .35rem; font-weight: 6
 @keyframes floatUp { from { transform: translateY(0) scale(.8); opacity: 1; } to { transform: translateY(-320px) scale(1.4); opacity: 0; } }
 @media (max-width: 1000px) { .live-room { grid-template-columns: 1fr; } .live-stage { height: 52vh; } }
 .live-stage:empty::after { content: "Waiting for the host's video…"; margin: auto; color: rgba(255, 255, 255, .75); font-weight: 600; }
+
+.comment-photo { display: block; margin-top: .35rem; max-width: 220px; max-height: 220px; border-radius: 12px; object-fit: cover; }
+.comment-photo-preview { width: 96px; margin: .4rem 0 0 2.6rem; }
+.comment-photo-preview img { width: 96px; height: 96px; object-fit: cover; border-radius: 12px; }
+.comment-photo-preview .x { width: 26px; height: 26px; font-size: .8rem; }

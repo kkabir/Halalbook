@@ -88,7 +88,7 @@ public partial class PostService(AppDbContext db)
     {
         var posts = await query
             .Include(p => p.Author).Include(p => p.Media).Include(p => p.Hashtags).ThenInclude(h => h.Hashtag)
-            .Include(p => p.Group).Include(p => p.Page)
+            .Include(p => p.Group).Include(p => p.Page).Include(p => p.TargetUser)
             .Include(p => p.SharedPost).ThenInclude(s => s!.Author)
             .Include(p => p.SharedPost).ThenInclude(s => s!.Media)
             .AsSplitQuery().AsNoTracking().ToListAsync();
@@ -119,7 +119,8 @@ public partial class PostService(AppDbContext db)
                 ? new PostDto(s.Id, s.Author.ToSummary(), s.Content, s.Visibility, s.Kind, s.CreatedAt, s.EditedAt,
                     s.Media.OrderBy(m => m.SortOrder).Select(m => new MediaDto(m.Url, m.Type)).ToList(), [], 0, 0, [], null, false,
                     s.Moderation, s.Feeling, s.Location, null, null, null)
-                : null)).ToList();
+                : null,
+            p.TargetUser?.ToSummary())).ToList();
     }
 
     /// <summary>Replaces a post's hashtags with the ones found in its text.</summary>

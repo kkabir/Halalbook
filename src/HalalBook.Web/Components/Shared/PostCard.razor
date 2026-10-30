@@ -26,6 +26,7 @@
                         <a class="post-author" href="/u/@Post.Author.UserName">@Post.Author.DisplayName</a>
                         @if (Post.Author.IsVerified) { <span class="verified" title="Verified">✦</span> }
                     }
+                    @if (Post.TargetUser is { } wall) { <span class="muted"> ▸ </span><a class="post-author" href="/u/@wall.UserName">@wall.DisplayName</a> }
                     @if (Post.Feeling is { Length: > 0 }) { <span class="muted"> is feeling @Post.Feeling</span> }
                     @if (Post.Group is { } g && ShowGroup) { <span class="muted"> ▸ </span><a class="post-author" href="/groups/@g.Id">@g.Name</a> }
                 </div>
@@ -51,7 +52,9 @@
                         }
                         else
                         {
+                            @if (Post.TargetUser?.Id == Session.User?.Id) { <button @onclick="Delete">🗑️ Remove from my profile</button> }
                             <button @onclick="() => reporting = true">🚩 Report post</button>
+                            <button @onclick="BlockAuthor">🚫 Block @Post.Author.DisplayName</button>
                         }
                     </div>
                 }
@@ -292,6 +295,17 @@
     private async Task Delete()
     {
         try { await Api.DeleteAsync($"api/posts/{Post.Id}"); deleted = true; Toasts.Show("Post deleted"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task BlockAuthor()
+    {
+        try
+        {
+            await Api.PostAsync($"api/users/{Post.Author.Id}/block");
+            deleted = true; // hide their post right away
+            Toasts.Show($"You blocked {Post.Author.DisplayName}. You won't see each other's posts.");
+        }
         catch (Exception ex) { Toasts.Error(ex); }
     }
 

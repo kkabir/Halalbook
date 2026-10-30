@@ -144,7 +144,7 @@
     {
         try
         {
-            var up = await Api.UploadAsync(e.File, 10_000_000);
+            var up = await Api.UploadAsync(e.File, 8_000_001, "message");
             var m = await Api.PostAsync<MessageDto>($"api/conversations/{current!.Id}/messages", new SendMessageRequest("", up.Url));
             if (messages.All(x => x.Id != m.Id)) messages.Add(m);
             scroll = true;

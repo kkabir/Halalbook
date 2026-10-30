@@ -58,12 +58,13 @@ public static class PlatformEndpoints
         }).WithTags("Search").RequireAuthorization();
 
         // ---------- Media upload ----------
-        app.MapPost("/api/media", async (IFormFile file, HttpRequest request, IWebHostEnvironment env, IConfiguration config) =>
+        // purpose: post (default), reel, story, comment, message, profile or cover. Each has its own size and length limits.
+        app.MapPost("/api/media", async (IFormFile file, string? purpose, HttpRequest request, IWebHostEnvironment env, IConfiguration config, MediaPolicy policy) =>
         {
             var ext = Path.GetExtension(file.FileName);
             if (!AllowedMedia.TryGetValue(ext, out var type)) return Results.Problem("Only images (jpg, png, gif, webp) and videos (mp4, webm, mov) are supported.", statusCode: 415);
-            long max = type == MediaType.Video ? 100_000_000 : 10_000_000;
-            if (file.Length is 0 || file.Length > max) return Results.Problem($"Files must be under {max / 1_000_000} MB.", statusCode: 413);
+            var use = Enum.TryParse<UploadPurpose>(purpose, true, out var p) ? p : UploadPurpose.Post;
+            if (await policy.CheckAsync(file, type, use) is { } problem) return Results.Problem(problem, statusCode: 413, title: "Upload too large");
             if (!await HasValidSignatureAsync(file, type)) return Results.Problem("That file doesn't look like a real image or video.", statusCode: 415);
 
             var folder = Path.Combine(DateTime.UtcNow.ToString("yyyy"), DateTime.UtcNow.ToString("MM"));
@@ -75,7 +76,9 @@ public static class PlatformEndpoints
 
             var baseUrl = config["PublicBaseUrl"]?.TrimEnd('/') ?? $"{request.Scheme}://{request.Host}";
             return Results.Ok(new UploadResult($"{baseUrl}/uploads/{folder.Replace('\\', '/')}/{name}", type));
-        }).WithTags("Media").RequireAuthorization().DisableAntiforgery();
+        }).WithTags("Media").RequireAuthorization().DisableAntiforgery().RequireRateLimiting("upload");
+
+        app.MapGet("/api/media/limits", (MediaOptions o) => o).WithTags("Media").RequireAuthorization();
 
         // ---------- Islamic tools (public) ----------
         var islamic = app.MapGroup("/api/islamic").WithTags("Islamic");

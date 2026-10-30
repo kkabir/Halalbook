@@ -44,14 +44,19 @@ builder.Services.AddSingleton<EmailTemplates>();
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<OtpService>();
 builder.Services.AddSingleton<PresenceTracker>();
+var mediaOptions = config.GetSection("Media").Get<MediaOptions>() ?? new MediaOptions();
+builder.Services.AddSingleton(mediaOptions);
+builder.Services.AddSingleton<MediaPolicy>();
 builder.Services.AddSingleton<HalalBook.Api.Hubs.LiveRoomTracker>();
 builder.Services.AddSingleton(config.GetSection("Live").Get<LiveOptions>() ?? new LiveOptions());
 builder.Services.AddScoped<Mailer>();
 
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddSignalR().AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
-builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = 110_000_000);
-builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = 110_000_000);
+// Request bodies are capped just above the largest allowed video, so oversized uploads are cut off early.
+var maxBody = (long)(Math.Max(Math.Max(mediaOptions.MaxVideoMB, mediaOptions.MaxImageMB), 1) * 1_000_000) + 1_000_000;
+builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = maxBody);
+builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = maxBody);
 builder.Services.AddOpenApi(o => o.AddDocumentTransformer<HalalBook.Api.OpenApiDocumentInfo>());
 builder.Services.AddProblemDetails();
 
@@ -94,6 +99,9 @@ builder.Services.AddRateLimiter(o =>
     o.AddPolicy("ai", ctx => RateLimitPartition.GetFixedWindowLimiter(
         ctx.User.Identity?.Name ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "anon",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) }));
+    o.AddPolicy("upload", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.User.Identity?.Name ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "anon",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = mediaOptions.UploadsPerMinute, Window = TimeSpan.FromMinutes(1) }));
     // Sign-in, codes and password resets: slows down guessing and email flooding.
     o.AddPolicy("auth", ctx => RateLimitPartition.GetFixedWindowLimiter(
         ctx.Connection.RemoteIpAddress?.ToString() ?? "anon",

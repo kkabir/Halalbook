@@ -209,4 +209,48 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(LiveStatus.Ended, ended.Status);
         Assert.NotEmpty((await viewer.GetFromJsonAsync<List<IceServerDto>>("/api/live/ice-servers", Json))!);
     }
+
+    [Fact]
+    public async Task ProfilePosts_FollowOwnersSetting()
+    {
+        var jamal = await SignUp("jamal_" + Random.Shared.Next(9999));
+        var khalid = await SignUp("khalid_" + Random.Shared.Next(9999));
+        var jamalId = (await jamal.GetFromJsonAsync<UserDto>("/api/users/me", Json))!.Id;
+
+        // Default: friends only, and they aren't friends.
+        var denied = await khalid.PostAsJsonAsync("/api/posts", new CreatePostRequest("Salaam!", TargetUserId: jamalId), Json);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+
+        await jamal.PutAsJsonAsync("/api/users/me", new UpdateProfileRequest(null, null, null, null, null, null, null, null, null, null, ProfilePostPermission.Everyone), Json);
+        var ok = await khalid.PostAsJsonAsync("/api/posts", new CreatePostRequest("Salaam brother!", TargetUserId: jamalId), Json);
+        Assert.Equal(HttpStatusCode.Created, ok.StatusCode);
+        var post = (await ok.Content.ReadFromJsonAsync<PostDto>(Json))!;
+        Assert.Equal(jamalId, post.TargetUser!.Id);
+
+        // The profile owner can remove posts others leave on their profile.
+        Assert.Equal(HttpStatusCode.NoContent, (await jamal.DeleteAsync($"/api/posts/{post.Id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task CommentPhoto_MustBeAnUploadedImage()
+    {
+        var c = await SignUp("layla_" + Random.Shared.Next(9999));
+        var post = (await (await c.PostAsJsonAsync("/api/posts", new CreatePostRequest("Photo thread"), Json)).Content.ReadFromJsonAsync<PostDto>(Json))!;
+        var withPhoto = await c.PostAsJsonAsync($"/api/posts/{post.Id}/comments", new CreateCommentRequest("", null, "https://api.halalbook.app/uploads/2026/10/abc.jpg"), Json);
+        withPhoto.EnsureSuccessStatusCode();
+        Assert.Equal("https://api.halalbook.app/uploads/2026/10/abc.jpg", (await withPhoto.Content.ReadFromJsonAsync<CommentDto>(Json))!.MediaUrl);
+        var external = await c.PostAsJsonAsync($"/api/posts/{post.Id}/comments", new CreateCommentRequest("", null, "https://evil.example.com/x.exe"), Json);
+        Assert.Equal(HttpStatusCode.BadRequest, external.StatusCode);
+    }
+
+    [Fact]
+    public async Task CommentUpload_RejectsLargePhotosAndVideos()
+    {
+        var c = await SignUp("musa_" + Random.Shared.Next(9999));
+        var png = new byte[3_000_000];
+        new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }.CopyTo(png, 0);
+        using var form = new MultipartFormDataContent { { new ByteArrayContent(png), "file", "big.png" } };
+        var res = await c.PostAsync("/api/media?purpose=comment", form);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, res.StatusCode);
+    }
 }

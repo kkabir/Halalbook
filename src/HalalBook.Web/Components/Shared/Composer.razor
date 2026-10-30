@@ -1,6 +1,7 @@
 @inject ApiClient Api
 @inject AuthSession Session
 @inject Toasts Toasts
+@inject MediaGuard Guard
 
 <div class="card composer">
     <div class="row" style="align-items:flex-start">
@@ -70,14 +71,14 @@
             {
                 <label class="btn btn-gold btn-sm" title="Vertical video">
                     🎬 @(media.Count == 0 ? "Choose video" : "Replace video")
-                    <InputFile OnChange="Upload" accept="video/*" style="display:none" />
+                    <InputFile @ref="fileInput" OnChange="Upload" accept="video/*" style="display:none" />
                 </label>
             }
             else
             {
                 <label class="btn btn-ghost btn-sm" title="Photos or videos (up to 10)">
                     🖼️ Photo/Video
-                    <InputFile OnChange="Upload" multiple accept="image/*,video/*" style="display:none" />
+                    <InputFile @ref="fileInput" OnChange="Upload" multiple accept="image/*,video/*" style="display:none" />
                 </label>
             }
             <button class="btn btn-ghost btn-sm" @onclick="() => showExtras = !showExtras">😊 Feeling</button>
@@ -103,6 +104,8 @@
 @code {
     [Parameter] public Guid? GroupId { get; set; }
     [Parameter] public Guid? PageId { get; set; }
+    /// <summary>Set to post on someone else's profile.</summary>
+    [Parameter] public Guid? TargetUserId { get; set; }
     [Parameter] public bool AllowReel { get; set; } = true;
     /// <summary>TikTok-style flow: a single vertical video posted as a reel.</summary>
     [Parameter] public bool ReelMode { get; set; }
@@ -115,7 +118,7 @@
     private Visibility visibility = Visibility.Public;
     private bool uploading, posting, aiBusy, showExtras, asReel;
     private int uploadIndex, uploadTotal;
-    private const long MaxImage = 10_000_000, MaxVideo = 100_000_000;
+    private InputFile? fileInput;
 
     private UserSummaryDto? Me => Session.User is { } u ? new(u.Id, u.UserName, u.DisplayName, u.AvatarUrl, u.IsVerified) : null;
     private bool CanPost => !posting && !uploading && (ReelMode ? media.Count == 1 : (!string.IsNullOrWhiteSpace(text) || media.Count > 0));
@@ -125,25 +128,14 @@
         var files = e.GetMultipleFiles(20).Take(ReelMode ? 1 : 10 - media.Count).ToList();
         if (e.FileCount > files.Count && !ReelMode) Toasts.Show("A post can hold up to 10 photos or videos.", true);
         if (ReelMode) media.Clear();
+        if (ReelMode && files.Any(f => !f.ContentType.StartsWith("video"))) { Toasts.Show("Reels need a video.", true); return; }
         uploading = true; uploadTotal = files.Count; uploadIndex = 0;
         try
         {
-            foreach (var file in files)
-            {
-                uploadIndex++;
-                StateHasChanged();
-                var isVideo = file.ContentType.StartsWith("video");
-                if (ReelMode && !isVideo) { Toasts.Show("Reels need a video.", true); continue; }
-                if (file.Size > (isVideo ? MaxVideo : MaxImage))
-                {
-                    Toasts.Show($"{file.Name} is too large (max {(isVideo ? "100" : "10")} MB).", true);
-                    continue;
-                }
-                var up = await Api.UploadAsync(file, isVideo ? MaxVideo : MaxImage);
-                media.Add(new MediaDto(up.Url, up.Type));
-            }
+            var uploaded = await Guard.UploadAsync(files, ReelMode ? "reel" : "post", fileInput?.Element,
+                (i, n) => { uploadIndex = i; uploadTotal = n; InvokeAsync(StateHasChanged); });
+            media.AddRange(uploaded.Select(u => new MediaDto(u.Url, u.Type)));
         }
-        catch (Exception ex) { Toasts.Error(ex); }
         finally { uploading = false; }
     }
 
@@ -180,7 +172,7 @@
         {
             var kind = (ReelMode || asReel) && media.FirstOrDefault()?.Type == MediaType.Video ? PostKind.Reel : PostKind.Standard;
             var post = await Api.PostAsync<PostDto>("api/posts",
-                new CreatePostRequest(text ?? "", visibility, media.ToList(), GroupId, PageId, null, kind, feeling, location));
+                new CreatePostRequest(text ?? "", visibility, media.ToList(), GroupId, PageId, null, kind, feeling, location, TargetUserId));
             text = feeling = location = moderationNote = null;
             media.Clear(); suggestedTags = []; showExtras = asReel = false;
             Toasts.Show(post.Moderation == ModerationStatus.PendingReview ? "Posted. A moderator will review it shortly." : "Posted, alhamdulillah!");

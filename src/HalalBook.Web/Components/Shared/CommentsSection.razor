@@ -1,6 +1,7 @@
 @inject ApiClient Api
 @inject AuthSession Session
 @inject Toasts Toasts
+@inject MediaGuard Guard
 
 <div class="comments">
     @if (CommentCount >= 5)
@@ -31,8 +32,14 @@
         <Avatar User="Me" Size="32" />
         <input class="input" placeholder="@(replyTo is null ? "Write a comment…" : $"Reply to {replyTo.Author.DisplayName}…")" @bind="text" @bind:event="oninput" @onkeydown="OnKey" />
         @if (replyTo is not null) { <button class="btn btn-ghost btn-sm" @onclick="() => replyTo = null">✕</button> }
-        <button class="btn btn-primary btn-sm" disabled="@(string.IsNullOrWhiteSpace(text) || sending)" @onclick="Send">Send</button>
+        <label class="icon-btn" title="Add a photo (up to 2 MB)" style="width:34px;height:34px;font-size:.95rem">📷<InputFile OnChange="AttachPhoto" accept="image/*" style="display:none" /></label>
+        <button class="btn btn-primary btn-sm" disabled="@((string.IsNullOrWhiteSpace(text) && photo is null) || sending || attaching)" @onclick="Send">Send</button>
     </div>
+    @if (attaching) { <div class="subtle" style="margin-left:2.6rem">Adding photo…</div> }
+    @if (photo is not null)
+    {
+        <div class="thumb comment-photo-preview"><img src="@photo" alt="" /><button class="icon-btn x" @onclick="() => photo = null" aria-label="Remove photo">✕</button></div>
+    }
 </div>
 
 @code {
@@ -43,7 +50,8 @@
     private List<CommentDto>? comments;
     private string? text, summary;
     private CommentDto? replyTo;
-    private bool sending, summarizing;
+    private bool sending, summarizing, attaching;
+    private string? photo;
 
     private UserSummaryDto? Me => Session.User is { } u ? new(u.Id, u.UserName, u.DisplayName, u.AvatarUrl, u.IsVerified) : null;
 
@@ -59,7 +67,7 @@
             <div class="comment">
                 <Avatar User="c.Author" Size="32" />
                 <div>
-                    <div class="comment-bubble"><a class="name" href="/u/@c.Author.UserName">@c.Author.DisplayName</a><div>@c.Content</div></div>
+                    <div class="comment-bubble"><a class="name" href="/u/@c.Author.UserName">@c.Author.DisplayName</a>@if (c.Content.Length > 0) {<div>@c.Content</div>}@if (c.MediaUrl is { } img) {<a href="@img" target="_blank" rel="noopener"><img class="comment-photo" src="@img" alt="" loading="lazy" /></a>}</div>
                     <div class="comment-actions">
                         <button class="@(c.LikedByMe ? "on" : "")" @onclick="() => Like(c)">@(c.LikedByMe ? "Liked" : "Like")@(c.LikeCount > 0 ? $" · {c.LikeCount}" : "")</button>
                         @if (topLevel) { <button @onclick="() => replyTo = c">Reply</button> }
@@ -84,23 +92,30 @@
 
     private async Task Send()
     {
-        if (string.IsNullOrWhiteSpace(text) || sending) return;
+        if ((string.IsNullOrWhiteSpace(text) && photo is null) || sending) return;
         sending = true;
         try
         {
-            var created = await Api.PostAsync<CommentDto>($"api/posts/{PostId}/comments", new CreateCommentRequest(text, replyTo?.Id));
+            var created = await Api.PostAsync<CommentDto>($"api/posts/{PostId}/comments", new CreateCommentRequest(text ?? "", replyTo?.Id, photo));
             if (replyTo is not null)
             {
                 var parent = comments!.First(c => c.Id == replyTo.Id);
                 comments![comments.IndexOf(parent)] = parent with { Replies = [.. parent.Replies, created] };
             }
             else comments!.Add(created);
-            text = null; replyTo = null;
+            text = null; replyTo = null; photo = null;
             CommentCount++;
             await OnCountChanged.InvokeAsync(CommentCount);
         }
         catch (Exception ex) { Toasts.Error(ex); }
         finally { sending = false; }
+    }
+
+    private async Task AttachPhoto(InputFileChangeEventArgs e)
+    {
+        attaching = true;
+        try { photo = (await Guard.UploadAsync([e.File], "comment")).FirstOrDefault()?.Url ?? photo; }
+        finally { attaching = false; }
     }
 
     private async Task Like(CommentDto c)

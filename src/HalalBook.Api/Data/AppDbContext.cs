@@ -61,6 +61,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(x => x.Group).WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Page).WithMany().HasForeignKey(x => x.PageId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.SharedPost).WithMany().HasForeignKey(x => x.SharedPostId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.TargetUser).WithMany().HasForeignKey(x => x.TargetUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(x => x.Media).WithOne().HasForeignKey(x => x.PostId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Hashtags).WithOne().HasForeignKey(x => x.PostId).OnDelete(DeleteBehavior.Cascade);
         });

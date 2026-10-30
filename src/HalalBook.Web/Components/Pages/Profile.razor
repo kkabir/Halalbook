@@ -103,6 +103,11 @@ else
         else
         {
             @if (p.Friendship == FriendshipStatus.Self) { <Composer OnPosted="p => list?.Prepend(p)" /> <div class="mt"></div> }
+            else if (p.CanPost)
+            {
+                <Composer TargetUserId="p.User.Id" AllowReel="false" Placeholder="@($"Write something to {p.User.DisplayName.Split(' ')[0]}…")" OnPosted="p => list?.Prepend(p)" />
+                <div class="mt"></div>
+            }
             <PostList @ref="list" Url="@($"api/users/{p.User.UserName}/posts")" EmptyTitle="No posts yet" />
         }
     </div>

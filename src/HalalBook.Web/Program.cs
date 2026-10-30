@@ -17,6 +17,7 @@ builder.Services.AddScoped<AuthSession>();
 builder.Services.AddScoped<Realtime>();
 builder.Services.AddScoped<Toasts>();
 builder.Services.AddScoped<ClientClock>();
+builder.Services.AddScoped<MediaGuard>();
 
 var app = builder.Build();
 

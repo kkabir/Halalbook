@@ -2,6 +2,7 @@
 @inject ApiClient Api
 @inject AuthSession Session
 @inject Toasts Toasts
+@inject MediaGuard Guard
 
 <div class="stories">
     <div class="story add" @onclick="() => creating = true">
@@ -81,7 +82,7 @@
                 }
             </div>
             <div class="row spread mt">
-                <label class="btn btn-outline">🖼️ Add photo/video<InputFile OnChange="Upload" accept="image/*,video/*" style="display:none" /></label>
+                <label class="btn btn-outline">🖼️ Add photo/video<InputFile @ref="storyInput" OnChange="Upload" accept="image/*,video/*" style="display:none" /></label>
                 <button class="btn btn-gold" disabled="@(busy || (newMedia is null && string.IsNullOrWhiteSpace(newText)))" @onclick="Create">Share story</button>
             </div>
         </div>
@@ -96,6 +97,7 @@
     private string? newText;
     private string newBg = "emerald";
     private MediaDto? newMedia;
+    private InputFile? storyInput;
     private System.Threading.Timer? timer;
 
     protected override async Task OnInitializedAsync() => await Load();
@@ -149,8 +151,11 @@
     private async Task Upload(InputFileChangeEventArgs e)
     {
         busy = true;
-        try { var r = await Api.UploadAsync(e.File); newMedia = new MediaDto(r.Url, r.Type); }
-        catch (Exception ex) { Toasts.Error(ex); }
+        try
+        {
+            var r = (await Guard.UploadAsync([e.File], "story", storyInput?.Element)).FirstOrDefault();
+            if (r is not null) newMedia = new MediaDto(r.Url, r.Type);
+        }
         finally { busy = false; }
     }
 
