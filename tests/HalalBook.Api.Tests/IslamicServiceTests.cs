@@ -141,3 +141,21 @@ public class TurnTests
         Assert.Equal("turn:global.relay.metered.ca:80", m[1].Urls[0]);
     }
 }
+
+public class VisitorTests
+{
+    [Theory]
+    [InlineData("/post/3f2b1c7e-1111-4a5b-9c9d-123456789abc?x=1", "/post/{id}")]
+    [InlineData("/u/Aisha", "/u/…")]
+    [InlineData("/", "/")]
+    [InlineData("/Friends/", "/friends")]
+    public void GroupsPages(string path, string expected) => Assert.Equal(expected, HalalBook.Api.Endpoints.VisitorEndpoints.NormalizePath(path));
+
+    [Theory]
+    [InlineData("https://www.google.com/", "Google")]
+    [InlineData("https://l.facebook.com/l.php?u=x", "Facebook")]
+    [InlineData("https://halalbook.app/welcome", "Direct")]
+    [InlineData("", "Direct")]
+    [InlineData("https://www.example.org/page", "example.org")]
+    public void NamesSources(string referrer, string expected) => Assert.Equal(expected, HalalBook.Api.Endpoints.VisitorEndpoints.Source(referrer, "halalbook.app"));
+}

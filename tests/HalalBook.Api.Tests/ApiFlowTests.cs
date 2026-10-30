@@ -640,4 +640,25 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.NoContent, (await c.PostAsJsonAsync("/api/push/unsubscribe", sub, Json)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anon.PostAsJsonAsync("/api/push/subscribe", sub, Json)).StatusCode);
     }
+
+    [Fact]
+    public async Task Visitors_CountedOncePerDayAndShownToAdmins()
+    {
+        var anon = factory.CreateClient();
+        var id = Guid.NewGuid().ToString();
+        for (var i = 0; i < 3; i++)
+            await anon.PostAsJsonAsync("/api/stats/visit", new VisitRequest(id, i == 0 ? "/welcome" : "/login", "https://www.google.com/"), Json);
+        var bot = new HttpRequestMessage(HttpMethod.Post, "/api/stats/visit") { Content = JsonContent.Create(new VisitRequest(Guid.NewGuid().ToString(), "/", null), options: Json) };
+        bot.Headers.UserAgent.ParseAdd("Googlebot/2.1");
+        await anon.SendAsync(bot);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anon.GetAsync("/api/admin/visitors")).StatusCode);
+        var admin = await SignUpAdmin();
+        var v = (await admin.GetFromJsonAsync<VisitorStatsDto>("/api/admin/visitors", Json))!;
+        Assert.True(v.Today >= 1);
+        Assert.True(v.PageViewsToday >= 3);
+        Assert.Contains(v.Sources, s => s.Name == "Google");
+        Assert.Contains(v.TopPages, p => p.Name == "/login");
+        Assert.Equal(14, v.Daily.Count);
+    }
 }

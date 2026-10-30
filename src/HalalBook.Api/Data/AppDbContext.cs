@@ -7,6 +7,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<User> Users => Set<User>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
+    public DbSet<SiteVisit> SiteVisits => Set<SiteVisit>();
+    public DbSet<PageStat> PageStats => Set<PageStat>();
     public DbSet<Follow> Follows => Set<Follow>();
     public DbSet<Block> Blocks => Set<Block>();
     public DbSet<Post> Posts => Set<Post>();
@@ -41,6 +43,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<SiteVisit>(e =>
+        {
+            e.HasIndex(x => new { x.Day, x.VisitorId }).IsUnique();
+            e.HasIndex(x => x.LastSeen);
+            e.Property(x => x.VisitorId).HasMaxLength(40);
+            e.Property(x => x.FirstPath).HasMaxLength(120);
+            e.Property(x => x.Source).HasMaxLength(100);
+            e.Property(x => x.Device).HasMaxLength(20);
+        });
+        b.Entity<PageStat>(e =>
+        {
+            e.HasIndex(x => new { x.Day, x.Path }).IsUnique();
+            e.Property(x => x.Path).HasMaxLength(120);
+        });
         b.Entity<PushSubscription>(e =>
         {
             e.HasIndex(x => x.Endpoint).IsUnique();

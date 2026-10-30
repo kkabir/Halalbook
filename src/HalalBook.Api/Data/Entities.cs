@@ -72,6 +72,30 @@ public class Block
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+/// <summary>One browser's visit on one day (anonymous random ID; no IP address is kept).</summary>
+public class SiteVisit
+{
+    public long Id { get; set; }
+    public DateOnly Day { get; set; }
+    public string VisitorId { get; set; } = "";
+    public Guid? UserId { get; set; }
+    public string FirstPath { get; set; } = "/";
+    public string Source { get; set; } = "Direct";
+    public string Device { get; set; } = "Computer";
+    public int PageViews { get; set; }
+    public DateTime FirstSeen { get; set; }
+    public DateTime LastSeen { get; set; }
+}
+
+/// <summary>Page views per page section per day.</summary>
+public class PageStat
+{
+    public long Id { get; set; }
+    public DateOnly Day { get; set; }
+    public string Path { get; set; } = "/";
+    public int Views { get; set; }
+}
+
 /// <summary>A browser or phone that asked for HalalBook notifications (Web Push).</summary>
 public class PushSubscription
 {

@@ -206,6 +206,12 @@ public record ErrorLogDto(Guid Id, string Source, string Level, string Message, 
     string? Method, int? StatusCode, int Count, DateTime FirstSeen, DateTime LastSeen, ErrorStatus Status, string? Note,
     UserSummaryDto? LastUser, string? TraceId, string? UserAgent);
 public record UpdateErrorRequest(ErrorStatus Status, string? Note);
+/// <summary>Sent by the browser on each page it shows; VisitorId is a random ID kept in that browser.</summary>
+public record VisitRequest(string VisitorId, string? Path, string? Referrer);
+public record DailyVisitsDto(DateOnly Day, int Visitors, int PageViews);
+public record CountDto(string Name, int Count);
+public record VisitorStatsDto(int OnlineNow, int MembersOnline, int Today, int Yesterday, int Last7Days, int Last30Days, int AllTime,
+    int PageViewsToday, int PageViews7Days, List<DailyVisitsDto> Daily, List<CountDto> TopPages, List<CountDto> Sources, List<CountDto> Devices);
 public record AdminStatsDto(int NewFeedback, int OpenFeedback, int OpenErrors, int ErrorsLast24h, int Users, int UsersLast7d,
     int Posts, int PostsLast24h, int PendingReview, int OpenReports);
 

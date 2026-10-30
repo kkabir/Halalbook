@@ -182,6 +182,7 @@ app.MapMessagingEndpoints();
 app.MapPlatformEndpoints();
 app.MapPresenceEndpoints();
 app.MapLiveEndpoints();
+app.MapVisitorEndpoints();
 app.MapAdminEndpoints();
 app.MapFriendListEndpoints();
 app.MapCallEndpoints();

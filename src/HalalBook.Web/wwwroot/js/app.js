@@ -218,3 +218,27 @@ try { const t = localStorage.getItem('hb.theme'); if (t) document.documentElemen
 // Keep the browser's "Install app" offer for our own button, and register the service worker for notifications.
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__hbInstall = e; });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => { });
+
+// Anonymous visitor counts for the admin console: a random ID kept in this browser, sent once per page shown.
+(() => {
+    if (navigator.webdriver) return;
+    let id;
+    try { id = localStorage.getItem('hb.vid') || crypto.randomUUID(); localStorage.setItem('hb.vid', id); } catch { return; }
+    let last = '';
+    const send = () => {
+        if (location.pathname === last) return;
+        last = location.pathname;
+        const api = window.halalbookApi;
+        if (!api) return;
+        fetch(`${api}api/stats/visit`, {
+            method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ visitorId: id, path: location.pathname, referrer: document.referrer }),
+        }).catch(() => { });
+    };
+    // Blazor changes pages without reloading, so watch history as well as the first load.
+    const push = history.pushState, replace = history.replaceState;
+    history.pushState = function () { push.apply(this, arguments); setTimeout(send, 0); };
+    history.replaceState = function () { replace.apply(this, arguments); setTimeout(send, 0); };
+    addEventListener('popstate', () => setTimeout(send, 0));
+    if (document.readyState === 'loading') addEventListener('DOMContentLoaded', send); else send();
+})();

@@ -20,12 +20,53 @@ else
     @if (stats is { } s)
     {
         <div class="stat-grid">
+            <button class="stat good @(tab == "visitors" ? "active" : "")" @onclick='() => Tab("visitors")'><b>@(visitors?.Today.ToString("N0") ?? "…")</b><span>Visitors today</span><small>@(visitors is { } v0 ? $"{v0.OnlineNow} online now" : "")</small></button>
             <button class="stat @(tab == "feedback" ? "active" : "")" @onclick='() => Tab("feedback")'><b>@s.NewFeedback</b><span>New feedback</span><small>@s.OpenFeedback open</small></button>
             <button class="stat warn @(tab == "errors" ? "active" : "")" @onclick='() => Tab("errors")'><b>@s.OpenErrors</b><span>Open errors</span><small>@s.ErrorsLast24h in 24 h</small></button>
             <a class="stat" href="/moderation"><b>@(s.PendingReview + s.OpenReports)</b><span>To moderate</span><small>@s.PendingReview posts · @s.OpenReports reports</small></a>
             <div class="stat"><b>@s.Users</b><span>Members</span><small>+@s.UsersLast7d this week</small></div>
             <div class="stat"><b>@s.Posts</b><span>Posts</span><small>+@s.PostsLast24h today</small></div>
         </div>
+    }
+
+    @if (tab == "visitors" && visitors is { } v)
+    {
+        <div class="visitor-grid">
+            <div class="card vstat live"><span class="pulse"></span><b>@v.OnlineNow</b><span>Online now</span><small>@v.MembersOnline signed-in members</small></div>
+            <div class="card vstat"><b>@v.Today.ToString("N0")</b><span>Today</span><small>@v.Yesterday.ToString("N0") yesterday · @v.PageViewsToday.ToString("N0") page views</small></div>
+            <div class="card vstat"><b>@v.Last7Days.ToString("N0")</b><span>Last 7 days</span><small>@v.PageViews7Days.ToString("N0") page views</small></div>
+            <div class="card vstat"><b>@v.Last30Days.ToString("N0")</b><span>Last 30 days</span><small>unique visitors</small></div>
+            <div class="card vstat"><b>@v.AllTime.ToString("N0")</b><span>All time</span><small>unique visitors</small></div>
+        </div>
+        <div class="card mt">
+            <div class="card-title">Visitors, last 14 days</div>
+            @{ var max = Math.Max(1, v.Daily.Max(d => d.Visitors)); }
+            <div class="visit-chart">
+                @foreach (var d in v.Daily)
+                {
+                    <div class="visit-bar" title="@d.Day.ToString("ddd d MMM"): @d.Visitors visitors, @d.PageViews page views">
+                        <small>@(d.Visitors > 0 ? d.Visitors : "")</small>
+                        <i style="height:@((int)Math.Round(100.0 * d.Visitors / max))%"></i>
+                        <span>@d.Day.ToString("d")</span>
+                    </div>
+                }
+            </div>
+        </div>
+        <div class="visitor-lists mt">
+            @foreach (var (title, items) in new[] { ("Top pages (7 days)", v.TopPages), ("Where visitors come from", v.Sources), ("Devices", v.Devices) })
+            {
+                <div class="card">
+                    <div class="card-title">@title</div>
+                    @if (items.Count == 0) { <p class="muted" style="margin:0">No visits yet.</p> }
+                    @{ var top = Math.Max(1, items.FirstOrDefault()?.Count ?? 1); }
+                    @foreach (var it in items)
+                    {
+                        <div class="vrow"><span>@it.Name</span><b>@it.Count.ToString("N0")</b><i style="width:@((int)Math.Round(100.0 * it.Count / top))%"></i></div>
+                    }
+                </div>
+            }
+        </div>
+        <p class="subtle mt">Counted without cookies or IP addresses: each browser gets a random ID, and search engine bots are left out.</p>
     }
 
     @if (tab == "feedback")
@@ -131,6 +172,7 @@ else
 
 @code {
     private AdminStatsDto? stats;
+    private VisitorStatsDto? visitors;
     private string tab = "feedback";
     private List<FeedbackDto>? feedback;
     private List<ErrorLogDto>? errors;
@@ -151,7 +193,8 @@ else
     private async Task LoadAll()
     {
         try { stats = await Api.GetAsync<AdminStatsDto>("api/admin/stats"); } catch (Exception ex) { Toasts.Error(ex); }
-        if (tab == "feedback") await LoadFeedback(); else await LoadErrors();
+        try { visitors = await Api.GetAsync<VisitorStatsDto>("api/admin/visitors"); } catch (Exception) { }
+        if (tab == "feedback") await LoadFeedback(); else if (tab == "errors") await LoadErrors();
     }
 
     private async Task Tab(string t) { tab = t; await LoadAll(); }
