@@ -1258,3 +1258,40 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030043644_TimelineLifeEvents'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [PinnedPostId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030043644_TimelineLifeEvents'
+)
+BEGIN
+    ALTER TABLE [Posts] ADD [LifeEvent] nvarchar(max) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030043644_TimelineLifeEvents'
+)
+BEGIN
+    ALTER TABLE [Posts] ADD [LifeEventDate] date NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030043644_TimelineLifeEvents'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261030043644_TimelineLifeEvents', N'10.0.14');
+END;
+
+COMMIT;
+GO
+

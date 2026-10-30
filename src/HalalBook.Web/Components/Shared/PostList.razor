@@ -1,9 +1,16 @@
 @* Paged list of posts from any endpoint returning PagedResult<PostDto>. *@
 @inject ApiClient Api
 @inject Toasts Toasts
+@inject ClientClock Clock
 
+@{ string? lastMonth = null; }
 @foreach (var p in posts)
 {
+    @if (GroupByMonth && Clock.Local(p.CreatedAt).ToString("MMMM yyyy") is var month && month != lastMonth)
+    {
+        lastMonth = month;
+        <div class="month-divider"><span>@month</span></div>
+    }
     <PostCard @key="p.Id" Post="p" ShowGroup="ShowGroup" />
 }
 @if (loading)
@@ -24,6 +31,8 @@ else if (hasMore)
     [Parameter] public bool ShowGroup { get; set; } = true;
     [Parameter] public string EmptyTitle { get; set; } = "No posts yet";
     [Parameter] public string? EmptyText { get; set; }
+    /// <summary>Show "October 2026" style dividers between months, like a timeline.</summary>
+    [Parameter] public bool GroupByMonth { get; set; }
 
     private readonly List<PostDto> posts = [];
     private string? loadedUrl;

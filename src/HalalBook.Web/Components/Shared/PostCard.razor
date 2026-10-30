@@ -46,6 +46,11 @@
                         <button @onclick="Translate">🌐 Translate to English (AI)</button>
                         <button @onclick="CheckSources">📖 Check Quran and hadith sources (AI)</button>
                         <button @onclick="CopyLink">🔗 Copy link</button>
+                        @if (IsMine && Post.Group is null)
+                        {
+                            @if (Post.IsPinned) { <button @onclick="Unpin">📌 Unpin from profile</button> }
+                            else { <button @onclick="Pin">📌 Pin to profile</button> }
+                        }
                         @if (IsMine)
                         {
                             <button @onclick="StartEdit">✏️ Edit post</button>
@@ -65,6 +70,15 @@
         @if (Post.Moderation == ModerationStatus.PendingReview)
         {
             <div class="pending-banner">⏳ Only you can see this post while a moderator reviews it.</div>
+        }
+
+        @if (Post.LifeEvent is { } le && LifeEvents.Find(le) is { } kind)
+        {
+            <div class="life-event-card">
+                <div class="life-icon">@kind.Icon</div>
+                <div class="life-title">@kind.Title</div>
+                @if (Post.LifeEventDate is { } d) { <div class="life-date">@d.ToString("MMMM d, yyyy")</div> }
+            </div>
         }
 
         @if (editing)
@@ -296,6 +310,18 @@
     private async Task Delete()
     {
         try { await Api.DeleteAsync($"api/posts/{Post.Id}"); deleted = true; Toasts.Show("Post deleted"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Pin()
+    {
+        try { await Api.PostAsync($"api/users/me/pin/{Post.Id}"); Post = Post with { IsPinned = true }; Toasts.Show("Pinned to the top of your profile"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Unpin()
+    {
+        try { await Api.DeleteAsync("api/users/me/pin"); Post = Post with { IsPinned = false }; Toasts.Show("Unpinned"); }
         catch (Exception ex) { Toasts.Error(ex); }
     }
 

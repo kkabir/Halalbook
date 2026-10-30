@@ -23,6 +23,18 @@ public static class PostEndpoints
         })
             .WithTags("Posts").RequireAuthorization();
 
+        // "On this day": your own posts from this date in previous years.
+        app.MapGet("/api/memories", async (int? offset, ClaimsPrincipal cp, AppDbContext db, PostService svc) =>
+        {
+            var me = cp.UserId();
+            var today = DateTime.UtcNow.AddMinutes(offset ?? 0);
+            var ids = (await db.Posts.Where(p => p.AuthorId == me && !p.IsDeleted && p.CreatedAt.Year < today.Year)
+                    .Select(p => new { p.Id, p.CreatedAt }).ToListAsync())
+                .Where(p => p.CreatedAt.AddMinutes(offset ?? 0).Month == today.Month && p.CreatedAt.AddMinutes(offset ?? 0).Day == today.Day)
+                .OrderByDescending(p => p.CreatedAt).Take(10).Select(p => p.Id).ToList();
+            return await svc.BuildAsync(db.Posts.Where(p => ids.Contains(p.Id)), me);
+        }).WithTags("Posts").RequireAuthorization();
+
         // Short vertical videos.
         app.MapGet("/api/reels", async (int? page, ClaimsPrincipal cp, PostService svc) =>
         {
@@ -51,7 +63,7 @@ public static class PostEndpoints
         {
             var me = cp.UserId();
             var content = (req.Content ?? "").Trim();
-            if (content.Length == 0 && (req.Media?.Count ?? 0) == 0 && req.SharedPostId is null)
+            if (content.Length == 0 && (req.Media?.Count ?? 0) == 0 && req.SharedPostId is null && LifeEvents.Find(req.LifeEvent) is null)
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["content"] = ["Write something or add a photo or video."] });
             if (content.Length > 10000) return Results.ValidationProblem(new Dictionary<string, string[]> { ["content"] = ["Posts are limited to 10,000 characters."] });
 
@@ -100,6 +112,8 @@ public static class PostEndpoints
                 GroupId = groupId, PageId = groupId is null ? req.PageId : null, SharedPostId = req.SharedPostId,
                 TargetUserId = groupId is null ? target : null,
                 Feeling = req.Feeling, Location = req.Location,
+                LifeEvent = groupId is null && LifeEvents.Find(req.LifeEvent) is not null ? req.LifeEvent : null,
+                LifeEventDate = groupId is null && LifeEvents.Find(req.LifeEvent) is not null ? req.LifeEventDate ?? DateOnly.FromDateTime(DateTime.UtcNow) : null,
                 Moderation = moderation.NeedsReview ? ModerationStatus.PendingReview : ModerationStatus.Approved,
                 ModerationNote = moderation.NeedsReview ? string.Join(" ", moderation.Reasons) : null,
                 Media = (req.Media ?? []).Take(10).Select((m, i) => new PostMedia

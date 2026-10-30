@@ -88,52 +88,134 @@ else
             </div>
         </div>
         <div class="tabs" style="padding:0 1rem;margin-bottom:0">
-            <button class="@(tab == "posts" ? "active" : "")" @onclick='() => tab = "posts"'>Posts</button>
-            <button class="@(tab == "about" ? "active" : "")" @onclick='() => tab = "about"'>About</button>
-            @if (p.CanSeeFriends) { <button class="@(tab == "friends" ? "active" : "")" @onclick="ShowFriends">Friends</button> }
+            @foreach (var (key, label) in Tabs(p))
+            {
+                <button class="@(tab == key ? "active" : "")" @onclick="() => ShowTab(key)">@label</button>
+            }
         </div>
     </div>
 
-    <div class="feed-column mt">
-        @if (tab == "about")
-        {
-            <div class="card stack">
-                <div class="card-title">About</div>
-                @if (p.Bio is { Length: > 0 }) { <p style="white-space:pre-wrap">@p.Bio</p> }
-                @if (p.Location is { Length: > 0 }) { <div>📍 Lives in <b>@p.Location</b></div> }
-                @if (p.Website is { Length: > 0 }) { <div>🔗 <a href="@p.Website" target="_blank" rel="noopener nofollow">@p.Website</a></div> }
-                <div>🗓️ Joined @p.JoinedAt.ToString("MMMM yyyy")</div>
-                <div>📝 @p.PostCount posts · following @p.FollowingCount</div>
-            </div>
-        }
-        else if (tab == "friends")
-        {
-            <div class="card">
-                <div class="card-title">Friends</div>
-                @if (friends is null) { <div class="spinner"></div> }
-                else if (friends.Count == 0) { <p class="muted">No friends to show yet.</p> }
-                else
+    @if (tab == "posts")
+    {
+        <div class="timeline mt">
+            <aside class="timeline-side">
+                <div class="card intro-card">
+                    <div class="card-title">Intro</div>
+                    @if (p.Bio is { Length: > 0 }) { <p class="center" style="white-space:pre-wrap">@p.Bio</p> }
+                    else if (IsSelf) { <a class="btn btn-outline btn-sm btn-block" href="/settings">Add a bio</a> }
+                    @if (p.Location is { Length: > 0 }) { <div>📍 Lives in <b>@p.Location</b></div> }
+                    @if (p.Website is { Length: > 0 }) { <div>🔗 <a href="@p.Website" target="_blank" rel="noopener nofollow">@p.Website.Replace("https://", "")</a></div> }
+                    <div>🗓️ Joined @p.JoinedAt.ToString("MMMM yyyy")</div>
+                    <div>👥 Followed by @p.FollowerCount @(p.FollowerCount == 1 ? "person" : "people")</div>
+                </div>
+
+                @if (lifeEvents is { Count: > 0 })
                 {
-                    <div class="grid-cards">
-                        @foreach (var f in friends)
-                        {
-                            <a class="tile" href="/u/@f.UserName" style="align-items:center;padding:1rem;text-align:center"><Avatar User="f" Size="72" Link="false" /><b class="mt">@f.DisplayName</b></a>
-                        }
+                    <div class="card">
+                        <div class="card-title">Life journey</div>
+                        <div class="journey">
+                            @foreach (var e in lifeEvents.Take(6))
+                            {
+                                var kind = LifeEvents.Find(e.LifeEvent);
+                                <a class="journey-item" href="/post/@e.Id"><span>@kind?.Icon</span><div><b>@kind?.Title</b><small>@e.LifeEventDate?.ToString("MMMM yyyy")</small></div></a>
+                            }
+                        </div>
                     </div>
                 }
+
+                <div class="card">
+                    <div class="row spread"><div class="card-title" style="margin:0">Photos</div><a href="javascript:void(0)" @onclick='() => ShowTab("photos")'>See all</a></div>
+                    @if (photos is null) { <div class="spinner"></div> }
+                    else if (photos.Count == 0) { <p class="subtle">No photos yet.</p> }
+                    else
+                    {
+                        <div class="mini-grid">@foreach (var m in photos.Take(9)) { <a href="/post/@m.PostId"><img src="@m.Url" alt="@(m.AltText ?? "")" loading="lazy" /></a> }</div>
+                    }
+                </div>
+
+                @if (p.CanSeeFriends)
+                {
+                    <div class="card">
+                        <div class="row spread"><div class="card-title" style="margin:0">Friends</div><a href="javascript:void(0)" @onclick='() => ShowTab("friends")'>See all</a></div>
+                        <div class="subtle">@p.FriendCount friends</div>
+                        <div class="mini-grid friends">
+                            @foreach (var f in (friends ?? []).Take(9))
+                            {
+                                <a href="/u/@f.UserName"><span class="avatar" style="--size:100%;border-radius:12px;aspect-ratio:1">@if (f.AvatarUrl is { } fa) { <img src="@fa" alt="" style="border-radius:12px" /> } else { @Ui.Initials(f.DisplayName) }</span><small>@f.DisplayName</small></a>
+                            }
+                        </div>
+                    </div>
+                }
+            </aside>
+
+            <div class="timeline-main">
+                @if (p.Friendship == FriendshipStatus.Self) { <Composer OnPosted="p => list?.Prepend(p)" /> <div class="mt"></div> }
+                else if (p.CanPost)
+                {
+                    <Composer TargetUserId="p.User.Id" AllowReel="false" Placeholder="@($"Write something to {p.User.DisplayName.Split(' ')[0]}…")" OnPosted="p => list?.Prepend(p)" />
+                    <div class="mt"></div>
+                }
+                @if (pinned is not null) { <div class="pinned-label">📌 Pinned post</div><PostCard @key="pinned.Id" Post="pinned" /> }
+                <PostList @ref="list" Url="@($"api/users/{p.User.UserName}/posts")" EmptyTitle="No posts yet" GroupByMonth="true" />
             </div>
-        }
-        else
-        {
-            @if (p.Friendship == FriendshipStatus.Self) { <Composer OnPosted="p => list?.Prepend(p)" /> <div class="mt"></div> }
-            else if (p.CanPost)
+        </div>
+    }
+    else
+    {
+        <div class="feed-column mt">
+            @switch (tab)
             {
-                <Composer TargetUserId="p.User.Id" AllowReel="false" Placeholder="@($"Write something to {p.User.DisplayName.Split(' ')[0]}…")" OnPosted="p => list?.Prepend(p)" />
-                <div class="mt"></div>
+                case "about":
+                    <div class="card stack">
+                        <div class="card-title">About</div>
+                        @if (p.Bio is { Length: > 0 }) { <p style="white-space:pre-wrap">@p.Bio</p> }
+                        @if (p.Location is { Length: > 0 }) { <div>📍 Lives in <b>@p.Location</b></div> }
+                        @if (p.Website is { Length: > 0 }) { <div>🔗 <a href="@p.Website" target="_blank" rel="noopener nofollow">@p.Website</a></div> }
+                        <div>🗓️ Joined @p.JoinedAt.ToString("MMMM yyyy")</div>
+                        <div>📝 @p.PostCount posts · @p.FriendCount friends · @p.FollowerCount followers · following @p.FollowingCount</div>
+                    </div>
+                    break;
+                case "life":
+                    <PostList Url="@($"api/users/{p.User.UserName}/posts?filter=life")" EmptyTitle="No life events yet"
+                              EmptyText="Share milestones like your Shahada, Hajj, Nikah or graduation with 🌟 Life event when you post." />
+                    break;
+                case "photos":
+                case "videos":
+                    var items = (tab == "photos" ? photos : videos) ?? [];
+                    @if ((tab == "photos" ? photos : videos) is null) { <div class="spinner"></div> }
+                    else if (items.Count == 0) { <div class="card"><Empty Title="@(tab == "photos" ? "No photos yet" : "No videos yet")" /></div> }
+                    else
+                    {
+                        <div class="photo-wall">
+                            @foreach (var m in items)
+                            {
+                                <a href="/post/@m.PostId" class="photo-cell">
+                                    @if (m.Type == MediaType.Video) { <video src="@(m.Url)#t=0.1" preload="metadata" muted playsinline></video><span class="play-badge">▶</span> }
+                                    else { <img src="@m.Url" alt="@(m.AltText ?? "")" loading="lazy" /> }
+                                </a>
+                            }
+                        </div>
+                    }
+                    break;
+                case "friends":
+                    <div class="card">
+                        <div class="card-title">Friends</div>
+                        @if (friends is null) { <div class="spinner"></div> }
+                        else if (friends.Count == 0) { <p class="muted">No friends to show yet.</p> }
+                        else
+                        {
+                            <div class="grid-cards">
+                                @foreach (var f in friends)
+                                {
+                                    <a class="tile" href="/u/@f.UserName" style="align-items:center;padding:1rem;text-align:center"><Avatar User="f" Size="72" Link="false" /><b class="mt">@f.DisplayName</b></a>
+                                }
+                            </div>
+                        }
+                    </div>
+                    break;
             }
-            <PostList @ref="list" Url="@($"api/users/{p.User.UserName}/posts")" EmptyTitle="No posts yet" />
-        }
-    </div>
+        </div>
+    }
 }
 
 @if (viewing is not null)
@@ -149,6 +231,45 @@ else
     [Parameter] public string UserName { get; set; } = "";
     private ProfileDto? profile;
     private List<UserSummaryDto>? friends;
+    private List<TimelineMediaDto>? photos, videos;
+    private List<PostDto>? lifeEvents;
+    private PostDto? pinned;
+
+    private static IEnumerable<(string, string)> Tabs(ProfileDto p)
+    {
+        yield return ("posts", "Posts");
+        yield return ("photos", "Photos");
+        yield return ("videos", "Videos");
+        yield return ("life", "Life events");
+        yield return ("about", "About");
+        if (p.CanSeeFriends) yield return ("friends", "Friends");
+    }
+
+    private async Task ShowTab(string key)
+    {
+        tab = key;
+        try
+        {
+            if (key == "photos") photos ??= await Api.GetAsync<List<TimelineMediaDto>>($"api/users/{UserName}/media?type=Image");
+            if (key == "videos") videos ??= await Api.GetAsync<List<TimelineMediaDto>>($"api/users/{UserName}/media?type=Video");
+            if (key == "friends") await ShowFriends();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    /// <summary>Loads the side column: photos, friends, life events and the pinned post.</summary>
+    private async Task LoadTimelineExtras()
+    {
+        var p = profile!;
+        try
+        {
+            photos = await Api.GetAsync<List<TimelineMediaDto>>($"api/users/{UserName}/media?type=Image");
+            lifeEvents = (await Api.GetAsync<PagedResult<PostDto>>($"api/users/{UserName}/posts?filter=life")).Items;
+            if (p.CanSeeFriends) friends = await Api.GetAsync<List<UserSummaryDto>>($"api/users/{UserName}/friends");
+            pinned = p.PinnedPostId is Guid pin ? await Api.GetAsync<PostDto>($"api/posts/{pin}") : null;
+        }
+        catch (Exception) { }
+    }
     private PostList? list;
     private string tab = "posts";
     private bool missing, menu, photoMenu, uploadingPhoto;
@@ -191,8 +312,9 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
-        profile = null; missing = false; friends = null; tab = "posts";
+        profile = null; missing = false; friends = null; photos = videos = null; lifeEvents = null; pinned = null; tab = "posts";
         await Load();
+        if (profile is not null) await LoadTimelineExtras();
     }
 
     private async Task Load()

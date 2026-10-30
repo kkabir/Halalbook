@@ -543,4 +543,32 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         messages = (await b.GetFromJsonAsync<List<MessageDto>>($"/api/conversations/{conv.Id}/messages", Json))!;
         Assert.Contains(messages, m => m.Content == "📵 Missed voice call");
     }
+
+    [Fact]
+    public async Task Timeline_LifeEventsPinningAndMedia()
+    {
+        var (me, _) = await SignUpWithId("timeline");
+        var name = (await me.GetFromJsonAsync<UserDto>("/api/users/me", Json))!.UserName;
+
+        var hajj = (await (await me.PostAsJsonAsync("/api/posts", new CreatePostRequest("", LifeEvent: "hajj", LifeEventDate: new DateOnly(2025, 6, 4)), Json))
+            .Content.ReadFromJsonAsync<PostDto>(Json))!;
+        Assert.Equal("hajj", hajj.LifeEvent);
+        Assert.Equal(new DateOnly(2025, 6, 4), hajj.LifeEventDate);
+        var normal = (await (await me.PostAsJsonAsync("/api/posts", new CreatePostRequest("Ordinary day"), Json)).Content.ReadFromJsonAsync<PostDto>(Json))!;
+
+        var life = (await me.GetFromJsonAsync<PagedResult<PostDto>>($"/api/users/{name}/posts?filter=life", Json))!;
+        Assert.Equal(hajj.Id, Assert.Single(life.Items).Id);
+
+        (await me.PostAsync($"/api/users/me/pin/{hajj.Id}", null)).EnsureSuccessStatusCode();
+        var profile = (await me.GetFromJsonAsync<ProfileDto>($"/api/users/{name}", Json))!;
+        Assert.Equal(hajj.Id, profile.PinnedPostId);
+        // The pinned post is shown on its own, not repeated in the list.
+        var timeline = (await me.GetFromJsonAsync<PagedResult<PostDto>>($"/api/users/{name}/posts", Json))!;
+        Assert.DoesNotContain(timeline.Items, p => p.Id == hajj.Id);
+        Assert.Contains(timeline.Items, p => p.Id == normal.Id);
+        Assert.True((await me.GetFromJsonAsync<PostDto>($"/api/posts/{hajj.Id}", Json))!.IsPinned);
+
+        Assert.Empty((await me.GetFromJsonAsync<List<TimelineMediaDto>>($"/api/users/{name}/media?type=Image", Json))!);
+        Assert.NotNull(await me.GetFromJsonAsync<List<PostDto>>("/api/memories", Json));
+    }
 }

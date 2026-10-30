@@ -67,16 +67,48 @@ public static partial class UserEndpoints
                 u.Id != me && await CanPostOnProfileAsync(db, me, u.Id) is null,
                 PrivacyService.Allows(u.WhoCanMessage, rel), PrivacyService.Allows(u.WhoCanSendFriendRequests, rel),
                 PrivacyService.Allows(u.WhoCanSeeFriendsList, rel), PrivacyService.Allows(u.WhoCanFollow, rel),
-                await privacy.MutualFriendsAsync(me, u.Id)));
+                await privacy.MutualFriendsAsync(me, u.Id), u.PinnedPostId));
         });
 
-        users.MapGet("/{userName}/posts", async (string userName, int? page, ClaimsPrincipal cp, AppDbContext db, PostService posts) =>
+        // filter: life (life events only). The pinned post is shown separately, so it's left out of the list.
+        users.MapGet("/{userName}/posts", async (string userName, int? page, string? filter, ClaimsPrincipal cp, AppDbContext db, PostService posts) =>
         {
             var key = userName.ToUpperInvariant();
             var u = await db.Users.FirstOrDefaultAsync(x => x.NormalizedUserName == key);
             if (u is null) return Results.NotFound();
             var visible = await posts.VisibleToAsync(cp.UserId(), cp.IsModerator());
-            return Results.Ok(await posts.PageAsync(visible.Where(p => ((p.AuthorId == u.Id && p.TargetUserId == null) || p.TargetUserId == u.Id) && p.GroupId == null && p.PageId == null), cp.UserId(), page ?? 1, 15));
+            var q = visible.Where(p => ((p.AuthorId == u.Id && p.TargetUserId == null) || p.TargetUserId == u.Id) && p.GroupId == null && p.PageId == null);
+            if (filter == "life") q = q.Where(p => p.LifeEvent != null && p.AuthorId == u.Id);
+            else if (u.PinnedPostId is Guid pin) q = q.Where(p => p.Id != pin);
+            return Results.Ok(await posts.PageAsync(q, cp.UserId(), page ?? 1, 15));
+        });
+
+        // Photos and videos from someone's timeline, newest first.
+        users.MapGet("/{userName}/media", async (string userName, MediaType? type, ClaimsPrincipal cp, AppDbContext db, PostService posts) =>
+        {
+            var key = userName.ToUpperInvariant();
+            var u = await db.Users.FirstOrDefaultAsync(x => x.NormalizedUserName == key);
+            if (u is null) return Results.NotFound();
+            var visible = await posts.VisibleToAsync(cp.UserId(), cp.IsModerator());
+            var postIds = visible.Where(p => p.AuthorId == u.Id && p.GroupId == null && p.PageId == null && p.SharedPostId == null).Select(p => p.Id);
+            var media = await db.PostMedia.Where(m => postIds.Contains(m.PostId) && (type == null || m.Type == type))
+                .Join(db.Posts, m => m.PostId, p => p.Id, (m, p) => new { m, p.CreatedAt })
+                .OrderByDescending(x => x.CreatedAt).Take(120).ToListAsync();
+            return Results.Ok(media.Select(x => new TimelineMediaDto(x.m.PostId, x.m.Url, x.m.Type, x.m.AltText, x.CreatedAt)).ToList());
+        });
+
+        users.MapPost("/me/pin/{postId:guid}", async (Guid postId, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var me = cp.UserId();
+            if (!await db.Posts.AnyAsync(p => p.Id == postId && p.AuthorId == me && !p.IsDeleted && p.GroupId == null)) return Results.NotFound();
+            await db.Users.Where(u => u.Id == me).ExecuteUpdateAsync(s => s.SetProperty(u => u.PinnedPostId, postId));
+            return Results.Ok();
+        });
+
+        users.MapDelete("/me/pin", async (ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            await db.Users.Where(u => u.Id == cp.UserId()).ExecuteUpdateAsync(s => s.SetProperty(u => u.PinnedPostId, (Guid?)null));
+            return Results.NoContent();
         });
 
         users.MapGet("/{userName}/friends", async (string userName, ClaimsPrincipal cp, AppDbContext db, PostService posts, PrivacyService privacy) =>

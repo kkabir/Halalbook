@@ -127,6 +127,8 @@ public partial class PostService(AppDbContext db)
         var shares = await db.Posts.Where(p => p.SharedPostId != null && ids.Contains(p.SharedPostId.Value) && !p.IsDeleted)
             .GroupBy(p => p.SharedPostId).Select(g => new { PostId = g.Key, Count = g.Count() }).ToListAsync();
         var bookmarks = await db.Bookmarks.Where(b => b.UserId == me && ids.Contains(b.PostId)).Select(b => b.PostId).ToListAsync();
+        var authorIds = posts.Select(p => p.AuthorId).Distinct().ToList();
+        var pinned = (await db.Users.Where(u => authorIds.Contains(u.Id) && u.PinnedPostId != null).Select(u => u.PinnedPostId!.Value).ToListAsync()).ToHashSet();
         var listIds = posts.Where(p => p.AuthorId == me && p.FriendListId != null).Select(p => p.FriendListId!.Value).Distinct().ToList();
         var listNames = listIds.Count == 0 ? [] : await db.FriendLists.Where(l => listIds.Contains(l.Id)).ToDictionaryAsync(l => l.Id, l => $"{l.Icon} {l.Name}");
         // Only the author sees who a custom audience includes or excludes.
@@ -151,7 +153,8 @@ public partial class PostService(AppDbContext db)
                 : null,
             p.TargetUser?.ToSummary(),
             mineCustom.Contains(p.Id) ? audiences.Where(a => a.PostId == p.Id).Select(a => a.User.ToSummary()).ToList() : null,
-            p.FriendListId is Guid fl && p.AuthorId == me ? listNames.GetValueOrDefault(fl) : null)).ToList();
+            p.FriendListId is Guid fl && p.AuthorId == me ? listNames.GetValueOrDefault(fl) : null,
+            p.LifeEvent, p.LifeEventDate, pinned.Contains(p.Id))).ToList();
     }
 
     /// <summary>Replaces a post's hashtags with the ones found in its text.</summary>

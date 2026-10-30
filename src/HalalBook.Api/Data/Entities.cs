@@ -25,6 +25,8 @@ public class User
     public DateTime? LastSeenAt { get; set; }
     public ProfilePostPermission WhoCanPost { get; set; }
     public PrivacyAudience WhoCanMessage { get; set; } = PrivacyAudience.Everyone;
+    /// <summary>The post shown first on this person's profile.</summary>
+    public Guid? PinnedPostId { get; set; }
     public PrivacyAudience WhoCanSendFriendRequests { get; set; } = PrivacyAudience.Everyone;
     public PrivacyAudience WhoCanSeeFriendsList { get; set; } = PrivacyAudience.Everyone;
     public PrivacyAudience WhoCanFindMe { get; set; } = PrivacyAudience.Everyone;
@@ -80,6 +82,9 @@ public class Post
     public Page? Page { get; set; }
     public Guid? SharedPostId { get; set; }
     public Post? SharedPost { get; set; }
+    /// <summary>A life event (see <see cref="LifeEvents"/>), shown as a special card on the timeline.</summary>
+    public string? LifeEvent { get; set; }
+    public DateOnly? LifeEventDate { get; set; }
     /// <summary>Set when the audience is one of the author's friend lists (Family, Close friends...).</summary>
     public Guid? FriendListId { get; set; }
     /// <summary>Set when someone posts on another person's profile.</summary>

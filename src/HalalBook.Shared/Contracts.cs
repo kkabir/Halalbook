@@ -54,7 +54,8 @@ public record ProfileDto(
     UserSummaryDto User, string? Bio, string? CoverUrl, string? Location, string? Website, DateTime JoinedAt,
     int FriendCount, int FollowerCount, int FollowingCount, int PostCount,
     FriendshipStatus Friendship, bool IsFollowing, bool IsBlocked, bool IsOnline = false, DateTime? LastSeenAt = null, bool CanPost = false,
-    bool CanMessage = true, bool CanAddFriend = true, bool CanSeeFriends = true, bool CanFollow = true, int MutualFriends = 0);
+    bool CanMessage = true, bool CanAddFriend = true, bool CanSeeFriends = true, bool CanFollow = true, int MutualFriends = 0,
+    Guid? PinnedPostId = null);
 
 public record UpdateProfileRequest(
     string? DisplayName, string? Bio, string? AvatarUrl, string? CoverUrl, string? Location, string? Website,
@@ -69,7 +70,8 @@ public record CreatePostRequest(
     string Content, Visibility Visibility = Visibility.Public, List<MediaDto>? Media = null,
     Guid? GroupId = null, Guid? PageId = null, Guid? SharedPostId = null, PostKind Kind = PostKind.Standard,
     string? Feeling = null, string? Location = null, Guid? TargetUserId = null,
-    List<Guid>? AudienceUserIds = null, List<Guid>? GroupIds = null, bool AlsoOnProfile = false, Guid? FriendListId = null);
+    List<Guid>? AudienceUserIds = null, List<Guid>? GroupIds = null, bool AlsoOnProfile = false, Guid? FriendListId = null,
+    string? LifeEvent = null, DateOnly? LifeEventDate = null);
 
 public record UpdatePostRequest(string Content, Visibility Visibility, List<Guid>? AudienceUserIds = null);
 
@@ -78,7 +80,8 @@ public record PostDto(
     List<MediaDto> Media, List<string> Hashtags, int CommentCount, int ShareCount,
     Dictionary<ReactionType, int> Reactions, ReactionType? MyReaction, bool IsBookmarked,
     ModerationStatus Moderation, string? Feeling, string? Location,
-    GroupSummaryDto? Group, PageSummaryDto? Page, PostDto? SharedPost, UserSummaryDto? TargetUser = null, List<UserSummaryDto>? Audience = null, string? FriendListName = null)
+    GroupSummaryDto? Group, PageSummaryDto? Page, PostDto? SharedPost, UserSummaryDto? TargetUser = null, List<UserSummaryDto>? Audience = null, string? FriendListName = null,
+    string? LifeEvent = null, DateOnly? LifeEventDate = null, bool IsPinned = false)
 {
     public int TotalReactions => Reactions.Values.Sum();
 }
@@ -208,3 +211,36 @@ public enum CallStatus { Ringing, Active, Ended, Missed, Declined }
 public record CallDto(Guid Id, Guid ConversationId, string Title, bool IsVideo, bool IsGroup, CallStatus Status, UserSummaryDto Caller,
     List<UserSummaryDto> Participants, DateTime CreatedAt, DateTime? AnsweredAt, DateTime? EndedAt);
 public record StartCallRequest(Guid ConversationId, bool Video);
+
+// ---------- Timeline ----------
+public record TimelineMediaDto(Guid PostId, string Url, MediaType Type, string? AltText, DateTime CreatedAt);
+public record LifeEventKind(string Key, string Icon, string Title, string Category);
+
+/// <summary>Life events, including Islamic milestones Facebook doesn't have.</summary>
+public static class LifeEvents
+{
+    public static readonly IReadOnlyList<LifeEventKind> All =
+    [
+        new("shahada", "☪️", "Took my Shahada", "Faith"),
+        new("hajj", "🕋", "Performed Hajj", "Faith"),
+        new("umrah", "🕋", "Performed Umrah", "Faith"),
+        new("hifz", "📖", "Completed memorizing the Quran", "Faith"),
+        new("surah", "📖", "Memorized a new surah", "Faith"),
+        new("khatm", "📗", "Completed reading the Quran", "Faith"),
+        new("first-ramadan", "🌙", "Fasted my first Ramadan", "Faith"),
+        new("arabic", "🔤", "Started learning Arabic", "Faith"),
+        new("nikah", "💍", "Got married (Nikah)", "Family"),
+        new("baby", "👶", "Welcomed a new baby", "Family"),
+        new("aqiqah", "🐑", "Held an Aqiqah", "Family"),
+        new("graduated", "🎓", "Graduated", "Education"),
+        new("new-job", "💼", "Started a new job", "Work"),
+        new("business", "🏪", "Started a halal business", "Work"),
+        new("moved", "🏠", "Moved to a new home", "Home"),
+        new("travel", "✈️", "Travelled somewhere new", "Travel"),
+        new("charity", "🤲", "Completed a charity project", "Community"),
+        new("volunteer", "🌱", "Started volunteering", "Community"),
+        new("other", "🌟", "Life event", "Other"),
+    ];
+
+    public static LifeEventKind? Find(string? key) => All.FirstOrDefault(e => e.Key == key);
+}

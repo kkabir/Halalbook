@@ -816,6 +816,12 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<int>("Kind")
                         .HasColumnType("int");
 
+                    b.Property<string>("LifeEvent")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateOnly?>("LifeEventDate")
+                        .HasColumnType("date");
+
                     b.Property<string>("Location")
                         .HasColumnType("nvarchar(max)");
 
@@ -1100,6 +1106,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("PinnedPostId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("PrayerMethod")
                         .IsRequired()

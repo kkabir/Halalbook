@@ -14,6 +14,18 @@
         </div>
         @if (digest is not null) { <div class="ai-summary mt">@digest</div> }
     </div>
+    @if (memories is { Count: > 0 })
+    {
+        <div class="card memories">
+            <div class="card-title">On this day</div>
+            @foreach (var m in memories.Take(1))
+            {
+                <div class="subtle">@(DateTime.UtcNow.Year - m.CreatedAt.Year) year@(DateTime.UtcNow.Year - m.CreatedAt.Year == 1 ? "" : "s") ago</div>
+                <PostCard Post="m" />
+            }
+            @if (memories.Count > 1) { <div class="subtle center">and @(memories.Count - 1) more memories from this day</div> }
+        </div>
+    }
     <Composer OnPosted="p => posts.Insert(0, p)" Placeholder="@($"What's on your heart, {FirstName}?")" />
 
     <div class="mt">
@@ -48,6 +60,8 @@
     private bool loading = true, hasMore;
 
     private string? digest;
+    private List<PostDto>? memories;
+    [Inject] private ClientClock Clock { get; set; } = default!;
     private bool digestBusy;
 
     private async Task CatchUp()
@@ -60,7 +74,11 @@
 
     private string FirstName => Session.User?.DisplayName.Split(' ')[0] ?? "friend";
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        try { memories = await Api.GetAsync<List<PostDto>>($"api/memories?offset={Clock.OffsetMinutes}"); } catch (Exception) { }
+    }
 
     private async Task Load()
     {
