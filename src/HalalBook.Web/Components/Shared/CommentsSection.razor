@@ -49,7 +49,10 @@
     }
     <div class="comment-input">
         <Avatar User="Me" Size="32" />
-        <input class="input" placeholder="@(replyTo is null ? T("Write a comment…") : $"{T("Reply to")} {replyTo.Author.DisplayName}…")" @bind="text" @bind:event="oninput" @onkeydown="OnKey" />
+        <div class="grow mention-host">
+            <input class="input" placeholder="@(replyTo is null ? T("Write a comment…") : $"{T("Reply to")} {replyTo.Author.DisplayName}…")" @bind="text" @bind:event="oninput" @onkeydown="OnKey" />
+            <MentionSuggest @bind-Text="text" />
+        </div>
         @if (replyTo is not null) { <button class="btn btn-ghost btn-sm" @onclick="() => replyTo = null">✕</button> }
         <label class="icon-btn" title="Add a photo (up to 2 MB)" style="width:34px;height:34px;font-size:.95rem">📷<InputFile OnChange="AttachPhoto" accept="image/*" style="display:none" /></label>
         <button class="btn btn-primary btn-sm" disabled="@((string.IsNullOrWhiteSpace(text) && photo is null) || sending || attaching)" @onclick="Send">@T("Send")</button>

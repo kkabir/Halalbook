@@ -1,0 +1,43 @@
+@inject ApiClient Api
+
+@* While someone types "@na…", suggests friends; picking one completes it as @username so they get notified. *@
+
+@if (Matches.Count > 0)
+{
+    <div class="mention-suggest">
+        @foreach (var f in Matches)
+        {
+            <button type="button" @onclick="() => Pick(f)"><Avatar User="f" Size="26" Link="false" ShowStatus="false" /> <b>@f.DisplayName</b> <small>@@@f.UserName</small></button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string? Text { get; set; }
+    [Parameter] public EventCallback<string> TextChanged { get; set; }
+
+    private static readonly System.Text.RegularExpressions.Regex Typing = new(@"(?:^|\s)@([\w.]{0,30})$");
+    private List<UserSummaryDto>? friends;
+
+    private string? Partial => Text is { } t && Typing.Match(t) is { Success: true } m ? m.Groups[1].Value : null;
+
+    private List<UserSummaryDto> Matches => Partial is not { } p || friends is null ? []
+        : friends.Where(f => p.Length == 0 || f.UserName.Contains(p, StringComparison.OrdinalIgnoreCase)
+            || f.DisplayName.Contains(p, StringComparison.OrdinalIgnoreCase)).Take(6).ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (friends is null && Partial is not null)
+        {
+            friends = [];
+            try { friends = await Api.GetAsync<List<UserSummaryDto>>("api/friends"); } catch (Exception) { }
+        }
+    }
+
+    private async Task Pick(UserSummaryDto f)
+    {
+        var t = Text ?? "";
+        var at = t.LastIndexOf('@');
+        await TextChanged.InvokeAsync(t[..at] + "@" + f.UserName + " ");
+    }
+}

@@ -1085,6 +1085,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<Guid?>("PageId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("PublishAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid?>("SharedPostId")
                         .HasColumnType("uniqueidentifier");
 

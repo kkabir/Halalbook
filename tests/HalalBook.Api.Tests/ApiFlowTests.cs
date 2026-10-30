@@ -865,4 +865,38 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         (await a.PutAsJsonAsync($"/api/market/{item.Id}/status", new ListingStatusRequest(ListingStatus.Sold), Json)).EnsureSuccessStatusCode();
         Assert.DoesNotContain((await b.GetFromJsonAsync<PagedResult<ListingDto>>("/api/market?q=abaya", Json))!.Items, l => l.Id == item.Id);
     }
+
+    [Fact]
+    public async Task ScheduledPosts_HiddenUntilPublished()
+    {
+        var (a, aId) = await SignUpWithId("schedA");
+        var (b, _) = await SignUpWithId("schedB");
+        var post = (await (await a.PostAsJsonAsync("/api/posts", new CreatePostRequest("Eid announcement", PublishAt: DateTime.UtcNow.AddHours(2)), Json))
+            .Content.ReadFromJsonAsync<PostDto>(Json))!;
+        Assert.NotNull(post.ScheduledFor);
+        Assert.Equal(HttpStatusCode.NotFound, (await b.GetAsync($"/api/posts/{post.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await a.GetAsync($"/api/posts/{post.Id}")).StatusCode);
+
+        // Time passes: move it into the past and let the publisher run.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HalalBook.Api.Data.AppDbContext>();
+            var p = (await db.Posts.FindAsync(post.Id))!;
+            p.PublishAt = DateTime.UtcNow.AddMinutes(-1);
+            await db.SaveChangesAsync();
+        }
+        Assert.True(await factory.Services.GetRequiredService<ScheduledPostPublisher>().PublishDueAsync(default) >= 1);
+        var seen = (await b.GetFromJsonAsync<PostDto>($"/api/posts/{post.Id}", Json))!;
+        Assert.Null(seen.ScheduledFor);
+    }
+
+    [Fact]
+    public async Task Trending_ListsLovedPosts()
+    {
+        var (a, _) = await SignUpWithId("trendA");
+        var (b, _) = await SignUpWithId("trendB");
+        var post = (await (await a.PostAsJsonAsync("/api/posts", new CreatePostRequest("Free halaqa this Friday #halaqa"), Json)).Content.ReadFromJsonAsync<PostDto>(Json))!;
+        await b.PutAsJsonAsync($"/api/posts/{post.Id}/reaction", new ReactRequest(ReactionType.Love), Json);
+        Assert.Contains((await b.GetFromJsonAsync<List<PostDto>>("/api/posts/trending", Json))!, p => p.Id == post.Id);
+    }
 }

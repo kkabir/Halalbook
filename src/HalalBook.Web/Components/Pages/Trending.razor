@@ -1,0 +1,43 @@
+@page "/trending"
+@inject ApiClient Api
+@inject Toasts Toasts
+
+<PageTitle>@T("Trending") · HalalBook</PageTitle>
+
+<div class="feed-column">
+    <div class="page-hero">
+        <h1>🔥 @T("Trending this week")</h1>
+        <p>@T("What people are talking about, and the posts they loved most.")</p>
+    </div>
+
+    @if (tags is { Count: > 0 })
+    {
+        <div class="card trending-tags">
+            @for (var i = 0; i < tags.Count; i++)
+            {
+                var t = tags[i];
+                <a href="/hashtag/@t.Tag" class="trend-tag"><span class="trend-rank">@(i + 1)</span><b>#@t.Tag</b><small>@t.PostCount @T(t.PostCount == 1 ? "post" : "posts")</small></a>
+            }
+        </div>
+    }
+
+    <h2 class="mt">❤️ @T("Most loved")</h2>
+    @if (posts is null) { <div class="spinner"></div> }
+    else if (posts.Count == 0) { <div class="card"><Empty Title="Nothing trending yet" Text="Posts with the most reactions and comments this week will show here." /></div> }
+    else { @foreach (var p in posts) { <PostCard @key="p.Id" Post="p" /> } }
+</div>
+
+@code {
+    private List<HashtagDto>? tags;
+    private List<PostDto>? posts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            tags = await Api.GetAsync<List<HashtagDto>>("api/hashtags/trending");
+            posts = await Api.GetAsync<List<PostDto>>("api/posts/trending");
+        }
+        catch (Exception ex) { Toasts.Error(ex); posts ??= []; }
+    }
+}

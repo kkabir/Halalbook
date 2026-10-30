@@ -1,4 +1,5 @@
 @inject ApiClient Api
+@inject ClientClock Clock
 @inject AuthSession Session
 @inject Toasts Toasts
 @inject NavigationManager Nav
@@ -6,6 +7,7 @@
 @if (!deleted)
 {
     <article class="card post @(Post.Kind == PostKind.Dua ? "dua-post" : "")">
+        @if (Post.ScheduledFor is DateTime sch) { <div class="scheduled-banner">⏰ @T("Scheduled for") @Clock.Local(sch).ToString("ddd d MMM, h:mm tt") · @T("only you can see it until then")</div> }
         @if (Post.Kind == PostKind.Dua) { <div class="dua-banner">🤲 @T("Dua request") · <span>@T("Please remember them in your prayers")</span></div> }
         <header class="post-head">
             @if (Post.Page is { } pageInfo)

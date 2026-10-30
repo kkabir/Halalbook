@@ -1,13 +1,17 @@
+@implements IDisposable
 @inject ApiClient Api
 @inject AuthSession Session
 @inject Toasts Toasts
 @inject MediaGuard Guard
+@inject ClientClock Clock
+@inject IJSRuntime JS
 
 <div class="card composer">
     <div class="row" style="align-items:flex-start">
         <Avatar User="Me" Size="44" />
         <div class="grow">
             <textarea placeholder="@T(Placeholder)" @bind="text" @bind:event="oninput" rows="@(string.IsNullOrEmpty(text) ? 2 : 4)"></textarea>
+            <MentionSuggest @bind-Text="text" />
         </div>
     </div>
 
@@ -133,9 +137,25 @@
             {
                 <button class="btn btn-outline btn-sm audience-btn" @onclick="() => picking = true" title="Choose audience">@AudienceLabel ▾</button>
             }
-            <button class="btn btn-primary" disabled="@(!CanPost)" @onclick="Submit">@(posting ? T("Posting…") : T("Post"))</button>
+            @if (!ReelMode && PageId is null)
+            {
+                <button class="btn btn-ghost btn-sm @(scheduleAt is not null ? "on" : "")" title="@T("Schedule for later")" @onclick="ToggleSchedule">⏰</button>
+            }
+            <button class="btn btn-primary" disabled="@(!CanPost)" @onclick="Submit">@(posting ? T("Posting…") : scheduleAt is not null ? T("Schedule") : T("Post"))</button>
         </div>
     </div>
+    @if (scheduleAt is not null)
+    {
+        <div class="schedule-row">
+            <span>⏰ @T("Publish on")</span>
+            <input class="input" type="datetime-local" value="@scheduleAt.Value.ToString("yyyy-MM-ddTHH:mm")" min="@Clock.Now.AddMinutes(5).ToString("yyyy-MM-ddTHH:mm")"
+                   @onchange="e => { if (DateTime.TryParse(e.Value?.ToString(), out var d)) scheduleAt = d; }" />
+        </div>
+    }
+    @if (draftRestored)
+    {
+        <div class="subtle draft-note">📝 @T("Your unfinished post was restored.") <a href="javascript:void(0)" @onclick="DiscardDraft">@T("Discard")</a></div>
+    }
 </div>
 
 @if (pickingEvent)
@@ -201,6 +221,50 @@
     }
     private bool uploading, posting, aiBusy, showExtras, asReel;
     private List<string>? pollOptions;
+    /// <summary>Local date and time to publish at, or null to post now.</summary>
+    private DateTime? scheduleAt;
+    private bool draftRestored;
+    private string? lastSavedDraft;
+    private System.Threading.Timer? draftTimer;
+
+    /// <summary>Drafts are kept per place (home, a group, a page, someone's profile) on this device.</summary>
+    private string DraftKey => $"hb.draft.{GroupId?.ToString() ?? PageId?.ToString() ?? TargetUserId?.ToString() ?? (ReelMode ? "reel" : "home")}";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Clock.LoadAsync();
+        try
+        {
+            var saved = await JS.InvokeAsync<string?>("localStorage.getItem", DraftKey);
+            if (!string.IsNullOrWhiteSpace(saved) && string.IsNullOrEmpty(text)) { text = lastSavedDraft = saved; draftRestored = true; StateHasChanged(); }
+        }
+        catch (JSException) { }
+        // Save what's being written every few seconds, so leaving the page doesn't lose it.
+        draftTimer = new System.Threading.Timer(_ => InvokeAsync(SaveDraft), null, 3000, 3000);
+    }
+
+    private async Task SaveDraft()
+    {
+        if (text == lastSavedDraft) return;
+        lastSavedDraft = text;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(text)) await JS.InvokeVoidAsync("localStorage.removeItem", DraftKey);
+            else await JS.InvokeVoidAsync("localStorage.setItem", DraftKey, text);
+        }
+        catch (Exception) { }
+    }
+
+    private async Task DiscardDraft()
+    {
+        text = null; draftRestored = false;
+        await SaveDraft();
+    }
+
+    private void ToggleSchedule() => scheduleAt = scheduleAt is null ? Clock.Now.Date.AddDays(1).AddHours(9) : null;
+
+    public void Dispose() => draftTimer?.Dispose();
     private int uploadIndex, uploadTotal;
     private InputFile? fileInput;
 
@@ -261,7 +325,10 @@
                 new CreatePostRequest(text ?? "", audience.Visibility, media.ToList(), GroupId, PageId, null, kind, feeling, location, TargetUserId,
                     audience.People, audience.GroupIds.Count > 0 ? audience.GroupIds : null, audience.OnProfile, audience.ListId,
                     lifeEvent?.Key, lifeEvent is null ? null : lifeEventDate, forUmmah,
-                    pollOptions?.Where(o => !string.IsNullOrWhiteSpace(o)).ToList()));
+                    pollOptions?.Where(o => !string.IsNullOrWhiteSpace(o)).ToList(),
+                    scheduleAt is DateTime local ? Clock.ToUtc(local) : null));
+            var scheduled = scheduleAt;
+            scheduleAt = null; draftRestored = false;
             var postedTo = audience.GroupIds.Count;
             text = feeling = location = moderationNote = null;
             lifeEvent = null;
@@ -270,7 +337,9 @@
             asDua = false;
             audience = audience with { GroupIds = [], GroupNames = [], OnProfile = true };
             media.Clear(); suggestedTags = []; showExtras = asReel = false; pollOptions = null;
-            Toasts.Show(post.Moderation == ModerationStatus.PendingReview ? "Posted. A moderator will review it shortly."
+            await SaveDraft();
+            Toasts.Show(scheduled is DateTime when ? $"{T("Scheduled for")} {when:ddd d MMM, h:mm tt} ⏰"
+                : post.Moderation == ModerationStatus.PendingReview ? "Posted. A moderator will review it shortly."
                 : postedTo > 0 ? $"Posted{(audience.OnProfile ? " to your profile and" : " to")} {postedTo} group{(postedTo == 1 ? "" : "s")}, alhamdulillah!"
                 : "Posted, alhamdulillah!");
             await OnPosted.InvokeAsync(post);

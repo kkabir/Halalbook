@@ -87,7 +87,8 @@ public record CreatePostRequest(
     Guid? GroupId = null, Guid? PageId = null, Guid? SharedPostId = null, PostKind Kind = PostKind.Standard,
     string? Feeling = null, string? Location = null, Guid? TargetUserId = null,
     List<Guid>? AudienceUserIds = null, List<Guid>? GroupIds = null, bool AlsoOnProfile = false, Guid? FriendListId = null,
-    string? LifeEvent = null, DateOnly? LifeEventDate = null, bool TranslateForUmmah = false, List<string>? PollOptions = null);
+    string? LifeEvent = null, DateOnly? LifeEventDate = null, bool TranslateForUmmah = false, List<string>? PollOptions = null,
+    DateTime? PublishAt = null);
 /// <summary>A poll on a post: the post text is the question.</summary>
 public record PollDto(List<PollOptionDto> Options, Guid? MyVote, int TotalVotes);
 public record PollOptionDto(Guid Id, string Text, int Votes);
@@ -102,7 +103,8 @@ public record PostDto(
     ModerationStatus Moderation, string? Feeling, string? Location,
     GroupSummaryDto? Group, PageSummaryDto? Page, PostDto? SharedPost, UserSummaryDto? TargetUser = null, List<UserSummaryDto>? Audience = null, string? FriendListName = null,
     string? LifeEvent = null, DateOnly? LifeEventDate = null, bool IsPinned = false,
-    string? OriginalLanguage = null, string? TranslatedContent = null, string? TranslatedTo = null, int ViewCount = 0, PollDto? Poll = null)
+    string? OriginalLanguage = null, string? TranslatedContent = null, string? TranslatedTo = null, int ViewCount = 0, PollDto? Poll = null,
+    DateTime? ScheduledFor = null)
 {
     public int TotalReactions => Reactions.Values.Sum();
 }

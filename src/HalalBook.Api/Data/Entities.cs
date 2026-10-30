@@ -216,6 +216,8 @@ public class Post
     public string? ModerationNote { get; set; }
     /// <summary>How many times the video has been watched (reels and short videos).</summary>
     public int ViewCount { get; set; }
+    /// <summary>Scheduled posts stay hidden (except from their author) until this time (UTC), then appear as new.</summary>
+    public DateTime? PublishAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? EditedAt { get; set; }
     public bool IsDeleted { get; set; }

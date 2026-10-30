@@ -53,6 +53,8 @@ builder.Services.AddSingleton<VapidKeys>();
 builder.Services.AddSingleton<PushQueue>();
 builder.Services.AddHostedService<PushWorker>();
 builder.Services.AddHostedService<IndexNowWorker>();
+builder.Services.AddSingleton<ScheduledPostPublisher>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ScheduledPostPublisher>());
 builder.Services.AddHttpClient<AiService>(c => c.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddSingleton(config.GetSection("Email").Get<EmailOptions>() ?? new EmailOptions());
 builder.Services.AddSingleton(config.GetSection("Auth").Get<AuthOptions>() ?? new AuthOptions());

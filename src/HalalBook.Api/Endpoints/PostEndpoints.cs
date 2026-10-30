@@ -209,6 +209,8 @@ public static class PostEndpoints
                 LifeEventDate = groupId is null && LifeEvents.Find(req.LifeEvent) is not null ? req.LifeEventDate ?? DateOnly.FromDateTime(DateTime.UtcNow) : null,
                 Moderation = moderation.NeedsReview ? ModerationStatus.PendingReview : ModerationStatus.Approved,
                 ModerationNote = moderation.NeedsReview ? string.Join(" ", moderation.Reasons) : null,
+                PublishAt = req.PublishAt is DateTime when && when > DateTime.UtcNow.AddMinutes(1) && when < DateTime.UtcNow.AddDays(366)
+                    ? DateTime.SpecifyKind(when, DateTimeKind.Utc) : null,
                 Media = (req.Media ?? []).Take(10).Select((m, i) => new PostMedia
                 {
                     Url = m.Url, Type = m.Type, SortOrder = i,
@@ -234,7 +236,7 @@ public static class PostEndpoints
             await db.SaveChangesAsync();
 
             var meUser = (await db.Users.FindAsync(me))!;
-            foreach (var name in PostService.ExtractMentions(content))
+            foreach (var name in post.PublishAt is null ? PostService.ExtractMentions(content) : [])
             {
                 var key = name.ToUpperInvariant();
                 if (await db.Users.FirstOrDefaultAsync(u => u.NormalizedUserName == key) is { } mentioned)
@@ -247,8 +249,8 @@ public static class PostEndpoints
 
             // "Reach the whole Ummah": translate into the main languages in the background.
             if (req.TranslateForUmmah && content.Length > 0) foreach (var p in created) translations.Enqueue(p.Id);
-            // Public posts are announced to search engines.
-            foreach (var p in created.Where(p => p.Visibility == Visibility.Public && p.Moderation == ModerationStatus.Approved && p.GroupId is null))
+            // Public posts are announced to search engines (scheduled ones when they go out).
+            foreach (var p in created.Where(p => p.PublishAt is null && p.Visibility == Visibility.Public && p.Moderation == ModerationStatus.Approved && p.GroupId is null))
                 indexNow.Enqueue($"/p/{p.Id}");
             var dto = (await svc.BuildAsync(db.Posts.Where(p => p.Id == post.Id), me))[0];
             return Results.Created($"/api/posts/{post.Id}", dto);
@@ -367,6 +369,12 @@ public static class PostEndpoints
             await notifier.SendAsync(post.AuthorId, me, NotificationType.Comment, $"{meUser.DisplayName} commented: \"{Short(content)}\"", $"/post/{id}");
             if (req.ParentId is Guid pid && await db.Comments.FindAsync(pid) is { } parent && parent.AuthorId != post.AuthorId)
                 await notifier.SendAsync(parent.AuthorId, me, NotificationType.Comment, $"{meUser.DisplayName} replied to your comment.", $"/post/{id}");
+            foreach (var name in PostService.ExtractMentions(content))
+            {
+                var key = name.ToUpperInvariant();
+                if (await db.Users.FirstOrDefaultAsync(u => u.NormalizedUserName == key) is { } mentioned && mentioned.Id != post.AuthorId)
+                    await notifier.SendAsync(mentioned.Id, me, NotificationType.Mention, $"{meUser.DisplayName} mentioned you in a comment.", $"/post/{id}");
+            }
             return Results.Ok(new CommentDto(comment.Id, id, comment.ParentId, meUser.ToSummary(), content, comment.CreatedAt, 0, false, [], media));
         });
 
@@ -447,13 +455,33 @@ public static class PostEndpoints
         }).WithTags("Posts").RequireAuthorization();
 
         // ---- Hashtags ----
+        // The week's most-loved posts the reader can see: reactions, plus comments and shares counted double.
+        app.MapGet("/api/posts/trending", async (ClaimsPrincipal cp, AppDbContext db, PostService svc) =>
+        {
+            var me = cp.UserId();
+            var since = DateTime.UtcNow.AddDays(-7);
+            var top = await (await svc.VisibleToAsync(me))
+                .Where(p => p.CreatedAt > since && p.PublishAt == null && p.Kind != PostKind.Reel)
+                .Select(p => new
+                {
+                    p.Id,
+                    Score = db.Reactions.Count(r => r.PostId == p.Id)
+                        + 2 * db.Comments.Count(c => c.PostId == p.Id && !c.IsDeleted)
+                        + 2 * db.Posts.Count(s => s.SharedPostId == p.Id && !s.IsDeleted),
+                })
+                .Where(x => x.Score > 0).OrderByDescending(x => x.Score).Take(20).ToListAsync();
+            var ids = top.Select(t => t.Id).ToList();
+            var posts = await svc.BuildAsync(db.Posts.Where(p => ids.Contains(p.Id)), me);
+            return ids.Select(id => posts.First(p => p.Id == id)).ToList();
+        }).WithTags("Posts").RequireAuthorization();
+
         app.MapGet("/api/hashtags/trending", async (AppDbContext db) =>
         {
             var since = DateTime.UtcNow.AddDays(-7);
             var counts = await (from ph in db.PostHashtags
                                 join p in db.Posts on ph.PostId equals p.Id
                                 join h in db.Hashtags on ph.HashtagId equals h.Id
-                                where p.CreatedAt > since && !p.IsDeleted && p.Moderation == ModerationStatus.Approved
+                                where p.CreatedAt > since && !p.IsDeleted && p.PublishAt == null && p.Moderation == ModerationStatus.Approved
                                 group h by h.Tag into g
                                 select new { Tag = g.Key, Count = g.Count() })
                 .OrderByDescending(x => x.Count).Take(10).ToListAsync();

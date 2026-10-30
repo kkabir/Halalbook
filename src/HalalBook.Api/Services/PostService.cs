@@ -25,6 +25,7 @@ public partial class PostService(AppDbContext db)
         var privateGroups = await db.Groups.Where(g => g.Privacy == GroupPrivacy.Private).Select(g => g.Id).ToListAsync();
 
         return db.Posts.Where(p => !p.IsDeleted
+            && (p.PublishAt == null || p.AuthorId == me)
             && !blocked.Contains(p.AuthorId)
             && (p.Moderation == ModerationStatus.Approved || p.AuthorId == me || (isModerator && p.Moderation != ModerationStatus.Removed))
             && (p.AuthorId == me || p.Visibility == Visibility.Public
@@ -49,7 +50,7 @@ public partial class PostService(AppDbContext db)
         var since = DateTime.UtcNow.AddDays(-30);
 
         var candidates = await visible
-            .Where(p => p.Kind == PostKind.Standard && p.CreatedAt > since)
+            .Where(p => p.Kind != PostKind.Reel && p.CreatedAt > since)
             .Select(p => new
             {
                 p.Id, p.AuthorId, p.CreatedAt, p.GroupId, p.PageId,
@@ -162,7 +163,7 @@ public partial class PostService(AppDbContext db)
             mineCustom.Contains(p.Id) ? audiences.Where(a => a.PostId == p.Id).Select(a => a.User.ToSummary()).ToList() : null,
             p.FriendListId is Guid fl && p.AuthorId == me ? listNames.GetValueOrDefault(fl) : null,
             p.LifeEvent, p.LifeEventDate, pinned.Contains(p.Id),
-            p.Language, Translated(p), Translated(p) is null ? null : reader!.Language, p.ViewCount, polls.GetValueOrDefault(p.Id))).ToList();
+            p.Language, Translated(p), Translated(p) is null ? null : reader!.Language, p.ViewCount, polls.GetValueOrDefault(p.Id), p.PublishAt)).ToList();
     }
 
     /// <summary>Polls on these posts with their counts and this reader's vote.</summary>
