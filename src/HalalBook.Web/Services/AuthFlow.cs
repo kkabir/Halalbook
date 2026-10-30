@@ -11,7 +11,9 @@ public static class AuthFlow
         if (result.Step == AuthStep.Done && result.Auth is { } auth)
         {
             await session.SignInAsync(auth);
-            nav.NavigateTo(SafeReturn(returnUrl));
+            var target = SafeReturn(returnUrl);
+            // Shared post pages are server-rendered only and need a full page load.
+            nav.NavigateTo(target, forceLoad: target.StartsWith("/p/"));
             return;
         }
         var query = $"?email={Uri.EscapeDataString(result.Email ?? "")}&step={result.Step}&msg={Uri.EscapeDataString(result.Message ?? "")}";
@@ -19,5 +21,10 @@ public static class AuthFlow
         nav.NavigateTo("/verify" + query);
     }
 
-    public static string SafeReturn(string? r) => r is { Length: > 1 } && r.StartsWith('/') && !r.StartsWith("//") ? r : "/";
+    /// <summary>A local path to go back to after signing in; the sign-in and welcome pages themselves lead home.</summary>
+    public static string SafeReturn(string? r) =>
+        r is { Length: > 1 } && r.StartsWith('/') && !r.StartsWith("//") && !IsEntryPage(r) ? r : "/";
+
+    private static bool IsEntryPage(string path) =>
+        new[] { "/welcome", "/login", "/register", "/verify" }.Any(p => path.Split('?', '#')[0].Equals(p, StringComparison.OrdinalIgnoreCase));
 }

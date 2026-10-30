@@ -173,7 +173,9 @@ else
         if (!Session.IsAuthenticated)
         {
             // Newcomers on the front page meet the welcome page; deep links go to sign in and come back.
-            Nav.NavigateTo(Path == "" ? "/welcome" : $"/login?returnUrl={Uri.EscapeDataString("/" + Path)}");
+            // The welcome page is server-rendered only, so it needs a full page load.
+            if (Path == "") Nav.NavigateTo("/welcome", forceLoad: true);
+            else Nav.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/" + Path)}");
             return;
         }
         await Clock.LoadAsync();
