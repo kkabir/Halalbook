@@ -970,6 +970,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<string>("Translations")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("ViewCount")
+                        .HasColumnType("int");
+
                     b.Property<int>("Visibility")
                         .HasColumnType("int");
 

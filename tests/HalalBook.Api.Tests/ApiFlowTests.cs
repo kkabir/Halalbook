@@ -745,4 +745,24 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var notes = await a.GetStringAsync("/api/notifications");
         Assert.Contains("made dua for you", notes);
     }
+
+    [Fact]
+    public async Task Reels_ViewsFollowingAndStart()
+    {
+        var (a, aId) = await SignUpWithId("reelA");
+        var (b, bId) = await SignUpWithId("reelB");
+        var post = (await (await a.PostAsJsonAsync("/api/posts", new CreatePostRequest("Short reminder", Visibility.Public,
+            [new MediaDto("https://example.test/uploads/x.mp4", MediaType.Video)], Kind: PostKind.Reel), Json)).Content.ReadFromJsonAsync<PostDto>(Json))!;
+
+        await b.PostAsync($"/api/posts/{post.Id}/view", null);
+        await b.PostAsync($"/api/posts/{post.Id}/view", null); // the same person on the same day counts once
+        var started = (await b.GetFromJsonAsync<PagedResult<PostDto>>($"/api/reels?start={post.Id}", Json))!;
+        Assert.Equal(post.Id, started.Items[0].Id);
+        Assert.Equal(1, started.Items[0].ViewCount);
+
+        Assert.DoesNotContain((await b.GetFromJsonAsync<PagedResult<PostDto>>("/api/reels?following=true", Json))!.Items, p => p.Id == post.Id);
+        await b.PostAsync($"/api/users/{aId}/follow", null);
+        Assert.Contains((await b.GetFromJsonAsync<PagedResult<PostDto>>("/api/reels?following=true", Json))!.Items, p => p.Id == post.Id);
+        Assert.Contains((await b.GetFromJsonAsync<List<PostDto>>("/api/short-videos", Json))!, p => p.Id == post.Id);
+    }
 }

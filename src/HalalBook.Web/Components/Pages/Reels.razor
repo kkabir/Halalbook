@@ -3,36 +3,45 @@
 @inject Toasts Toasts
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@implements IDisposable
 
 <PageTitle>Reels · HalalBook</PageTitle>
 
 <div class="feed-column reels-page">
+    <div class="reel-tabs">
+        <button class="@(!following ? "on" : "")" @onclick="() => SwitchTab(false)">@T("For you")</button>
+        <button class="@(following ? "on" : "")" @onclick="() => SwitchTab(true)">@T("Following")</button>
+    </div>
     <div class="reel-create row">
-        <button class="btn btn-ghost btn-sm" @onclick="ToggleMute">@(muted ? "🔇 Sound off" : "🔊 Sound on")</button>
-        <button class="btn btn-gold btn-sm" @onclick="() => creating = true">🎬 Create reel</button>
+        <button class="btn btn-ghost btn-sm" @onclick="ToggleMute">@(muted ? "🔇" : "🔊")</button>
+        <button class="btn btn-gold btn-sm" @onclick="() => creating = true">🎬 @T("Create")</button>
     </div>
 
     @if (loading) { <div class="spinner"></div> }
     else if (reels.Count == 0)
     {
-        <div class="card mt"><Empty Title="No reels yet" Text="Short, beneficial vertical videos live here. Be the first to share one!"><button class="btn btn-primary" @onclick="() => creating = true">🎬 Create a reel</button></Empty></div>
+        <div class="card mt"><Empty Title="@(following ? "No reels from people you follow yet" : "No reels yet")" Text="Short, beneficial vertical videos live here. Be the first to share one!"><button class="btn btn-primary" @onclick="() => creating = true">🎬 Create a reel</button></Empty></div>
     }
     else
     {
         <div class="reels" @ref="container">
             @foreach (var r in reels)
             {
-                <div class="reel" @key="r.Id">
-                    <video src="@r.Media[0].Url" loop playsinline muted preload="metadata" @onclick="() => TogglePlay(r.Id)" @ref="videoRefs[r.Id]"></video>
+                <div class="reel" @key="r.Id" data-id="@r.Id">
+                    <video src="@r.Media[0].Url" loop playsinline muted preload="metadata" @ref="videoRefs[r.Id]"></video>
+                    <div class="reel-tap" @ondblclick="() => DoubleTapLike(r)" @onclick="() => TogglePlay(r.Id)"></div>
+                    @if (heartFor == r.Id) { <div class="reel-heart">❤️</div> }
+                    <div class="reel-progress"><i></i></div>
                     <div class="reel-side">
-                        <div><button class="@(r.MyReaction is not null ? "on" : "")" @onclick="() => React(r)" title="MashaAllah">✨</button><small>@r.TotalReactions</small></div>
+                        <div><button class="@(r.MyReaction is not null ? "on" : "")" @onclick="() => React(r)" title="MashaAllah">✨</button><small>@Ui.Compact(r.TotalReactions)</small></div>
                         <div><a href="/post/@r.Id" title="Comments">💬</a><small>@r.CommentCount</small></div>
                         <div><button class="@(r.IsBookmarked ? "on" : "")" @onclick="() => Save(r)" title="Save">🔖</button></div>
                         <div><button @onclick="() => Copy(r)" title="Share">↗</button><small>@r.ShareCount</small></div>
                     </div>
                     <div class="info">
                         <div class="row"><Avatar User="r.Author" Size="38" Ring="true" /><a href="/u/@r.Author.UserName" style="color:#fff;font-weight:700">@r.Author.DisplayName</a></div>
-                        @if (!string.IsNullOrWhiteSpace(r.Content)) { <p style="margin:.5rem 0 0">@r.Content</p> }
+                        @if (!string.IsNullOrWhiteSpace(r.Content)) { <p style="margin:.5rem 0 0">@(r.TranslatedContent ?? r.Content)</p> }
+                        <small class="reel-views">▶ @Ui.Compact(r.ViewCount) @T("views")</small>
                     </div>
                 </div>
             }
@@ -57,20 +66,57 @@
     private readonly Dictionary<Guid, ElementReference> videoRefs = [];
     private ElementReference container;
     private int page = 1;
-    private bool loading = true, hasMore, creating, muted = true, observe;
+    private bool loading = true, hasMore, creating, muted = true, observe, following;
+    private Guid? heartFor;
+    private DotNetObjectReference<Reels>? self;
 
-    protected override async Task OnInitializedAsync() => await Load();
+    [SupplyParameterFromQuery] public Guid? Start { get; set; }
+    [SupplyParameterFromQuery(Name = "create")] public int? Create { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        creating = Create == 1;
+        await Load();
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (observe && reels.Count > 0) { observe = false; await JS.InvokeVoidAsync("halalbook.observeReels", container); }
+        if (observe && reels.Count > 0)
+        {
+            observe = false;
+            self ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("halalbook.observeReels", container, self);
+        }
+    }
+
+    /// <summary>Called from the browser once a reel has played for a couple of seconds.</summary>
+    [JSInvokable]
+    public async Task Watched(string id)
+    {
+        if (Guid.TryParse(id, out var g)) { try { await Api.PostAsync($"api/posts/{g}/view"); } catch (Exception) { } }
+    }
+
+    private async Task SwitchTab(bool f)
+    {
+        if (following == f) return;
+        following = f; page = 1; reels.Clear(); loading = true;
+        await Load();
+    }
+
+    private async Task DoubleTapLike(PostDto r)
+    {
+        heartFor = r.Id;
+        if (r.MyReaction is null) await React(r);
+        StateHasChanged();
+        await Task.Delay(800);
+        heartFor = null;
     }
 
     private async Task Load()
     {
         try
         {
-            var res = await Api.GetAsync<PagedResult<PostDto>>($"api/reels?page={page}");
+            var res = await Api.GetAsync<PagedResult<PostDto>>($"api/reels?page={page}&following={following.ToString().ToLowerInvariant()}{(Start is Guid s && page == 1 ? $"&start={s}" : "")}");
             reels.AddRange(res.Items.Where(r => r.Media.Count > 0 && reels.All(x => x.Id != r.Id)));
             hasMore = res.HasMore;
             observe = true;
@@ -133,4 +179,6 @@
         creating = false;
         if (p.Kind == PostKind.Reel) { reels.Insert(0, p); observe = true; }
     }
+
+    public void Dispose() => self?.Dispose();
 }

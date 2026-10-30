@@ -161,7 +161,7 @@ public partial class PostService(AppDbContext db)
             mineCustom.Contains(p.Id) ? audiences.Where(a => a.PostId == p.Id).Select(a => a.User.ToSummary()).ToList() : null,
             p.FriendListId is Guid fl && p.AuthorId == me ? listNames.GetValueOrDefault(fl) : null,
             p.LifeEvent, p.LifeEventDate, pinned.Contains(p.Id),
-            p.Language, Translated(p), Translated(p) is null ? null : reader!.Language)).ToList();
+            p.Language, Translated(p), Translated(p) is null ? null : reader!.Language, p.ViewCount)).ToList();
     }
 
     /// <summary>Replaces a post's hashtags with the ones found in its text.</summary>

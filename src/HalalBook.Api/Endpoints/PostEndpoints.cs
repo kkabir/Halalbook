@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using System.Security.Claims;
 using HalalBook.Api.Data;
 using HalalBook.Api.Services;
@@ -36,10 +37,47 @@ public static class PostEndpoints
         }).WithTags("Posts").RequireAuthorization();
 
         // Short vertical videos.
-        app.MapGet("/api/reels", async (int? page, ClaimsPrincipal cp, PostService svc) =>
+        // following=true: only from friends and people I follow. start: open the player at this reel first.
+        app.MapGet("/api/reels", async (int? page, bool? following, Guid? start, ClaimsPrincipal cp, AppDbContext db, PostService svc) =>
         {
-            var visible = await svc.VisibleToAsync(cp.UserId());
-            return await svc.PageAsync(visible.Where(p => p.Kind == PostKind.Reel), cp.UserId(), Math.Max(1, page ?? 1), 5);
+            var me = cp.UserId();
+            var visible = (await svc.VisibleToAsync(me)).Where(p => p.Kind == PostKind.Reel);
+            if (following == true)
+            {
+                var friends = db.Friendships.Where(f => f.Accepted && (f.RequesterId == me || f.AddresseeId == me))
+                    .Select(f => f.RequesterId == me ? f.AddresseeId : f.RequesterId);
+                var follows = db.Follows.Where(f => f.FollowerId == me).Select(f => f.FolloweeId);
+                visible = visible.Where(p => friends.Contains(p.AuthorId) || follows.Contains(p.AuthorId));
+            }
+            var result = await svc.PageAsync(visible, me, Math.Max(1, page ?? 1), 5);
+            if (start is Guid s && (page ?? 1) == 1 && result.Items.All(p => p.Id != s))
+            {
+                var first = await svc.BuildAsync(visible.Where(p => p.Id == s), me);
+                if (first.Count == 1) result = result with { Items = [first[0], .. result.Items] };
+            }
+            else if (start is Guid s2 && (page ?? 1) == 1)
+                result = result with { Items = [.. result.Items.Where(p => p.Id == s2), .. result.Items.Where(p => p.Id != s2)] };
+            return result;
+        }).WithTags("Posts").RequireAuthorization();
+
+        // Short videos for the home feed's carousel: the newest reels and video posts from the last 30 days.
+        app.MapGet("/api/short-videos", async (ClaimsPrincipal cp, PostService svc) =>
+        {
+            var me = cp.UserId();
+            var since = DateTime.UtcNow.AddDays(-30);
+            var visible = (await svc.VisibleToAsync(me))
+                .Where(p => p.CreatedAt > since && (p.Kind == PostKind.Reel || p.Media.Any(m => m.Type == MediaType.Video)));
+            return (await svc.PageAsync(visible, me, 1, 12)).Items;
+        }).WithTags("Posts").RequireAuthorization();
+
+        // Counts a watch once per person per video per day.
+        app.MapPost("/api/posts/{id:guid}/view", async (Guid id, ClaimsPrincipal cp, AppDbContext db, IMemoryCache seen) =>
+        {
+            var key = $"view:{cp.UserId()}:{id}";
+            if (seen.TryGetValue(key, out _)) return Results.NoContent();
+            seen.Set(key, true, TimeSpan.FromHours(24));
+            await db.Posts.Where(p => p.Id == id).ExecuteUpdateAsync(s => s.SetProperty(p => p.ViewCount, p => p.ViewCount + 1));
+            return Results.NoContent();
         }).WithTags("Posts").RequireAuthorization();
 
         // The dua wall: requests for prayers from friends and the wider community, newest first.

@@ -88,7 +88,7 @@ public record PostDto(
     ModerationStatus Moderation, string? Feeling, string? Location,
     GroupSummaryDto? Group, PageSummaryDto? Page, PostDto? SharedPost, UserSummaryDto? TargetUser = null, List<UserSummaryDto>? Audience = null, string? FriendListName = null,
     string? LifeEvent = null, DateOnly? LifeEventDate = null, bool IsPinned = false,
-    string? OriginalLanguage = null, string? TranslatedContent = null, string? TranslatedTo = null)
+    string? OriginalLanguage = null, string? TranslatedContent = null, string? TranslatedTo = null, int ViewCount = 0)
 {
     public int TotalReactions => Reactions.Values.Sum();
 }

@@ -22,6 +22,14 @@ public class Toasts
 
 public static class Ui
 {
+    /// <summary>1234 → "1.2K", 2500000 → "2.5M".</summary>
+    public static string Compact(int n) => n switch
+    {
+        >= 1_000_000 => $"{n / 1_000_000.0:0.#}M",
+        >= 1_000 => $"{n / 1_000.0:0.#}K",
+        _ => n.ToString(),
+    };
+
     public static string TimeAgo(DateTime utc)
     {
         var span = DateTime.UtcNow - DateTime.SpecifyKind(utc, DateTimeKind.Utc);

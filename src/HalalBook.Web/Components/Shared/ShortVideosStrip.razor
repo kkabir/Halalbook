@@ -1,0 +1,49 @@
+@inject ApiClient Api
+@inject IJSRuntime JS
+
+@* Facebook-style "Reels and short videos" carousel: small vertical cards that preview silently, tap to watch full screen. *@
+
+@if (videos is { Count: > 0 })
+{
+    <div class="card shorts-card">
+        <div class="row spread shorts-head">
+            <b>🎬 @T("Reels and short videos")</b>
+            <a href="/reels">@T("See all")</a>
+        </div>
+        <div class="shorts-row" @ref="row">
+            <a class="short-tile create" href="/reels?create=1">
+                <span class="short-plus">＋</span>
+                <b>@T("Create reel")</b>
+            </a>
+            @foreach (var v in videos)
+            {
+                var media = v.Media.First(m => m.Type == MediaType.Video);
+                <a class="short-tile" href="@(v.Kind == PostKind.Reel ? $"/reels?start={v.Id}" : $"/post/{v.Id}")">
+                    <video src="@($"{media.Url}#t=0.5")" muted playsinline loop preload="metadata"></video>
+                    <span class="short-views">▶ @Ui.Compact(v.ViewCount)</span>
+                    <span class="short-author"><Avatar User="v.Author" Size="28" Link="false" ShowStatus="false" /></span>
+                    <span class="short-caption">@(string.IsNullOrWhiteSpace(v.Content) ? v.Author.DisplayName : v.Content)</span>
+                </a>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private List<PostDto>? videos;
+    private ElementReference row;
+    private bool wired;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { videos = (await Api.GetAsync<List<PostDto>>("api/short-videos")).Where(v => v.Media.Any(m => m.Type == MediaType.Video)).ToList(); }
+        catch (Exception) { videos = []; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (wired || videos is not { Count: > 0 }) return;
+        wired = true;
+        try { await JS.InvokeVoidAsync("halalbook.previewShorts", row); } catch (JSException) { }
+    }
+}

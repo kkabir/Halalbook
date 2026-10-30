@@ -32,9 +32,12 @@
     <Composer OnPosted="p => posts.Insert(0, p)" Placeholder="@($"{T("What's on your heart")}, {FirstName}?")" />
 
     <div class="mt">
-        @foreach (var p in posts)
+        @for (var i = 0; i < posts.Count; i++)
         {
+            var p = posts[i];
             <PostCard @key="p.Id" Post="p" OnShared="s => posts.Insert(0, s)" />
+            @* Like Facebook: a row of short videos after the first couple of posts. *@
+            @if (i == Math.Min(1, posts.Count - 1)) { <ShortVideosStrip /> }
         }
     </div>
 

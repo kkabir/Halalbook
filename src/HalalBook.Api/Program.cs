@@ -45,6 +45,7 @@ builder.Services.AddSingleton<MessageTranslationQueue>();
 builder.Services.AddHostedService<MessageTranslationWorker>();
 builder.Services.AddSingleton(config.GetSection("Seo").Get<SeoOptions>() ?? new SeoOptions());
 builder.Services.AddSingleton<IndexNowQueue>();
+builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<DailyAyahService>();
 builder.Services.AddSingleton<NisabService>();
 builder.Services.AddSingleton<NearbyPlacesService>();

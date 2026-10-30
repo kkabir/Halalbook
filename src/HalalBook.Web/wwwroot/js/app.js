@@ -36,6 +36,38 @@ window.halalbook = {
 
     copy: (text) => navigator.clipboard?.writeText(text),
 
+    // Short-video cards on the home page: preview silently while on screen (or while hovered on a computer).
+    previewShorts: (row) => {
+        if (!row) return;
+        const vids = [...row.querySelectorAll('video')];
+        const io = new IntersectionObserver((entries) => {
+            for (const e of entries) {
+                const v = e.target;
+                if (e.isIntersecting && e.intersectionRatio > 0.8 && matchMedia('(hover: none)').matches) v.play().catch(() => { });
+                else v.pause();
+            }
+        }, { root: row, threshold: [0, 0.8] });
+        vids.forEach((v) => {
+            io.observe(v);
+            v.closest('a')?.addEventListener('mouseenter', () => v.play().catch(() => { }));
+            v.closest('a')?.addEventListener('mouseleave', () => v.pause());
+        });
+    },
+    // ---------- Tasbeeh ----------
+    // Adds n counts and returns [today, all time, days in a row]; kept on this device only.
+    tasbeehStats: (n) => {
+        const day = new Date().toISOString().slice(0, 10);
+        let s;
+        try { s = JSON.parse(localStorage.getItem('hb.tasbeeh') || '{}'); } catch { s = {}; }
+        s.days = s.days || {};
+        s.days[day] = (s.days[day] || 0) + n;
+        s.total = (s.total || 0) + n;
+        try { localStorage.setItem('hb.tasbeeh', JSON.stringify(s)); } catch { }
+        let streak = 0;
+        for (let d = new Date(); s.days[d.toISOString().slice(0, 10)] > 0; d.setDate(d.getDate() - 1)) streak++;
+        return [s.days[day], s.total, streak];
+    },
+    buzz: (ms) => { try { navigator.vibrate?.(ms); } catch { } },
     // ---------- Nearby map (Leaflet + OpenStreetMap, loaded on first use) ----------
     placesMap: async (el, lat, lng, places) => {
         if (!window.L) {
@@ -155,7 +187,7 @@ window.halalbook = {
     },
 
     // TikTok-style reels: play the video that is on screen, pause the rest.
-    observeReels: (container) => {
+    observeReels: (container, dotnet) => {
         if (!container) return;
         container.__hbObserver?.disconnect();
         const io = new IntersectionObserver((entries) => {
@@ -165,7 +197,18 @@ window.halalbook = {
                 else v.pause();
             }
         }, { root: container, threshold: [0, 0.6, 1] });
-        container.querySelectorAll('video').forEach((v) => io.observe(v));
+        container.querySelectorAll('video').forEach((v) => {
+            io.observe(v);
+            if (v.__hbWired) return;
+            v.__hbWired = true;
+            const reel = v.closest('.reel');
+            const bar = reel?.querySelector('.reel-progress i');
+            // A view counts after 2 seconds of watching; the thin bar shows how far through the video you are.
+            v.addEventListener('timeupdate', () => {
+                if (bar && v.duration) bar.style.width = `${(v.currentTime / v.duration) * 100}%`;
+                if (!v.__hbCounted && v.currentTime > 2 && dotnet && reel?.dataset.id) { v.__hbCounted = true; dotnet.invokeMethodAsync('Watched', reel.dataset.id).catch(() => { }); }
+            });
+        });
         container.__hbObserver = io;
         // The observer can miss the first reel if layout settles late; start whichever is on screen.
         setTimeout(() => {

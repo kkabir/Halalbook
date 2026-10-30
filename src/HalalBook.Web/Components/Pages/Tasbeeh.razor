@@ -1,0 +1,102 @@
+@page "/tasbeeh"
+@inject IJSRuntime JS
+
+<PageTitle>@T("Tasbeeh") · HalalBook</PageTitle>
+
+@* A digital tasbeeh: tap anywhere on the ring, feel a gentle buzz, and the after-salah dhikr moves on by itself. *@
+
+<div class="feed-column tasbeeh-page">
+    <div class="tasbeeh-presets">
+        @foreach (var p in Presets)
+        {
+            <button class="chip @(preset == p ? "active" : "")" @onclick="() => Choose(p)">@p.Name</button>
+        }
+    </div>
+
+    <div class="card tasbeeh-card">
+        <div class="tasbeeh-arabic arabic" lang="ar" dir="rtl">@Current.Arabic</div>
+        <div class="tasbeeh-meaning">@Current.Latin · <span class="subtle">@T(Current.Meaning)</span></div>
+
+        <button class="tasbeeh-ring @(pulse ? "pulse" : "")" style="--p:@(Math.Min(100, count * 100 / Math.Max(1, Current.Target)))" @onclick="Tap"
+                aria-label="@T("Count")">
+            <span class="tasbeeh-count">@count</span>
+            <span class="tasbeeh-target">/ @Current.Target</span>
+            @for (var i = 0; i < 33; i++)
+            {
+                var angle = i * 360.0 / 33;
+                <i class="bead @(count > 0 && (count % 33 == 0 || i < count % 33) ? "on" : "")" style="transform: rotate(@(angle.ToString(System.Globalization.CultureInfo.InvariantCulture))deg) translateY(-118px)"></i>
+            }
+        </button>
+
+        @if (done)
+        {
+            <div class="tasbeeh-done">✨ @(preset.Sequence is null ? T("MashaAllah! Complete.") : T("Alhamdulillah, your after-salah dhikr is complete."))</div>
+        }
+        <div class="row" style="justify-content:center;gap:.5rem;margin-top:.8rem">
+            <button class="btn btn-ghost btn-sm" @onclick="Reset">↺ @T("Reset")</button>
+            <button class="btn btn-ghost btn-sm" @onclick="() => vibrate = !vibrate">@(vibrate ? "📳 " + T("Vibration on") : "📴 " + T("Vibration off"))</button>
+        </div>
+    </div>
+
+    <div class="card mt tasbeeh-today">
+        <div><b>@today.ToString("N0")</b><span>@T("dhikr today")</span></div>
+        <div><b>@streak</b><span>@T(streak == 1 ? "day in a row" : "days in a row")</span></div>
+        <div><b>@total.ToString("N0")</b><span>@T("all time")</span></div>
+    </div>
+    <p class="subtle center mt" style="font-size:.8rem">@T("\"Are not hearts at rest in the remembrance of Allah?\" (Ar-Ra'd 13:28)")</p>
+</div>
+
+@code {
+    private record Dhikr(string Arabic, string Latin, string Meaning, int Target);
+    private record Preset(string Name, Dhikr[] Steps, bool? Sequence = null);
+
+    private static readonly Dhikr SubhanAllah = new("سُبْحَانَ ٱللَّٰهِ", "SubhanAllah", "Glory be to Allah", 33);
+    private static readonly Dhikr Alhamdulillah = new("ٱلْحَمْدُ لِلَّٰهِ", "Alhamdulillah", "All praise is for Allah", 33);
+    private static readonly Dhikr AllahuAkbar = new("ٱللَّٰهُ أَكْبَرُ", "Allahu Akbar", "Allah is the Greatest", 34);
+
+    private static readonly Preset[] Presets =
+    [
+        new("After salah", [SubhanAllah, Alhamdulillah, AllahuAkbar], true),
+        new("SubhanAllah", [SubhanAllah with { Target = 100 }]),
+        new("Astaghfirullah", [new("أَسْتَغْفِرُ ٱللَّٰهَ", "Astaghfirullah", "I seek Allah's forgiveness", 100)]),
+        new("Salawat", [new("ٱللَّٰهُمَّ صَلِّ عَلَىٰ مُحَمَّدٍ", "Allahumma salli 'ala Muhammad", "O Allah, send blessings on Muhammad ﷺ", 100)]),
+        new("La ilaha illallah", [new("لَا إِلَٰهَ إِلَّا ٱللَّٰهُ", "La ilaha illallah", "There is no god but Allah", 100)]),
+    ];
+
+    private Preset preset = Presets[0];
+    private int step, count, today, total, streak;
+    private bool done, pulse, vibrate = true;
+    private Dhikr Current => preset.Steps[step];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            var s = await JS.InvokeAsync<int[]>("halalbook.tasbeehStats", 0);
+            (today, total, streak) = (s[0], s[1], s[2]);
+            StateHasChanged();
+        }
+        catch (JSException) { }
+    }
+
+    private async Task Tap()
+    {
+        if (done) { Reset(); return; }
+        count++;
+        pulse = !pulse;
+        try
+        {
+            var s = await JS.InvokeAsync<int[]>("halalbook.tasbeehStats", 1);
+            (today, total, streak) = (s[0], s[1], s[2]);
+            if (vibrate) await JS.InvokeVoidAsync("halalbook.buzz", count == Current.Target ? 120 : 12);
+        }
+        catch (JSException) { }
+        if (count < Current.Target) return;
+        if (step < preset.Steps.Length - 1) { step++; count = 0; }
+        else done = true;
+    }
+
+    private void Choose(Preset p) { preset = p; Reset(); }
+    private void Reset() { step = 0; count = 0; done = false; }
+}

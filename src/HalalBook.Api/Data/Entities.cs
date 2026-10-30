@@ -161,6 +161,8 @@ public class Post
     public User? TargetUser { get; set; }
     public ModerationStatus Moderation { get; set; }
     public string? ModerationNote { get; set; }
+    /// <summary>How many times the video has been watched (reels and short videos).</summary>
+    public int ViewCount { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? EditedAt { get; set; }
     public bool IsDeleted { get; set; }
