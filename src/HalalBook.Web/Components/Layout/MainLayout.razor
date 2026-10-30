@@ -1,0 +1,258 @@
+@inherits LocalizedLayout
+@implements IDisposable
+@inject AuthSession Session
+@inject Realtime Realtime
+@inject NavigationManager Nav
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject ClientClock Clock
+
+@if (!ready)
+{
+    <div class="splash"><Logo ShowName="false" /></div>
+}
+else
+{
+    <header class="topbar">
+        <Logo />
+        <form class="topbar-search" @onsubmit="Search">
+            <span class="icon">🔍</span>
+            <input placeholder="@T("Search people, posts, groups, #hashtags")" @bind="query" aria-label="Search" />
+        </form>
+        <nav class="topbar-actions">
+            <a class="icon-btn hide-sm @Active("")" href="/" title="Home">🏠</a>
+            <a class="icon-btn hide-sm @Active("reels")" href="/reels" title="Reels">🎬</a>
+            <a class="icon-btn hide-sm @Active("live")" href="/live" title="Live">🔴</a>
+            <a class="icon-btn hide-sm @Active("noor")" href="/noor" title="Ask Noor AI">✨</a>
+            <a class="icon-btn @Active("messages")" href="/messages" title="Messages">💬@if (Realtime.UnreadMessages > 0) { <span class="badge">@Realtime.UnreadMessages</span> }</a>
+            <a class="icon-btn @Active("notifications")" href="/notifications" title="Notifications">🔔@if (Realtime.UnreadNotifications > 0) { <span class="badge">@Realtime.UnreadNotifications</span> }</a>
+            <div class="menu">
+                <button style="background:none;border:0;padding:0;cursor:pointer" @onclick="() => menuOpen = !menuOpen" aria-label="Account menu">
+                    <span class="avatar ring" style="--size:38px">@if (Session.User?.AvatarUrl is { } a) { <img src="@a" alt="" /> } else { @Ui.Initials(Session.User?.DisplayName ?? "?") }</span>
+                </button>
+                @if (menuOpen)
+                {
+                    <div class="menu-pop" @onclick="() => menuOpen = false">
+                        <a href="/u/@Session.User?.UserName">👤 @T("My profile")</a>
+                        <a href="/settings">⚙️ @T("Settings & privacy")</a>
+                        <a href="/bookmarks">🔖 Saved</a>
+                        @if (Session.IsModerator) { <a href="/moderation">🛡️ Moderation</a> }
+                        @if (Session.User?.Role == UserRole.Admin) { <a href="/admin">🧭 Admin console</a> }
+                        <a href="/feedback">💬 @T("Help & feedback")</a>
+                        <button @onclick='() => JS.InvokeVoidAsync("halalbook.toggleTheme").AsTask()'>🌓 Toggle dark mode</button>
+                        <button @onclick="Session.SignOutAsync">🚪 @T("Sign out")</button>
+                    </div>
+                }
+            </div>
+        </nav>
+    </header>
+
+    <div class="shell @(ShowRail ? "" : "wide")">
+        <aside class="sidebar">
+            <ul class="nav-list">
+                <li><a href="/u/@Session.User?.UserName" class="@Active("u")"><span class="avatar" style="--size:34px">@if (Session.User?.AvatarUrl is { } sideAvatar) { <img src="@sideAvatar" alt="" /> } else { @Ui.Initials(Session.User?.DisplayName ?? "?") }</span>@Session.User?.DisplayName</a></li>
+                <li><a href="/" class="@Active("")"><span class="nav-ico">🏠</span>@T("Home")</a></li>
+                <li><a href="/friends" class="@Active("friends")"><span class="nav-ico">🤝</span>@T("Friends")</a></li>
+                <li><a href="/groups" class="@Active("groups")"><span class="nav-ico">🕌</span>@T("Groups")</a></li>
+                <li><a href="/pages" class="@Active("pages")"><span class="nav-ico">📜</span>@T("Pages")</a></li>
+                <li><a href="/events" class="@Active("events")"><span class="nav-ico">📅</span>@T("Events")</a></li>
+                <li><a href="/reels" class="@Active("reels")"><span class="nav-ico">🎬</span>@T("Reels")</a></li>
+                <li><a href="/live" class="@Active("live")"><span class="nav-ico">🔴</span>@T("Live")</a></li>
+                <li><a href="/messages" class="@Active("messages")"><span class="nav-ico">💬</span>@T("Messages")</a></li>
+                <li><a href="/market" class="@Active("market")"><span class="nav-ico">🛍️</span>@T("Marketplace")</a></li>
+                <li><a href="/bookmarks" class="@Active("bookmarks")"><span class="nav-ico">🔖</span>@T("Saved")</a></li>
+                <li><a href="/invite" class="@Active("invite")"><span class="nav-ico">💌</span>@T("Invite friends")</a></li>
+            </ul>
+            @if (!Session.ShowFaith)
+            {
+                <ul class="nav-list"><li><a href="/noor" class="@Active("noor")"><span class="nav-ico">✨</span>@T("Ask Noor AI")</a></li></ul>
+            }
+            else
+            {
+            <div class="nav-section">@T("Deen")</div>
+            <ul class="nav-list">
+                <li><a href="/prayer" class="@Active("prayer")"><span class="nav-ico">🕋</span>@T("Prayer times")</a></li>
+                <li><a href="/qibla" class="@Active("qibla")"><span class="nav-ico">🧭</span>@T("Qibla finder")</a></li>
+                <li><a href="/calendar" class="@Active("calendar")"><span class="nav-ico">🌙</span>@T("Hijri calendar")</a></li>
+                <li><a href="/noor" class="@Active("noor")"><span class="nav-ico">✨</span>@T("Ask Noor AI")</a></li>
+                <li><a href="/duas" class="@Active("duas")"><span class="nav-ico">🤲</span>@T("Dua wall")</a></li>
+                <li><a href="/khatm" class="@Active("khatm")"><span class="nav-ico">📖</span>@T("Quran khatm")</a></li>
+                <li><a href="/tasbeeh" class="@Active("tasbeeh")"><span class="nav-ico">📿</span>@T("Tasbeeh")</a></li>
+                <li><a href="/zakat" class="@Active("zakat")"><span class="nav-ico">💰</span>@T("Zakat calculator")</a></li>
+                <li><a href="/nearby" class="@Active("nearby")"><span class="nav-ico">🕌</span>@T("Masjids & halal food")</a></li>
+            </ul>
+            }
+            @if (Session.IsModerator)
+            {
+                <div class="nav-section">Community</div>
+                <ul class="nav-list">
+                    <li><a href="/moderation" class="@Active("moderation")"><span class="nav-ico">🛡️</span>@T("Moderation")</a></li>
+                    @if (Session.User?.Role == UserRole.Admin) { <li><a href="/admin" class="@Active("admin")"><span class="nav-ico">🧭</span>@T("Admin console")</a></li> }
+                </ul>
+            }
+            <hr class="ornament" style="margin-top:1rem" />
+            <p class="subtle" style="padding:0 .85rem"><a href="/feedback">Help & feedback</a> · <a href="/terms">Agreement</a><br />HalalBook © @DateTime.UtcNow.Year · Built with ihsan</p>
+        </aside>
+
+        <main class="main">
+            <CascadingValue Name="i18nRev" Value="I18n.Revision">@Body</CascadingValue>
+        </main>
+
+        @if (ShowRail)
+        {
+            <aside class="rail">
+                @if (Session.ShowFaith) { <PrayerWidget /> }
+                <div class="card online-list">
+                    <div class="card-title">@T("Online now") <span class="subtle" style="margin-left:auto">@Realtime.OnlineUsers.Count</span></div>
+                    @if (Session.User?.ShowOnlineStatus == false)
+                    {
+                        <p class="subtle">Your active status is off, so you can't see who's online. <a href="/settings">Turn it on</a></p>
+                    }
+                    else if (Realtime.OnlineUsers.Count == 0)
+                    {
+                        <p class="subtle">No one else is online right now.</p>
+                    }
+                    @foreach (var o in Realtime.OnlineUsers.Take(12))
+                    {
+                        <div class="list-item" @onclick="() => Chat(o.User)">
+                            <Avatar User="o.User" Size="36" Link="false" />
+                            <b class="grow" style="font-weight:600">@o.User.DisplayName</b>
+                            @if (o.IsFriend) { <span class="subtle">Friend</span> }
+                        </div>
+                    }
+                </div>
+                <div class="card">
+                    <div class="card-title">@T("Trending")</div>
+                    @if (trending.Count == 0) { <p class="subtle">No trends yet. Start one with a #hashtag!</p> }
+                    @foreach (var t in trending)
+                    {
+                        <a class="trend" href="/hashtag/@t.Tag"><span>#@t.Tag</span><span class="subtle">@t.PostCount</span></a>
+                    }
+                </div>
+                <div class="card">
+                    <div class="card-title">@T("People you may know")</div>
+                    @foreach (var p in suggestions.Take(5))
+                    {
+                        <div class="list-item">
+                            <Avatar User="p" Size="38" />
+                            <a class="grow" style="color:var(--text);font-weight:600" href="/u/@p.UserName">@p.DisplayName</a>
+                            <button class="btn btn-sm btn-outline" @onclick="() => AddFriend(p)">+ Add</button>
+                        </div>
+                    }
+                    @if (suggestions.Count == 0) { <p class="subtle">You're connected with everyone we know of. MashaAllah!</p> }
+                </div>
+            </aside>
+        }
+    </div>
+
+    <nav class="bottom-nav">
+        <a href="/" class="@Active("")"><span>🏠</span>@T("Home")</a>
+        <a href="/reels" class="@Active("reels")"><span>🎬</span>@T("Reels")</a>
+        <a href="/live" class="@Active("live")"><span>🔴</span>@T("Live")</a>
+        @if (Session.ShowFaith) { <a href="/prayer" class="@Active("prayer")"><span>🕋</span>@T("Prayer")</a> }
+        else { <a href="/messages" class="@Active("messages")"><span>💬</span>@T("Chats")</a> }
+        <a href="/noor" class="@Active("noor")"><span>✨</span>@T("Noor")</a>
+        <a href="/menu" class="@Active("menu")"><span>☰</span>@T("Menu")</a>
+    </nav>
+}
+
+<Toaster />
+@if (ready) { <IncomingCall /> }
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private bool ready, menuOpen;
+    private string? query;
+    private List<HashtagDto> trending = [];
+    private List<UserSummaryDto> suggestions = [];
+
+    private string Path => Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].TrimEnd('/');
+    private bool ShowRail => Path is "" or "bookmarks" or "search" || Path.StartsWith("post/") || Path.StartsWith("hashtag/");
+    private string Active(string section) =>
+        (section == "" ? Path == "" : Path == section || Path.StartsWith(section + "/")) ? "active" : "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        Session.Changed += OnSessionChanged;
+        Realtime.CountsChanged += Refresh;
+        Realtime.PresenceChanged += Refresh;
+        await Session.LoadAsync();
+        await I18n.InitializeAsync(Session.User?.Language);
+        // Keep the profile in step, so chats and posts are translated into the language this person actually reads.
+        if (Session.User is { } me && me.Language != I18n.Language)
+        {
+            try { await Session.UpdateUserAsync(await Api.PutAsync<UserDto>("api/users/me/language", new LanguageSettingsRequest(I18n.Language, me.AutoTranslate))); }
+            catch (Exception) { }
+        }
+        I18n.Changed += Refresh;
+        if (!Session.IsAuthenticated)
+        {
+            // Newcomers on the front page meet the welcome page; deep links go to sign in and come back.
+            // The welcome page is server-rendered only, so it needs a full page load.
+            if (Path == "") Nav.NavigateTo("/welcome", forceLoad: true);
+            else Nav.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/" + Path)}");
+            return;
+        }
+        await Clock.LoadAsync();
+        // Everyone must have read and accepted the current Community Agreement.
+        if (Session.User?.AcceptedTermsVersion != Terms.Version && Path != "agreement") Nav.NavigateTo("/agreement");
+        ready = true;
+        await Realtime.StartAsync();
+        try
+        {
+            trending = await Api.GetAsync<List<HashtagDto>>("api/hashtags/trending");
+            suggestions = await Api.GetAsync<List<UserSummaryDto>>("api/users/suggestions");
+        }
+        catch (Exception) { }
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        menuOpen = false;
+        if (Session.User is { } u && u.AcceptedTermsVersion != Terms.Version && Path != "agreement") Nav.NavigateTo("/agreement");
+        InvokeAsync(StateHasChanged);
+    }
+    private void Refresh() => InvokeAsync(StateHasChanged);
+    private void OnSessionChanged()
+    {
+        // Signing out mid-session; the first load handles signed-out visitors itself.
+        if (!Session.IsAuthenticated && ready) InvokeAsync(() => Nav.NavigateTo("/login"));
+        else InvokeAsync(StateHasChanged);
+    }
+
+    private void Search()
+    {
+        if (string.IsNullOrWhiteSpace(query)) return;
+        Nav.NavigateTo(query.StartsWith('#') && !query.Contains(' ') ? $"/hashtag/{query[1..]}" : $"/search?q={Uri.EscapeDataString(query)}");
+    }
+
+    private async Task Chat(UserSummaryDto u)
+    {
+        try
+        {
+            var conv = await Api.PostAsync<ConversationDto>("api/conversations", new StartConversationRequest([u.Id], null));
+            Nav.NavigateTo($"/messages/{conv.Id}");
+        }
+        catch (Exception) { Nav.NavigateTo($"/u/{u.UserName}"); }
+    }
+
+    private async Task AddFriend(UserSummaryDto p)
+    {
+        try { await Api.PostAsync($"api/friends/{p.Id}"); suggestions.Remove(p); } catch (Exception) { }
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        Session.Changed -= OnSessionChanged;
+        Realtime.CountsChanged -= Refresh;
+        Realtime.PresenceChanged -= Refresh;
+        I18n.Changed -= Refresh;
+    }
+}

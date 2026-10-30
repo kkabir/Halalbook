@@ -1,0 +1,89 @@
+@page "/moderation"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+
+<PageTitle>Moderation · HalalBook</PageTitle>
+
+<div class="page-hero"><h1>Moderation</h1><p>Keep HalalBook safe, kind and halal. Review flagged posts and community reports.</p></div>
+
+@if (!Session.IsModerator)
+{
+    <div class="card"><Empty Title="Moderators only" Text="You don't have access to this page." /></div>
+}
+else
+{
+    <div class="tabs">
+        <button class="@(tab == "queue" ? "active" : "")" @onclick='() => tab = "queue"'>Review queue (@queue.Count)</button>
+        <button class="@(tab == "reports" ? "active" : "")" @onclick='() => tab = "reports"'>Reports (@reports.Count)</button>
+    </div>
+
+    <div class="feed-column">
+        @if (tab == "queue")
+        {
+            @if (queue.Count == 0) { <div class="card"><Empty Title="All clear" Text="No posts are waiting for review. Alhamdulillah." /></div> }
+            @foreach (var p in queue)
+            {
+                <div class="card">
+                    <div class="row"><Avatar User="p.Author" /><div class="grow"><b>@p.Author.DisplayName</b><div class="subtle">@Ui.TimeAgo(p.CreatedAt)</div></div></div>
+                    <p style="white-space:pre-wrap;margin-top:.75rem">@p.Content</p>
+                    <MediaGrid Media="p.Media" />
+                    <div class="row" style="justify-content:flex-end">
+                        <button class="btn btn-danger btn-sm" @onclick='() => Decide(p, "remove")'>Remove</button>
+                        <button class="btn btn-primary btn-sm" @onclick='() => Decide(p, "approve")'>Approve</button>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            @if (reports.Count == 0) { <div class="card"><Empty Title="No open reports" /></div> }
+            @foreach (var r in reports)
+            {
+                <div class="card">
+                    <div class="row spread"><span class="chip gold">@r.TargetType</span><span class="subtle">@Ui.TimeAgo(r.CreatedAt) · by @r.Reporter.DisplayName</span></div>
+                    <p class="mt"><b>Reason:</b> @r.Reason</p>
+                    @if (r.TargetPreview is { } preview) { <div class="ai-summary">@preview</div> }
+                    <div class="row mt" style="justify-content:flex-end">
+                        @if (r.TargetType == ReportTarget.Post) { <a class="btn btn-ghost btn-sm" href="/post/@r.TargetId">Open</a> }
+                        <button class="btn btn-outline btn-sm" @onclick='() => Resolve(r, "dismiss")'>Dismiss</button>
+                        <button class="btn btn-danger btn-sm" @onclick='() => Resolve(r, "remove")'>@(r.TargetType == ReportTarget.User ? "Suspend user" : "Remove content")</button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    private string tab = "queue";
+    private List<PostDto> queue = [];
+    private List<ReportDto> reports = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.IsModerator) await Load();
+    }
+
+    private async Task Load()
+    {
+        try
+        {
+            queue = await Api.GetAsync<List<PostDto>>("api/moderation/queue");
+            reports = await Api.GetAsync<List<ReportDto>>("api/moderation/reports");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Decide(PostDto p, string decision)
+    {
+        try { await Api.PostAsync($"api/moderation/posts/{p.Id}/{decision}"); queue.Remove(p); Toasts.Show(decision == "approve" ? "Approved" : "Removed"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Resolve(ReportDto r, string decision)
+    {
+        try { await Api.PostAsync($"api/moderation/reports/{r.Id}/{decision}"); reports.Remove(r); Toasts.Show("Report resolved"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

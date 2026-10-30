@@ -1,0 +1,31 @@
+@inherits LocalizedLayout
+
+<div class="auth">
+    <section class="auth-art">
+        <Logo />
+        <div class="bismillah">بِسْمِ ٱللَّٰهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</div>
+        <h2>@T("A beautiful, intelligent home for the Ummah.")</h2>
+        <p style="max-width:480px;opacity:.85">Share moments, grow in faith and stay close to the people you love, in a space designed with modesty, beauty and barakah in mind.</p>
+        <div class="features">
+            <span>🕋 Prayer times & Qibla</span>
+            <span>✨ Noor AI assistant</span>
+            <span>🛡️ Halal-first moderation</span>
+            <span>🌙 Hijri calendar</span>
+            <span>🕌 Groups & events</span>
+        </div>
+    </section>
+    <section class="auth-form">
+        <LanguagePicker Compact="true" />
+        <div class="auth-card"><CascadingValue Name="i18nRev" Value="I18n.Revision">@Body</CascadingValue></div>
+    </section>
+</div>
+<Toaster />
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        I18n.Changed += () => InvokeAsync(StateHasChanged);
+        await I18n.InitializeAsync();
+    }
+}

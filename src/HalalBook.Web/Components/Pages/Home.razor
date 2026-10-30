@@ -1,0 +1,112 @@
+@page "/"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+
+<PageTitle>HalalBook</PageTitle>
+
+<div class="feed-column">
+    <ProfileSetupCard />
+    <BirthdayCard />
+    <AppSetupCard />
+    <StoriesBar />
+    @if (Session.ShowFaith) { <TodayCard /> }
+    <div class="card catchup">
+        <div class="row spread">
+            <div><b>✨ @T("Catch me up")</b><div class="subtle">@T("Noor summarizes what your friends and groups shared recently.")</div></div>
+            <button class="btn btn-gold btn-sm" disabled="@digestBusy" @onclick="CatchUp">@(digestBusy ? T("Reading…") : digest is null ? T("Summarize") : T("Refresh"))</button>
+        </div>
+        @if (digest is not null) { <div class="ai-summary mt">@digest</div> }
+    </div>
+    @if (memories is { Count: > 0 })
+    {
+        <div class="card memories">
+            <div class="card-title">@T("On this day")</div>
+            @foreach (var m in memories.Take(1))
+            {
+                <div class="subtle">@(DateTime.UtcNow.Year - m.CreatedAt.Year) year@(DateTime.UtcNow.Year - m.CreatedAt.Year == 1 ? "" : "s") ago</div>
+                <PostCard Post="m" />
+            }
+            @if (memories.Count > 1) { <div class="subtle center">and @(memories.Count - 1) more memories from this day</div> }
+        </div>
+    }
+    <Composer OnPosted="p => posts.Insert(0, p)" Placeholder="@($"{T("What's on your heart")}, {FirstName}?")" />
+
+    <div class="mt">
+        @for (var i = 0; i < posts.Count; i++)
+        {
+            var p = posts[i];
+            <PostCard @key="p.Id" Post="p" OnShared="s => posts.Insert(0, s)" />
+            @* Like Facebook: rows of short videos on one subject, spread through the feed (after posts 2, 6, 10...). *@
+            @if (ShortsAfter(i) is { } row) { <ShortVideosStrip Group="row" First="row == shorts[0]" /> }
+        }
+    </div>
+
+    @if (loading)
+    {
+        <div class="spinner"></div>
+    }
+    else if (posts.Count == 0)
+    {
+        <div class="card"><Empty Title="Your feed is quiet" Text="Add friends, follow pages or join groups to fill it with goodness."><a class="btn btn-primary" href="/friends">Find friends</a></Empty></div>
+    }
+    else if (hasMore)
+    {
+        <div class="center mt"><button class="btn btn-outline" @onclick="LoadMore">Show more</button></div>
+    }
+    else
+    {
+        <hr class="ornament mt" />
+        <p class="center subtle">You're all caught up. Time for some dhikr? 📿</p>
+    }
+</div>
+
+@code {
+    private List<ShortVideoGroupDto> shorts = [];
+    private ShortVideoGroupDto? ShortsAfter(int i)
+    {
+        var at = i == Math.Min(1, posts.Count - 1) ? 0 : i > 1 && (i - 1) % 4 == 0 ? (i - 1) / 4 : -1;
+        return at >= 0 && at < shorts.Count ? shorts[at] : null;
+    }
+
+    private readonly List<PostDto> posts = [];
+    private int page = 1;
+    private bool loading = true, hasMore;
+
+    private string? digest;
+    private List<PostDto>? memories;
+    [Inject] private ClientClock Clock { get; set; } = default!;
+    private bool digestBusy;
+
+    private async Task CatchUp()
+    {
+        digestBusy = true;
+        try { digest = (await Api.GetAsync<AiTextResponse>("api/ai/digest")).Text; }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { digestBusy = false; }
+    }
+
+    private string FirstName => Session.User?.DisplayName.Split(' ')[0] ?? "friend";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        shorts = await ShortVideosStrip.LoadAsync(Api);
+        try { memories = await Api.GetAsync<List<PostDto>>($"api/memories?offset={Clock.OffsetMinutes}"); } catch (Exception) { }
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        try
+        {
+            var res = await Api.GetAsync<PagedResult<PostDto>>($"api/feed?page={page}");
+            posts.AddRange(res.Items.Where(i => posts.All(p => p.Id != i.Id)));
+            hasMore = res.HasMore;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { loading = false; }
+    }
+
+    private async Task LoadMore() { page++; await Load(); }
+}

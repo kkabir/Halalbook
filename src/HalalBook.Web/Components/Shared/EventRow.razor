@@ -1,0 +1,14 @@
+@inject ClientClock Clock
+@{ var local = Clock.Local(Event.StartsAt); }
+<a class="card row" href="/events/@Event.Id" style="color:var(--text);text-decoration:none;align-items:flex-start">
+    <div class="date-badge"><div class="m">@local.ToString("MMM")</div><div class="d">@local.Day</div></div>
+    <div class="grow">
+        <b>@Event.Title</b>
+        <div class="subtle">@local.ToString("dddd, h:mm tt") · @(Event.Location ?? (Event.OnlineUrl is not null ? "Online" : ""))</div>
+        <div class="subtle">@Event.GoingCount going · @Event.InterestedCount interested @if (Event.MyRsvp is { } r) { <span class="chip" style="margin-left:.4rem">@r</span> }</div>
+    </div>
+</a>
+
+@code {
+    [Parameter, EditorRequired] public EventDto Event { get; set; } = default!;
+}

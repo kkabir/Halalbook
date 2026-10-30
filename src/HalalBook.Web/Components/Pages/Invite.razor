@@ -1,0 +1,94 @@
+@page "/invite"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject Toasts Toasts
+@inject AuthSession Session
+
+<PageTitle>Invite friends · HalalBook</PageTitle>
+
+<div class="feed-column">
+    <div class="card invite-hero center">
+        <div style="font-size:2.4rem">🤝</div>
+        <h1>@T("Bring your people to HalalBook")</h1>
+        <p class="muted">@T("Anyone who joins with your link becomes your friend straight away.")</p>
+        @if (info is null)
+        {
+            <p class="subtle">@T("Loading…")</p>
+        }
+        else
+        {
+            <div class="invite-link" @onclick="Copy" title="@T("Copy")">
+                <span>@info.Link.Replace("https://", "")</span>
+                <b>@(copied ? "✓ " + T("Copied") : T("Copy"))</b>
+            </div>
+            <div class="invite-share">
+                <a class="invite-btn" style="--c:#25d366" href="@($"https://wa.me/?text={Uri.EscapeDataString(Message)}")" target="_blank" rel="noopener"><span>🟢</span>WhatsApp</a>
+                <a class="invite-btn" style="--c:#0a7cff" href="@($"sms:?&body={Uri.EscapeDataString(Message)}")"><span>💬</span>SMS</a>
+                <a class="invite-btn" style="--c:#a033ff" href="@($"fb-messenger://share/?link={Uri.EscapeDataString(info.Link)}")"><span>⚡</span>Messenger</a>
+                <a class="invite-btn" style="--c:#229ed9" href="@($"https://t.me/share/url?url={Uri.EscapeDataString(info.Link)}&text={Uri.EscapeDataString(Pitch)}")" target="_blank" rel="noopener"><span>✈️</span>Telegram</a>
+                <a class="invite-btn" style="--c:#ea4335" href="@($"mailto:?subject={Uri.EscapeDataString(T("Join me on HalalBook"))}&body={Uri.EscapeDataString(Message)}")"><span>✉️</span>@T("Email")</a>
+                <button class="invite-btn" style="--c:var(--gold-600)" @onclick="ShareAnywhere"><span>📤</span>@T("More apps")</button>
+            </div>
+            <div class="invite-qr">
+                <div @ref="qr" class="qr-box" aria-label="QR code of your invite link"></div>
+                <div class="subtle">@T("Together in person? Let them scan this with their phone camera.")</div>
+            </div>
+        }
+    </div>
+
+    @if (info is not null)
+    {
+        <div class="card mt">
+            <div class="card-title">@T("Joined from your invites") · @info.JoinedCount</div>
+            @if (info.Joined.Count == 0)
+            {
+                <p class="muted" style="margin:0">@T("No one yet. Your family group chat is a great place to start!")</p>
+            }
+            else
+            {
+                <div class="invite-joined">
+                    @foreach (var u in info.Joined)
+                    {
+                        <a href="/u/@u.UserName" class="center"><Avatar User="u" Size="56" Link="false" /><div class="subtle">@u.DisplayName.Split(' ')[0]</div></a>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private InviteInfoDto? info;
+    private ElementReference qr;
+    private bool copied, drawn;
+
+    private string Pitch => $"{Session.User?.DisplayName} {T("invited you to HalalBook, a beautiful and safe social home for the Ummah.")}";
+    private string Message => $"Assalamu alaikum! {Pitch}\n{info?.Link}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { info = await Api.GetAsync<InviteInfoDto>("api/users/me/invites"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (info is null || drawn) return;
+        drawn = true;
+        try { await JS.InvokeVoidAsync("halalbook.qr", qr, info.Link); } catch (JSException) { }
+    }
+
+    private async Task Copy()
+    {
+        if (info is null) return;
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", info.Link); copied = true; }
+        catch (JSException) { Toasts.Show(info.Link); }
+    }
+
+    private async Task ShareAnywhere()
+    {
+        if (info is null) return;
+        try { if (!await JS.InvokeAsync<bool>("halalbook.nativeShare", Pitch, info.Link)) await Copy(); }
+        catch (JSException) { }
+    }
+}

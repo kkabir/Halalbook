@@ -1,0 +1,211 @@
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+@inject MediaGuard Guard
+
+<div class="comments">
+    @if (CommentCount >= 5)
+    {
+        @if (summary is null)
+        {
+            <button class="chip gold" style="align-self:flex-start" @onclick="Summarize" disabled="@summarizing">✨ @(summarizing ? "Summarizing…" : "Summarize discussion with AI")</button>
+        }
+        else
+        {
+            <div class="ai-summary"><span class="ai-tag">✨ Discussion summary</span><br />@summary</div>
+        }
+    }
+
+    @if (comments is null)
+    {
+        <div class="spinner"></div>
+    }
+    else
+    {
+        @foreach (var c in comments)
+        {
+            @CommentView(c, true)
+        }
+    }
+
+    @if (tone is { IsHarsh: true })
+    {
+        <div class="adab-nudge">
+            <div><b>🌿 A gentle reminder</b> @(tone.Note ?? "This might come across as hurtful.")</div>
+            @if (tone.Suggestion is { Length: > 0 } better) { <div class="adab-suggestion">“@better”</div> }
+            <div class="row" style="gap:.4rem;margin-top:.4rem">
+                @if (tone.Suggestion is { Length: > 0 } s2) { <button class="btn btn-primary btn-sm" @onclick="() => UseSuggestion(s2)">Use kinder version</button> }
+                <button class="btn btn-ghost btn-sm" @onclick="() => tone = null">Edit</button>
+                <button class="btn btn-outline btn-sm" @onclick="() => SendCore(skipToneCheck: true)">Send anyway</button>
+            </div>
+        </div>
+    }
+    @if (smart.Count > 0 && string.IsNullOrEmpty(text))
+    {
+        <div class="smart-replies">
+            <span class="ai-tag">✨</span>
+            @foreach (var r in smart) { <button class="chip" @onclick="() => text = r">@r</button> }
+        </div>
+    }
+    <div class="comment-input">
+        <Avatar User="Me" Size="32" />
+        <input class="input" placeholder="@(replyTo is null ? T("Write a comment…") : $"{T("Reply to")} {replyTo.Author.DisplayName}…")" @bind="text" @bind:event="oninput" @onkeydown="OnKey" />
+        @if (replyTo is not null) { <button class="btn btn-ghost btn-sm" @onclick="() => replyTo = null">✕</button> }
+        <label class="icon-btn" title="Add a photo (up to 2 MB)" style="width:34px;height:34px;font-size:.95rem">📷<InputFile OnChange="AttachPhoto" accept="image/*" style="display:none" /></label>
+        <button class="btn btn-primary btn-sm" disabled="@((string.IsNullOrWhiteSpace(text) && photo is null) || sending || attaching)" @onclick="Send">@T("Send")</button>
+    </div>
+    @if (attaching) { <div class="subtle" style="margin-left:2.6rem">Adding photo…</div> }
+    @if (photo is not null)
+    {
+        <div class="thumb comment-photo-preview"><img src="@photo" alt="" /><button class="icon-btn x" @onclick="() => photo = null" aria-label="Remove photo">✕</button></div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid PostId { get; set; }
+    [Parameter] public int CommentCount { get; set; }
+    [Parameter] public EventCallback<int> OnCountChanged { get; set; }
+    /// <summary>The post's text, used to suggest smart replies.</summary>
+    [Parameter] public string? PostContent { get; set; }
+
+    private List<string> smart = [];
+    private ToneResponse? tone;
+
+    private List<CommentDto>? comments;
+    private readonly HashSet<Guid> originals = [];
+    private string? text, summary;
+    private CommentDto? replyTo;
+    private bool sending, summarizing, attaching;
+    private string? photo;
+
+    private UserSummaryDto? Me => Session.User is { } u ? new(u.Id, u.UserName, u.DisplayName, u.AvatarUrl, u.IsVerified) : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { comments = await Api.GetAsync<List<CommentDto>>($"api/posts/{PostId}/comments"); }
+        catch (Exception ex) { comments = []; Toasts.Error(ex); }
+        if (!string.IsNullOrWhiteSpace(PostContent))
+        {
+            try { smart = (await Api.PostAsync<SmartRepliesResponse>("api/ai/replies", new SmartRepliesRequest(PostContent))).Replies; } catch (Exception) { }
+        }
+    }
+
+    private RenderFragment CommentView(CommentDto c, bool topLevel) => __builder =>
+    {
+        <div>
+            <div class="comment">
+                <Avatar User="c.Author" Size="32" />
+                <div>
+                    <div class="comment-bubble"><a class="name" href="/u/@c.Author.UserName">@c.Author.DisplayName</a>@if (c.Content.Length > 0) {<div dir="auto">@(c.TranslatedContent is { } tc && !originals.Contains(c.Id) ? tc : c.Content)</div>}@if (c.MediaUrl is { } img) {<a href="@img" target="_blank" rel="noopener"><img class="comment-photo" src="@img" alt="" loading="lazy" /></a>}</div>
+                    <div class="comment-actions">
+                        <button class="@(c.LikedByMe ? "on" : "")" @onclick="() => Like(c)">@(c.LikedByMe ? "Liked" : "Like")@(c.LikeCount > 0 ? $" · {c.LikeCount}" : "")</button>
+                        @if (topLevel) { <button @onclick="() => replyTo = c">Reply</button> }
+                        <span>@Ui.TimeAgo(c.CreatedAt)</span>
+                        @if (c.TranslatedContent is not null)
+                        {
+                            <button @onclick="() => { if (!originals.Remove(c.Id)) originals.Add(c.Id); }">🌍 @(originals.Contains(c.Id) ? T("See translation") : T("See original"))</button>
+                        }
+                        @if (c.Author.Id == Session.User?.Id) { <button @onclick="() => Delete(c)">Delete</button> }
+                    </div>
+                </div>
+            </div>
+            @if (c.Replies.Count > 0)
+            {
+                <div class="replies">
+                    @foreach (var r in c.Replies) { @CommentView(r, false) }
+                </div>
+            }
+        </div>
+    };
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey) await Send();
+    }
+
+    private Task Send() => SendCore(skipToneCheck: false);
+
+    private void UseSuggestion(string s) { text = s; tone = null; }
+
+    private async Task SendCore(bool skipToneCheck)
+    {
+        // The adab assistant reviews the wording first; the person can always send anyway.
+        if (!skipToneCheck && !string.IsNullOrWhiteSpace(text))
+        {
+            try
+            {
+                var check = await Api.PostAsync<ToneResponse>("api/ai/tone", new ToneRequest(text));
+                if (check.IsHarsh) { tone = check; return; }
+            }
+            catch (Exception) { }
+        }
+        tone = null;
+        if ((string.IsNullOrWhiteSpace(text) && photo is null) || sending) return;
+        sending = true;
+        try
+        {
+            var created = await Api.PostAsync<CommentDto>($"api/posts/{PostId}/comments", new CreateCommentRequest(text ?? "", replyTo?.Id, photo));
+            if (replyTo is not null)
+            {
+                var parent = comments!.First(c => c.Id == replyTo.Id);
+                comments![comments.IndexOf(parent)] = parent with { Replies = [.. parent.Replies, created] };
+            }
+            else comments!.Add(created);
+            text = null; replyTo = null; photo = null;
+            CommentCount++;
+            await OnCountChanged.InvokeAsync(CommentCount);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { sending = false; }
+    }
+
+    private async Task AttachPhoto(InputFileChangeEventArgs e)
+    {
+        attaching = true;
+        try { photo = (await Guard.UploadAsync([e.File], "comment")).FirstOrDefault()?.Url ?? photo; }
+        finally { attaching = false; }
+    }
+
+    private async Task Like(CommentDto c)
+    {
+        try
+        {
+            var liked = await Api.PostAsync<bool>($"api/comments/{c.Id}/like");
+            Replace(c, c with { LikedByMe = liked, LikeCount = c.LikeCount + (liked ? 1 : -1) });
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Delete(CommentDto c)
+    {
+        try
+        {
+            await Api.DeleteAsync($"api/comments/{c.Id}");
+            if (!comments!.Remove(c))
+                foreach (var p in comments.ToList())
+                    if (p.Replies.Contains(c)) comments[comments.IndexOf(p)] = p with { Replies = p.Replies.Where(r => r != c).ToList() };
+            CommentCount--;
+            await OnCountChanged.InvokeAsync(CommentCount);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private void Replace(CommentDto old, CommentDto updated)
+    {
+        var i = comments!.IndexOf(old);
+        if (i >= 0) { comments[i] = updated; return; }
+        foreach (var p in comments!.ToList())
+        {
+            var j = p.Replies.IndexOf(old);
+            if (j >= 0) { var reps = p.Replies.ToList(); reps[j] = updated; comments[comments.IndexOf(p)] = p with { Replies = reps }; }
+        }
+    }
+
+    private async Task Summarize()
+    {
+        summarizing = true;
+        try { summary = (await Api.GetAsync<AiTextResponse>($"api/posts/{PostId}/summary")).Text; }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { summarizing = false; }
+    }
+}

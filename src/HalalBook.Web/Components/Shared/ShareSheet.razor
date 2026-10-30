@@ -1,0 +1,173 @@
+@* Share a post anywhere: your profile, your groups, friends in Messages, other apps, or a link. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="overlay" @onclick="Close">
+    <div class="modal share-sheet" @onclick:stopPropagation>
+        <div class="row spread"><h2 style="margin:0">Share</h2><button class="icon-btn" @onclick="Close" aria-label="Close">✕</button></div>
+
+        @* Like Facebook's "Copy link": paste it into WhatsApp, Messenger, SMS or anywhere. Public posts show a preview card. *@
+        <div class="share-link">
+            <input class="input" readonly value="@Url" onfocus="this.select()" />
+            <button class="btn btn-primary btn-sm" data-url="@Url" onclick="halalbook.copyLink(this)"><span data-label>🔗 Copy link</span></button>
+        </div>
+
+        <div class="tabs" style="margin:.6rem 0">
+            <button class="@(tab == "feed" ? "active" : "")" @onclick='() => tab = "feed"'>📰 Feed</button>
+            <button class="@(tab == "groups" ? "active" : "")" @onclick="ShowGroups">🕌 Groups</button>
+            <button class="@(tab == "send" ? "active" : "")" @onclick="ShowFriends">💬 Send</button>
+            <button class="@(tab == "apps" ? "active" : "")" @onclick='() => tab = "apps"'>📲 Apps</button>
+        </div>
+
+        @switch (tab)
+        {
+            case "feed":
+                <textarea class="input" placeholder="Say something about this…" @bind="text" rows="3"></textarea>
+                <div class="row spread mt">
+                    <select class="input" style="width:auto" @bind="visibility">
+                        <option value="@Visibility.Public">🌐 Public</option>
+                        <option value="@Visibility.Friends">👥 Friends</option>
+                        <option value="@Visibility.OnlyMe">🔒 Only me</option>
+                    </select>
+                    <button class="btn btn-primary" disabled="@busy" @onclick="ShareToFeed">Share now</button>
+                </div>
+                break;
+
+            case "groups":
+                @if (groups is null) { <div class="spinner"></div> }
+                else if (groups.Count == 0) { <p class="muted">Join a group to share posts with it.</p> }
+                else
+                {
+                    <div class="share-list">
+                        @foreach (var g in groups)
+                        {
+                            <label class="audience-row compact"><input type="checkbox" checked="@pickedGroups.Contains(g.Id)" @onchange="e => Toggle(pickedGroups, g.Id, e.Value is true)" /><span class="aud-ico" style="width:32px;height:32px">🕌</span><span>@g.Name</span></label>
+                        }
+                    </div>
+                    <textarea class="input mt" placeholder="Say something (optional)" @bind="text" rows="2"></textarea>
+                    <button class="btn btn-primary btn-block mt" disabled="@(busy || pickedGroups.Count == 0)" @onclick="ShareToGroups">Share to @pickedGroups.Count group@(pickedGroups.Count == 1 ? "" : "s")</button>
+                }
+                break;
+
+            case "send":
+                <input class="input" placeholder="Search friends" @bind="search" @bind:event="oninput" />
+                @if (friends is null) { <div class="spinner"></div> }
+                else
+                {
+                    <div class="share-list mt">
+                        @foreach (var f in friends.Where(f => string.IsNullOrWhiteSpace(search) || f.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase)).Take(60))
+                        {
+                            <label class="audience-row compact"><input type="checkbox" checked="@pickedPeople.Contains(f.Id)" @onchange="e => Toggle(pickedPeople, f.Id, e.Value is true)" /><Avatar User="f" Size="32" Link="false" /><span>@f.DisplayName</span></label>
+                        }
+                        @if (friends.Count == 0) { <p class="muted">Add friends to send them posts.</p> }
+                    </div>
+                }
+                <input class="input mt" placeholder="Add a message (optional)" @bind="text" />
+                <button class="btn btn-primary btn-block mt" disabled="@(busy || pickedPeople.Count == 0)" @onclick="SendToFriends">Send to @pickedPeople.Count</button>
+                break;
+
+            default:
+                <div class="share-apps">
+                    <button class="share-app" @onclick="NativeShare"><span style="background:#13866a">⤴</span>More apps…</button>
+                    <a class="share-app" href="@($"https://wa.me/?text={Enc(Title + " " + Url)}")" target="_blank" rel="noopener"><span style="background:#25d366">🟢</span>WhatsApp</a>
+                    <a class="share-app" href="@($"https://www.facebook.com/sharer/sharer.php?u={Enc(Url)}")" target="_blank" rel="noopener"><span style="background:#1877f2">f</span>Facebook</a>
+                    <a class="share-app" href="@($"fb-messenger://share/?link={Enc(Url)}")"><span style="background:#a033ff">✉</span>Messenger</a>
+                    <a class="share-app" href="@($"https://twitter.com/intent/tweet?text={Enc(Title)}&url={Enc(Url)}")" target="_blank" rel="noopener"><span style="background:#000">𝕏</span>X</a>
+                    <a class="share-app" href="@($"https://t.me/share/url?url={Enc(Url)}&text={Enc(Title)}")" target="_blank" rel="noopener"><span style="background:#229ed9">✈</span>Telegram</a>
+                    <a class="share-app" href="@($"https://www.linkedin.com/sharing/share-offsite/?url={Enc(Url)}")" target="_blank" rel="noopener"><span style="background:#0a66c2">in</span>LinkedIn</a>
+                    <a class="share-app" href="@($"mailto:?subject={Enc("Shared from HalalBook")}&body={Enc(Title + "\n\n" + Url)}")"><span style="background:#c9a227">@@</span>Email</a>
+                    <a class="share-app" href="@($"sms:?&body={Enc(Title + " " + Url)}")"><span style="background:#34c759">💬</span>Text message</a>
+                    <button class="share-app" data-url="@Url" onclick="halalbook.copyLink(this)"><span style="background:#4b5d55">🔗</span><b data-label>Copy link</b></button>
+                </div>
+                <p class="subtle center mt">@(Post.Visibility == Visibility.Public ? "Anyone with the link can see this public post." : "Only people who can already see this post can open the link.")</p>
+                break;
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PostDto Post { get; set; } = default!;
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<PostDto> OnShared { get; set; }
+
+    private string tab = "feed";
+    private string? text, search;
+    private Visibility visibility = Visibility.Public;
+    private bool busy;
+    private List<GroupDto>? groups;
+    private List<UserSummaryDto>? friends;
+    private readonly HashSet<Guid> pickedGroups = [], pickedPeople = [];
+
+    private Guid OriginalId => Post.SharedPost?.Id ?? Post.Id;
+    private string Url => Nav.ToAbsoluteUri($"/p/{OriginalId}").ToString();
+    private string Title => Post.Content.Length > 100 ? Post.Content[..100] + "…" : Post.Content.Length > 0 ? Post.Content : $"A post by {Post.Author.DisplayName} on HalalBook";
+    private static string Enc(string s) => Uri.EscapeDataString(s);
+    private static void Toggle(HashSet<Guid> set, Guid id, bool on) { if (on) set.Add(id); else set.Remove(id); }
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    private async Task ShowGroups()
+    {
+        tab = "groups";
+        groups ??= await Api.GetAsync<List<GroupDto>>("api/groups?filter=mine");
+    }
+
+    private async Task ShowFriends()
+    {
+        tab = "send";
+        friends ??= await Api.GetAsync<List<UserSummaryDto>>("api/friends");
+    }
+
+    private async Task ShareToFeed()
+    {
+        busy = true;
+        try
+        {
+            var created = await Api.PostAsync<PostDto>("api/posts", new CreatePostRequest(text ?? "", visibility, SharedPostId: OriginalId));
+            Toasts.Show("Shared to your profile");
+            await OnShared.InvokeAsync(created);
+            await Close();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task ShareToGroups()
+    {
+        busy = true;
+        try
+        {
+            await Api.PostAsync<PostDto>("api/posts", new CreatePostRequest(text ?? "", SharedPostId: OriginalId, GroupIds: [.. pickedGroups]));
+            Toasts.Show($"Shared to {pickedGroups.Count} group{(pickedGroups.Count == 1 ? "" : "s")}");
+            await Close();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task SendToFriends()
+    {
+        busy = true;
+        try
+        {
+            var n = await Api.PostAsync<int>("api/conversations/send-post", new SendPostRequest(OriginalId, [.. pickedPeople], text));
+            Toasts.Show(n == pickedPeople.Count ? $"Sent to {n}" : $"Sent to {n} of {pickedPeople.Count} (some people only accept messages from friends)");
+            await Close();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task NativeShare()
+    {
+        if (!await JS.InvokeAsync<bool>("halalbook.nativeShare", Title, Url)) await Copy();
+    }
+
+    private async Task Copy()
+    {
+        await JS.InvokeVoidAsync("halalbook.copy", Url);
+        Toasts.Show("Link copied");
+    }
+}

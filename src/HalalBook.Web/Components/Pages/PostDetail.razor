@@ -1,0 +1,22 @@
+﻿@page "/post/{Id:guid}"
+@inject ApiClient Api
+
+<PageTitle>Post · HalalBook</PageTitle>
+<div class="feed-column">
+    @if (post is not null) { <PostCard @key="post.Id" Post="post" OpenComments="true" /> }
+    else if (missing) { <div class="card"><Empty Title="This post isn't available" Text="It may have been removed, or it's only visible to some people." /></div> }
+    else { <div class="spinner"></div> }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private PostDto? post;
+    private bool missing;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        post = null; missing = false;
+        try { post = await Api.GetAsync<PostDto>($"api/posts/{Id}"); }
+        catch (Exception) { missing = true; }
+    }
+}

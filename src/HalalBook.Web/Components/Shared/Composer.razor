@@ -1,0 +1,281 @@
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+@inject MediaGuard Guard
+
+<div class="card composer">
+    <div class="row" style="align-items:flex-start">
+        <Avatar User="Me" Size="44" />
+        <div class="grow">
+            <textarea placeholder="@T(Placeholder)" @bind="text" @bind:event="oninput" rows="@(string.IsNullOrEmpty(text) ? 2 : 4)"></textarea>
+        </div>
+    </div>
+
+    @if (media.Count > 0)
+    {
+        <div class="media-grid n@(Math.Min(media.Count, 4))">
+            @foreach (var m in media)
+            {
+                <div class="thumb">
+                    @if (m.Type == MediaType.Video) { <video src="@(m.Url)#t=0.1" muted playsinline controls preload="metadata"></video> } else { <img src="@m.Url" alt="@(m.AltText ?? "")" /> }
+                    @if (m.AltText is { Length: > 0 } alt) { <span class="alt-badge" title="@alt">ALT ✨</span> }
+                    <button class="icon-btn x" @onclick="() => media.Remove(m)" aria-label="Remove">✕</button>
+                </div>
+            }
+        </div>
+    }
+
+    @if (uploading)
+    {
+        <div class="subtle">Uploading @uploadIndex of @uploadTotal… please keep this page open.</div>
+        <div class="upload-progress"><span style="width:@(uploadTotal == 0 ? 0 : (uploadIndex - 1) * 100 / uploadTotal + 100 / uploadTotal / 2)%"></span></div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(text) && text.Length > 3)
+    {
+        <div class="ai-bar">
+            <span class="ai-tag">✨ Noor AI</span>
+            <button class="chip" disabled="@aiBusy" @onclick='() => Compose("polish")'>Polish</button>
+            <button class="chip" disabled="@aiBusy" @onclick='() => Compose("shorter")'>Shorter</button>
+            <button class="chip" disabled="@aiBusy" @onclick='() => Compose("warmer")'>Warmer</button>
+            <button class="chip" disabled="@aiBusy" @onclick='() => Compose("arabic-greeting")'>Add a dua</button>
+            <button class="chip" disabled="@aiBusy" @onclick='() => Compose("caption")'>Caption</button>
+            @if (aiBusy) { <span class="subtle">thinking…</span> }
+        </div>
+    }
+
+    @if (suggestedTags.Count > 0)
+    {
+        <div class="row wrap" style="gap:.35rem;margin-bottom:.5rem">
+            <span class="subtle">Suggested:</span>
+            @foreach (var t in suggestedTags)
+            {
+                <button class="chip gold" @onclick="() => AddTag(t)">#@t</button>
+            }
+        </div>
+    }
+
+    @if (moderationNote is not null) { <div class="pending-banner" style="margin:0 0 .5rem">@moderationNote</div> }
+
+    @if (lifeEvent is { } ev)
+    {
+        <div class="life-event-card small">
+            <div class="life-icon">@ev.Icon</div>
+            <div class="life-title">@ev.Title</div>
+            <input type="date" class="input" style="max-width:180px;margin:.4rem auto 0" @bind="lifeEventDate" />
+            <button class="btn btn-ghost btn-sm" @onclick="() => lifeEvent = null">Remove</button>
+        </div>
+    }
+
+    @if (pollOptions is not null)
+    {
+        <div class="poll-editor">
+            <div class="row spread"><b>📊 @T("Poll")</b><button class="btn btn-ghost btn-sm" @onclick="() => pollOptions = null">@T("Remove")</button></div>
+            <small class="subtle">@T("Your post text is the question.")</small>
+            @for (var i = 0; i < pollOptions.Count; i++)
+            {
+                var n = i;
+                <input class="input" maxlength="120" placeholder="@($"{T("Option")} {n + 1}")" value="@pollOptions[n]" @oninput="e => pollOptions[n] = e.Value?.ToString() ?? string.Empty" />
+            }
+            @if (pollOptions.Count < 6) { <button class="btn btn-ghost btn-sm" @onclick='() => pollOptions.Add("")'>＋ @T("Add option")</button> }
+        </div>
+    }
+
+    @if (showExtras)
+    {
+        <div class="row wrap" style="margin-bottom:.5rem">
+            <input class="input grow" placeholder="Feeling… (grateful, blessed, motivated)" @bind="feeling" />
+            <input class="input grow" placeholder="📍 Location" @bind="location" />
+        </div>
+    }
+
+    <hr class="divider" />
+    <div class="row spread wrap">
+        <div class="composer-tools">
+            @if (ReelMode)
+            {
+                <label class="btn btn-gold btn-sm" title="Vertical video">
+                    🎬 @(media.Count == 0 ? "Choose video" : "Replace video")
+                    <InputFile @ref="fileInput" OnChange="Upload" accept="video/*" style="display:none" />
+                </label>
+            }
+            else
+            {
+                <label class="btn btn-ghost btn-sm" title="Photos or videos (up to 10)">
+                    🖼️ @T("Photo/Video")
+                    <InputFile @ref="fileInput" OnChange="Upload" multiple accept="image/*,video/*" style="display:none" />
+                </label>
+            }
+            <button class="btn btn-ghost btn-sm" @onclick="() => showExtras = !showExtras">😊 @T("Feeling")</button>
+            @if (!ReelMode) { <button class="btn btn-ghost btn-sm" @onclick='() => pollOptions ??= ["", ""]'>📊 @T("Poll")</button> }
+            @if (!ReelMode && PageId is null && Session.ShowFaith)
+            {
+                <button class="btn btn-ghost btn-sm dua-toggle @(asDua ? "on" : "")" @onclick="() => asDua = !asDua"
+                        title="@T("Ask friends and the community to make dua for you")">🤲 @T("Ask for dua")</button>
+            }
+            @if (GroupId is null && PageId is null && TargetUserId is null && !ReelMode)
+            {
+                <button class="btn btn-ghost btn-sm" @onclick="() => pickingEvent = true">🌟 @T("Life event")</button>
+            }
+            @if (GroupId is null && PageId is null && TargetUserId is null)
+            {
+                <label class="btn btn-ghost btn-sm ummah-toggle @(forUmmah ? "on" : "")" title="Translate into English, Arabic, Urdu, Bengali, Indonesian, Turkish, French and Malay">
+                    <input type="checkbox" @bind="forUmmah" /> 🌍 @T("Reach the whole Ummah")
+                </label>
+            }
+            @if (AllowReel && !ReelMode)
+            {
+                <label class="btn btn-ghost btn-sm" style="gap:.3rem"><input type="checkbox" @bind="asReel" /> 🎬 Reel</label>
+            }
+        </div>
+        <div class="row">
+            @if (GroupId is null && PageId is null)
+            {
+                <button class="btn btn-outline btn-sm audience-btn" @onclick="() => picking = true" title="Choose audience">@AudienceLabel ▾</button>
+            }
+            <button class="btn btn-primary" disabled="@(!CanPost)" @onclick="Submit">@(posting ? T("Posting…") : T("Post"))</button>
+        </div>
+    </div>
+</div>
+
+@if (pickingEvent)
+{
+    <div class="overlay" @onclick="() => pickingEvent = false">
+        <div class="modal" @onclick:stopPropagation>
+            <h2>🌟 Life event</h2>
+            @foreach (var group in LifeEvents.All.GroupBy(e => e.Category))
+            {
+                <div class="subtle" style="margin:.6rem 0 .3rem;font-weight:700">@group.Key</div>
+                <div class="event-grid">
+                    @foreach (var e in group)
+                    {
+                        <button class="event-option" @onclick="() => { lifeEvent = e; pickingEvent = false; }"><span>@e.Icon</span>@e.Title</button>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (picking)
+{
+    <AudiencePicker Value="audience" ShowDestinations="TargetUserId is null" OnCancel="() => picking = false"
+                    OnDone="c => { audience = c; picking = false; }" />
+}
+
+@code {
+    [Parameter] public Guid? GroupId { get; set; }
+    [Parameter] public Guid? PageId { get; set; }
+    /// <summary>Set to post on someone else's profile.</summary>
+    [Parameter] public Guid? TargetUserId { get; set; }
+    [Parameter] public bool AllowReel { get; set; } = true;
+    /// <summary>TikTok-style flow: a single vertical video posted as a reel.</summary>
+    [Parameter] public bool ReelMode { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Share something beautiful…";
+    [Parameter] public EventCallback<PostDto> OnPosted { get; set; }
+
+    private string? text, feeling, location, moderationNote;
+    private readonly List<MediaDto> media = [];
+    private List<string> suggestedTags = [];
+    private AudiencePicker.Choice audience = new(Visibility.Public, [], true, [], []);
+    private bool picking, pickingEvent, forUmmah, asDua;
+    private LifeEventKind? lifeEvent;
+    private DateOnly lifeEventDate = DateOnly.FromDateTime(DateTime.UtcNow);
+
+    private string AudienceLabel
+    {
+        get
+        {
+            var (_, icon, name, _) = AudiencePicker.Options.First(o => o.Item1 == audience.Visibility);
+            var who = audience.Visibility switch
+            {
+                Visibility.SpecificPeople => $"{audience.People.Count} friend{(audience.People.Count == 1 ? "" : "s")}",
+                Visibility.FriendsExcept when audience.People.Count > 0 => $"Friends except {audience.People.Count}",
+                Visibility.FriendList => audience.ListName ?? "Friend list",
+                _ => name,
+            };
+            var groups = audience.GroupIds.Count switch { 0 => "", 1 => audience.GroupNames.FirstOrDefault() ?? "1 group", var n => $"{n} groups" };
+            if (audience.Visibility == Visibility.FriendList) icon = "";
+            return !audience.OnProfile ? $"🕌 {groups}" : groups.Length > 0 ? $"{icon} {who} + 🕌 {groups}".Trim() : $"{icon} {who}".Trim();
+        }
+    }
+    private bool uploading, posting, aiBusy, showExtras, asReel;
+    private List<string>? pollOptions;
+    private int uploadIndex, uploadTotal;
+    private InputFile? fileInput;
+
+    private UserSummaryDto? Me => Session.User is { } u ? new(u.Id, u.UserName, u.DisplayName, u.AvatarUrl, u.IsVerified) : null;
+    private bool CanPost => !posting && !uploading && (ReelMode ? media.Count == 1 : (!string.IsNullOrWhiteSpace(text) || media.Count > 0 || lifeEvent is not null));
+
+    private async Task Upload(InputFileChangeEventArgs e)
+    {
+        var files = e.GetMultipleFiles(20).Take(ReelMode ? 1 : 10 - media.Count).ToList();
+        if (e.FileCount > files.Count && !ReelMode) Toasts.Show("A post can hold up to 10 photos or videos.", true);
+        if (ReelMode) media.Clear();
+        if (ReelMode && files.Any(f => !f.ContentType.StartsWith("video"))) { Toasts.Show("Reels need a video.", true); return; }
+        uploading = true; uploadTotal = files.Count; uploadIndex = 0;
+        try
+        {
+            var uploaded = await Guard.UploadAsync(files, ReelMode ? "reel" : "post", fileInput?.Element,
+                (i, n) => { uploadIndex = i; uploadTotal = n; InvokeAsync(StateHasChanged); });
+            media.AddRange(uploaded.Select(u => new MediaDto(u.Url, u.Type, u.AltText)));
+            if (uploaded.Any(u => u.NeedsReview))
+                Toasts.Show("A photo will be checked by a moderator before others can see your post.");
+        }
+        finally { uploading = false; }
+    }
+
+    private async Task Compose(string mode)
+    {
+        aiBusy = true;
+        try
+        {
+            var res = await Api.PostAsync<AiComposeResponse>("api/ai/compose", new AiComposeRequest(text!, mode));
+            if (res.UsedAi) text = res.Text;
+            else Toasts.Show("AI writing help needs a Claude API key on the server. Hashtags still work.");
+            var existing = HalalBookTags(text);
+            suggestedTags = res.SuggestedHashtags.Where(t => !existing.Contains(t)).ToList();
+            moderationNote = !res.Moderation.Allowed ? "⚠️ " + string.Join(" ", res.Moderation.Reasons)
+                : res.Moderation.NeedsReview ? "⏳ This may need a moderator's review before others see it." : null;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { aiBusy = false; }
+    }
+
+    private static HashSet<string> HalalBookTags(string? s) =>
+        System.Text.RegularExpressions.Regex.Matches(s ?? "", @"#(\w+)").Select(m => m.Groups[1].Value.ToLowerInvariant()).ToHashSet();
+
+    private void AddTag(string tag)
+    {
+        text = (text ?? "").TrimEnd() + " #" + tag;
+        suggestedTags.Remove(tag);
+    }
+
+    private async Task Submit()
+    {
+        posting = true;
+        try
+        {
+            var kind = (ReelMode || asReel) && media.FirstOrDefault()?.Type == MediaType.Video ? PostKind.Reel : asDua ? PostKind.Dua : PostKind.Standard;
+            var post = await Api.PostAsync<PostDto>("api/posts",
+                new CreatePostRequest(text ?? "", audience.Visibility, media.ToList(), GroupId, PageId, null, kind, feeling, location, TargetUserId,
+                    audience.People, audience.GroupIds.Count > 0 ? audience.GroupIds : null, audience.OnProfile, audience.ListId,
+                    lifeEvent?.Key, lifeEvent is null ? null : lifeEventDate, forUmmah,
+                    pollOptions?.Where(o => !string.IsNullOrWhiteSpace(o)).ToList()));
+            var postedTo = audience.GroupIds.Count;
+            text = feeling = location = moderationNote = null;
+            lifeEvent = null;
+            if (forUmmah) Toasts.Show(T("Your post is being translated for the whole Ummah 🌍"));
+            forUmmah = false;
+            asDua = false;
+            audience = audience with { GroupIds = [], GroupNames = [], OnProfile = true };
+            media.Clear(); suggestedTags = []; showExtras = asReel = false; pollOptions = null;
+            Toasts.Show(post.Moderation == ModerationStatus.PendingReview ? "Posted. A moderator will review it shortly."
+                : postedTo > 0 ? $"Posted{(audience.OnProfile ? " to your profile and" : " to")} {postedTo} group{(postedTo == 1 ? "" : "s")}, alhamdulillah!"
+                : "Posted, alhamdulillah!");
+            await OnPosted.InvokeAsync(post);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { posting = false; }
+    }
+}

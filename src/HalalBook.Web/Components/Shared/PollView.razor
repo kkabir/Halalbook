@@ -1,0 +1,40 @@
+@inject ApiClient Api
+@inject Toasts Toasts
+
+@* A poll on a post: tap an option to vote, tap it again to take the vote back. Results show once you've voted. *@
+
+@if (Poll is { } p)
+{
+    var voted = p.MyVote is not null;
+    <div class="poll">
+        @foreach (var o in p.Options)
+        {
+            var pct = p.TotalVotes == 0 ? 0 : (int)Math.Round(100.0 * o.Votes / p.TotalVotes);
+            <button class="poll-option @(p.MyVote == o.Id ? "mine" : "") @(voted ? "voted" : "")" disabled="@busy" @onclick="() => Vote(o.Id)">
+                @if (voted) { <i style="width:@(pct)%"></i> }
+                <span class="poll-text">@(p.MyVote == o.Id ? "✓ " : "")@o.Text</span>
+                @if (voted) { <b>@pct%</b> }
+            </button>
+        }
+        <div class="subtle poll-total">@p.TotalVotes @T(p.TotalVotes == 1 ? "vote" : "votes")@(voted ? "" : " · " + T("Vote to see results"))</div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid PostId { get; set; }
+    [Parameter] public PollDto? Poll { get; set; }
+    [Parameter] public EventCallback<PollDto> PollChanged { get; set; }
+    private bool busy;
+
+    private async Task Vote(Guid option)
+    {
+        busy = true;
+        try
+        {
+            Poll = await Api.PostAsync<PollDto>($"api/posts/{PostId}/poll/vote", new PollVoteRequest(option));
+            await PollChanged.InvokeAsync(Poll);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+}

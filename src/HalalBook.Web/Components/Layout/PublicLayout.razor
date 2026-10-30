@@ -1,0 +1,11 @@
+@inherits LocalizedLayout
+
+@* Lightweight layout for pages anyone can open without signing in (shared post links). *@
+<header class="topbar">
+    <Logo />
+    <nav class="topbar-actions">
+        <a class="btn btn-sm btn-gold" href="/register">Join</a>
+        <a class="btn btn-sm" style="background:rgba(255,255,255,.12);color:#fff" href="/login">Sign in</a>
+    </nav>
+</header>
+<main class="public-main">@Body</main>

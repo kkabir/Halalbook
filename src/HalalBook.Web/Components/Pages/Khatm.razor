@@ -1,0 +1,164 @@
+@page "/khatm"
+@page "/khatm/{Id:guid}"
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<PageTitle>@(current?.Title ?? T("Quran khatm together")) · HalalBook</PageTitle>
+
+<div class="feed-column">
+    @if (Id is null)
+    {
+        <div class="page-hero">
+            <h1>📖 @T("Quran khatm together")</h1>
+            <p>@T("Share one complete recitation of the Quran: each person reads a juz, and together you finish all 30.")</p>
+        </div>
+
+        <div class="card">
+            <div class="card-title">✨ @T("Start a khatm")</div>
+            <div class="stack">
+                <input class="input" placeholder="@T("Name, for example: Ramadan khatm with family")" @bind="title" maxlength="120" />
+                <input class="input" placeholder="@T("Dedicated to (optional), for example: for my late father")" @bind="intention" maxlength="300" />
+                <label class="field">@T("Finish by (optional)")<input class="input" type="date" @bind="due" /></label>
+                <button class="btn btn-gold" disabled="@(busy || string.IsNullOrWhiteSpace(title))" @onclick="Create">📖 @T("Create and share")</button>
+            </div>
+        </div>
+
+        @if (list is null) { <p class="subtle center mt">@T("Loading…")</p> }
+        else if (list.Count == 0) { <Empty Title="No khatms yet" Text="Start one above and share the link with family and friends." /> }
+        else
+        {
+            @foreach (var k in list)
+            {
+                var done = k.Parts.Count(p => p.Done);
+                <a class="card khatm-item mt" href="/khatm/@k.Id">
+                    <div class="khatm-ring small" style="--p:@(done * 100 / 30)"><b>@done</b><span>/30</span></div>
+                    <div class="grow">
+                        <b>@k.Title</b>
+                        @if (k.Intention is { } why) { <div class="subtle">🤍 @why</div> }
+                        <div class="subtle">@T("by") @k.Creator.DisplayName · @(k.CompletedAt is null ? $"{k.Parts.Count(p => p.Reader is null)} {T("juz still free")}" : "✅ " + T("Complete"))</div>
+                    </div>
+                </a>
+            }
+        }
+    }
+    else if (current is { } k)
+    {
+        var done = k.Parts.Count(p => p.Done);
+        var claimed = k.Parts.Count(p => p.Reader is not null);
+        <div class="card khatm-hero">
+            <a href="/khatm" class="subtle">← @T("All khatms")</a>
+            <div class="row" style="gap:1rem;align-items:center;margin-top:.5rem">
+                <div class="khatm-ring" style="--p:@(done * 100 / 30)"><b>@done</b><span>/30</span></div>
+                <div class="grow">
+                    <h1>@k.Title</h1>
+                    @if (k.Intention is { } why) { <p class="khatm-intention">🤍 @why</p> }
+                    <div class="subtle">@T("Started by") @k.Creator.DisplayName@(k.DueDate is { } d ? $" · {T("finish by")} {d:d MMM yyyy}" : "")</div>
+                </div>
+            </div>
+            @if (k.CompletedAt is not null)
+            {
+                <div class="khatm-complete">🎉 @T("Alhamdulillah! All 30 juz have been read. Gather for the khatm dua.")</div>
+            }
+            else
+            {
+                <div class="subtle mt">@claimed @T("of 30 juz taken") · @done @T("finished") · @T("Tap a free juz to take it")</div>
+            }
+            <div class="row mt" style="gap:.5rem;flex-wrap:wrap">
+                <button class="btn btn-primary btn-sm" @onclick="Share">📤 @T("Invite readers")</button>
+                <button class="btn btn-ghost btn-sm" @onclick="Copy">🔗 @(copied ? T("Copied") : T("Copy link"))</button>
+            </div>
+        </div>
+
+        <div class="juz-grid mt">
+            @foreach (var p in k.Parts)
+            {
+                <div class="juz @(p.Done ? "done" : p.Reader is not null ? "taken" : "free") @(p.Mine ? "mine" : "")">
+                    <div class="juz-no">@T("Juz") @p.Juz</div>
+                    @if (p.Reader is { } r)
+                    {
+                        <div class="juz-who"><Avatar User="r" Size="22" Link="false" ShowStatus="false" /> <span>@(p.Mine ? T("You") : r.DisplayName.Split(' ')[0])</span></div>
+                    }
+                    else { <div class="juz-who subtle">@T("Free")</div> }
+                    @if (k.CompletedAt is null)
+                    {
+                        @if (p.Reader is null)
+                        {
+                            <button class="btn btn-gold btn-sm" disabled="@busy" @onclick='() => Act(p.Juz, "claim")'>@T("Take")</button>
+                        }
+                        else if (p.Mine && !p.Done)
+                        {
+                            <a class="juz-read" href="https://quran.com/juz/@p.Juz" target="_blank" rel="noopener">📖 @T("Read")</a>
+                            <button class="btn btn-primary btn-sm" disabled="@busy" @onclick='() => Act(p.Juz, "done")'>✓ @T("Done")</button>
+                            <button class="juz-release" disabled="@busy" @onclick='() => Act(p.Juz, "release")'>@T("Give back")</button>
+                        }
+                        else if (p.Done) { <div class="juz-check">✓</div> }
+                    }
+                    else if (p.Done) { <div class="juz-check">✓</div> }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    private List<KhatmDto>? list;
+    private KhatmDto? current;
+    private string? title, intention;
+    private DateOnly? due;
+    private bool busy, copied;
+
+    private string Link => $"{Nav.BaseUri}khatm/{current?.Id}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        copied = false;
+        try
+        {
+            if (Id is Guid id) current = await Api.GetAsync<KhatmDto>($"api/khatms/{id}");
+            else { current = null; list = await Api.GetAsync<List<KhatmDto>>("api/khatms"); }
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Create()
+    {
+        busy = true;
+        try
+        {
+            var k = await Api.PostAsync<KhatmDto>("api/khatms", new CreateKhatmRequest(title!.Trim(), intention, due));
+            title = intention = null; due = null;
+            Nav.NavigateTo($"/khatm/{k.Id}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task Act(int juz, string action)
+    {
+        busy = true;
+        try
+        {
+            current = await Api.PostAsync<KhatmDto>($"api/khatms/{current!.Id}/juz/{juz}/{action}");
+            if (action == "claim") Toasts.Show($"{T("Juz")} {juz} {T("is yours. May Allah make it easy 🤲")}");
+            if (action == "done") Toasts.Show(current.CompletedAt is null ? T("MashaAllah! Marked as read.") : T("Alhamdulillah, the khatm is complete! 🎉"));
+        }
+        catch (Exception ex) { Toasts.Error(ex); await OnParametersSetAsync(); }
+        finally { busy = false; }
+    }
+
+    private async Task Share()
+    {
+        var text = $"{T("Join our Quran khatm")}: {current!.Title}{(current.Intention is { } w ? $" ({w})" : "")}. {T("Take a juz here")}:";
+        try { if (!await JS.InvokeAsync<bool>("halalbook.nativeShare", text, Link)) await Copy(); }
+        catch (JSException) { }
+    }
+
+    private async Task Copy()
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", Link); copied = true; }
+        catch (JSException) { Toasts.Show(Link); }
+    }
+}

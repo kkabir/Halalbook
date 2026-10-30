@@ -1,0 +1,139 @@
+@page "/groups"
+@page "/pages"
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject NavigationManager Nav
+
+<PageTitle>@(IsPages ? "Pages" : "Groups") · HalalBook</PageTitle>
+
+<div class="page-hero row spread wrap">
+    <div>
+        <h1>@(IsPages ? "Pages" : "Groups")</h1>
+        <p>@(IsPages ? "Follow masjids, scholars, charities and halal businesses." : "Circles of knowledge, sisterhood, brotherhood and shared interests.")</p>
+    </div>
+    <button class="btn btn-gold" @onclick="() => creating = true">+ Create @(IsPages ? "page" : "group")</button>
+</div>
+
+<div class="tabs">
+    <button class="@(filter == null ? "active" : "")" @onclick="() => SetFilter(null)">Discover</button>
+    @if (IsPages)
+    {
+        <button class="@(filter == "following" ? "active" : "")" @onclick='() => SetFilter("following")'>Following</button>
+    }
+    <button class="@(filter == "mine" ? "active" : "")" @onclick='() => SetFilter("mine")'>@(IsPages ? "Your pages" : "Your groups")</button>
+</div>
+
+@if (loading) { <div class="spinner"></div> }
+else if (IsPages)
+{
+    @if (pages.Count == 0) { <Empty Title="No pages here yet" /> }
+    <div class="grid-cards">
+        @foreach (var p in pages)
+        {
+            <a class="tile tile-arch" href="/pages/@p.Handle">
+                <div class="tile-cover">@if (p.CoverUrl is { } c) { <img src="@c" alt="" /> }</div>
+                <div class="tile-body">
+                    <b>@p.Name @if (p.IsVerified) { <span class="verified">✦</span> }</b>
+                    <span class="subtle">@p.Category · @p.FollowerCount followers</span>
+                    <span class="muted" style="font-size:.88rem">@p.Description</span>
+                </div>
+            </a>
+        }
+    </div>
+}
+else
+{
+    @if (groups.Count == 0) { <Empty Title="No groups here yet" Text="Start one and invite your community." /> }
+    <div class="grid-cards">
+        @foreach (var g in groups)
+        {
+            <a class="tile tile-arch" href="/groups/@g.Id">
+                <div class="tile-cover">@if (g.CoverUrl is { } c) { <img src="@c" alt="" /> }</div>
+                <div class="tile-body">
+                    <b>@g.Name</b>
+                    <span class="subtle">@(g.Privacy == GroupPrivacy.Private ? "🔒 Private" : "🌐 Public") · @g.MemberCount members</span>
+                    <span class="muted" style="font-size:.88rem">@g.Description</span>
+                    @if (g.IsMember) { <span class="chip" style="align-self:flex-start">✓ Member</span> }
+                </div>
+            </a>
+        }
+    </div>
+}
+
+@if (creating)
+{
+    <div class="overlay" @onclick="() => creating = false">
+        <div class="modal stack" @onclick:stopPropagation>
+            <h2>Create a @(IsPages ? "page" : "group")</h2>
+            <label class="field">Name<input class="input" @bind="name" /></label>
+            @if (IsPages) { <label class="field">Handle<input class="input" @bind="handle" placeholder="e.g. eastlondonmasjid" /></label> }
+            <label class="field">Category
+                <select class="input" @bind="category">
+                    @foreach (var c in new[] { "Faith", "Education", "Community", "Masjid", "Charity", "Family", "Sisters", "Brothers", "Youth", "Business", "Food", "Travel", "Health" }) { <option>@c</option> }
+                </select>
+            </label>
+            <label class="field">Description<textarea class="input" @bind="description" rows="3"></textarea></label>
+            @if (!IsPages)
+            {
+                <label class="field">Privacy
+                    <select class="input" @bind="privacy"><option value="@GroupPrivacy.Public">🌐 Public</option><option value="@GroupPrivacy.Private">🔒 Private</option></select>
+                </label>
+            }
+            <label class="btn btn-outline">🖼️ @(coverUrl is null ? "Add cover image" : "Change cover")<InputFile OnChange="Upload" accept="image/*" style="display:none" /></label>
+            <div class="row" style="justify-content:flex-end">
+                <button class="btn btn-ghost" @onclick="() => creating = false">Cancel</button>
+                <button class="btn btn-primary" @onclick="Create">Create</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool IsPages => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("pages");
+    private List<GroupDto> groups = [];
+    private List<PageDto> pages = [];
+    private string? filter, name, handle, description, coverUrl;
+    private string category = "Faith";
+    private GroupPrivacy privacy;
+    private bool loading = true, creating;
+
+    protected override async Task OnParametersSetAsync() { filter = null; await Load(); }
+
+    private async Task SetFilter(string? f) { filter = f; await Load(); }
+
+    private async Task Load()
+    {
+        loading = true;
+        try
+        {
+            var q = filter is null ? "" : $"?filter={filter}";
+            if (IsPages) pages = await Api.GetAsync<List<PageDto>>($"api/pages{q}");
+            else groups = await Api.GetAsync<List<GroupDto>>($"api/groups{q}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { loading = false; }
+    }
+
+    private async Task Upload(InputFileChangeEventArgs e)
+    {
+        try { coverUrl = (await Api.UploadAsync(e.File, 8_000_001, "cover")).Url; } catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Create()
+    {
+        try
+        {
+            if (IsPages)
+            {
+                var p = await Api.PostAsync<PageDto>("api/pages", new CreatePageRequest(name ?? "", handle ?? "", category, description, null, coverUrl, null));
+                Nav.NavigateTo($"/pages/{p.Handle}");
+            }
+            else
+            {
+                var g = await Api.PostAsync<GroupDto>("api/groups", new CreateGroupRequest(name ?? "", description, coverUrl, privacy, category));
+                Nav.NavigateTo($"/groups/{g.Id}");
+            }
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

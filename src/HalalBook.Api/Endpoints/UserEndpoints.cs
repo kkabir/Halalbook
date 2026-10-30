@@ -1,0 +1,404 @@
+using System.Security.Claims;
+using System.Text.RegularExpressions;
+using HalalBook.Api.Data;
+using HalalBook.Api.Services;
+using HalalBook.Shared;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+
+namespace HalalBook.Api.Endpoints;
+
+public static partial class UserEndpoints
+{
+    public static void MapUserEndpoints(this IEndpointRouteBuilder app)
+    {
+        app.MapAuthEndpoints();
+
+        var users = app.MapGroup("/api/users").WithTags("Users").RequireAuthorization();
+
+        users.MapGet("/me", async (ClaimsPrincipal cp, AppDbContext db) =>
+            await db.Users.FindAsync(cp.UserId()) is { } u ? Results.Ok(u.ToDto()) : Results.Unauthorized());
+
+        users.MapPut("/me", async (UpdateProfileRequest req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var u = await db.Users.FindAsync(cp.UserId());
+            if (u is null) return Results.Unauthorized();
+            if (!string.IsNullOrWhiteSpace(req.DisplayName)) u.DisplayName = req.DisplayName.Trim();
+            u.Bio = req.Bio ?? u.Bio;
+            // An empty string removes the photo; null leaves it unchanged.
+            if (req.AvatarUrl is not null) u.AvatarUrl = req.AvatarUrl.Length == 0 ? null : req.AvatarUrl;
+            if (req.CoverUrl is not null) u.CoverUrl = req.CoverUrl.Length == 0 ? null : req.CoverUrl;
+            u.Location = req.Location ?? u.Location;
+            u.Website = req.Website ?? u.Website;
+            if (req.WhoCanPost is { } who) u.WhoCanPost = who;
+            u.Latitude = req.Latitude ?? u.Latitude;
+            u.Longitude = req.Longitude ?? u.Longitude;
+            if (req.PrayerMethod is not null) u.PrayerMethod = PrayerTimeCalculator.GetMethod(req.PrayerMethod).Key;
+            if (req.AsrSchool is "Hanafi" or "Shafi") u.AsrSchool = req.AsrSchool;
+            await db.SaveChangesAsync();
+            return Results.Ok(u.ToDto());
+        });
+
+        users.MapGet("/{userName}", async (string userName, ClaimsPrincipal cp, AppDbContext db, PostService posts, PresenceTracker presence, PrivacyService privacy) =>
+        {
+            var me = cp.UserId();
+            var key = userName.ToUpperInvariant();
+            var u = await db.Users.FirstOrDefaultAsync(x => x.NormalizedUserName == key);
+            if (u is null || (await posts.BlockedIdsAsync(me)).Contains(u.Id)) return Results.NotFound();
+
+            var rel = await privacy.RelationAsync(me, u.Id);
+            var f = await db.Friendships.FirstOrDefaultAsync(x =>
+                (x.RequesterId == me && x.AddresseeId == u.Id) || (x.RequesterId == u.Id && x.AddresseeId == me));
+            var status = u.Id == me ? FriendshipStatus.Self
+                : f is null ? FriendshipStatus.None
+                : f.Accepted ? FriendshipStatus.Accepted
+                : f.RequesterId == me ? FriendshipStatus.OutgoingRequest : FriendshipStatus.IncomingRequest;
+
+            return Results.Ok(new ProfileDto(u.ToSummary(), u.Bio, u.CoverUrl, u.Location, u.Website, u.CreatedAt,
+                await db.Friendships.CountAsync(x => x.Accepted && (x.RequesterId == u.Id || x.AddresseeId == u.Id)),
+                await db.Follows.CountAsync(x => x.FolloweeId == u.Id),
+                await db.Follows.CountAsync(x => x.FollowerId == u.Id),
+                await db.Posts.CountAsync(p => p.AuthorId == u.Id && !p.IsDeleted && p.GroupId == null && p.PageId == null),
+                status,
+                await db.Follows.AnyAsync(x => x.FollowerId == me && x.FolloweeId == u.Id),
+                await db.Blocks.AnyAsync(x => x.BlockerId == me && x.BlockedId == u.Id),
+                await PresenceEndpoints.CanSeePresence(db, me, u) && presence.IsOnline(u.Id),
+                await PresenceEndpoints.CanSeePresence(db, me, u) ? u.LastSeenAt : null,
+                u.Id != me && await CanPostOnProfileAsync(db, me, u.Id) is null,
+                PrivacyService.Allows(u.WhoCanMessage, rel), PrivacyService.Allows(u.WhoCanSendFriendRequests, rel),
+                PrivacyService.Allows(u.WhoCanSeeFriendsList, rel), PrivacyService.Allows(u.WhoCanFollow, rel),
+                await privacy.MutualFriendsAsync(me, u.Id), u.PinnedPostId));
+        });
+
+        // filter: life (life events only). The pinned post is shown separately, so it's left out of the list.
+        users.MapGet("/{userName}/posts", async (string userName, int? page, string? filter, ClaimsPrincipal cp, AppDbContext db, PostService posts) =>
+        {
+            var key = userName.ToUpperInvariant();
+            var u = await db.Users.FirstOrDefaultAsync(x => x.NormalizedUserName == key);
+            if (u is null) return Results.NotFound();
+            var visible = await posts.VisibleToAsync(cp.UserId(), cp.IsModerator());
+            var q = visible.Where(p => ((p.AuthorId == u.Id && p.TargetUserId == null) || p.TargetUserId == u.Id) && p.GroupId == null && p.PageId == null);
+            if (filter == "life") q = q.Where(p => p.LifeEvent != null && p.AuthorId == u.Id);
+            else if (u.PinnedPostId is Guid pin) q = q.Where(p => p.Id != pin);
+            return Results.Ok(await posts.PageAsync(q, cp.UserId(), page ?? 1, 15));
+        });
+
+        // Photos and videos from someone's timeline, newest first.
+        users.MapGet("/{userName}/media", async (string userName, MediaType? type, ClaimsPrincipal cp, AppDbContext db, PostService posts) =>
+        {
+            var key = userName.ToUpperInvariant();
+            var u = await db.Users.FirstOrDefaultAsync(x => x.NormalizedUserName == key);
+            if (u is null) return Results.NotFound();
+            var visible = await posts.VisibleToAsync(cp.UserId(), cp.IsModerator());
+            var postIds = visible.Where(p => p.AuthorId == u.Id && p.GroupId == null && p.PageId == null && p.SharedPostId == null).Select(p => p.Id);
+            var media = await db.PostMedia.Where(m => postIds.Contains(m.PostId) && (type == null || m.Type == type))
+                .Join(db.Posts, m => m.PostId, p => p.Id, (m, p) => new { m, p.CreatedAt })
+                .OrderByDescending(x => x.CreatedAt).Take(120).ToListAsync();
+            return Results.Ok(media.Select(x => new TimelineMediaDto(x.m.PostId, x.m.Url, x.m.Type, x.m.AltText, x.CreatedAt)).ToList());
+        });
+
+        users.MapPost("/me/pin/{postId:guid}", async (Guid postId, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var me = cp.UserId();
+            if (!await db.Posts.AnyAsync(p => p.Id == postId && p.AuthorId == me && !p.IsDeleted && p.GroupId == null)) return Results.NotFound();
+            await db.Users.Where(u => u.Id == me).ExecuteUpdateAsync(s => s.SetProperty(u => u.PinnedPostId, postId));
+            return Results.Ok();
+        });
+
+        users.MapDelete("/me/pin", async (ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            await db.Users.Where(u => u.Id == cp.UserId()).ExecuteUpdateAsync(s => s.SetProperty(u => u.PinnedPostId, (Guid?)null));
+            return Results.NoContent();
+        });
+
+        users.MapGet("/{userName}/friends", async (string userName, ClaimsPrincipal cp, AppDbContext db, PostService posts, PrivacyService privacy) =>
+        {
+            var key = userName.ToUpperInvariant();
+            var u = await db.Users.FirstOrDefaultAsync(x => x.NormalizedUserName == key);
+            if (u is null) return Results.NotFound();
+            if (!PrivacyService.Allows(u.WhoCanSeeFriendsList, await privacy.RelationAsync(cp.UserId(), u.Id)))
+                return Results.Problem($"{u.DisplayName} keeps their friends list private.", statusCode: 403);
+            var ids = await posts.FriendIdsAsync(u.Id);
+            return Results.Ok(await db.Users.Where(x => ids.Contains(x.Id)).OrderBy(x => x.DisplayName).Select(x => x.ToSummary()).ToListAsync());
+        });
+
+        // People you may know: friends of friends ranked by mutual friend count.
+        users.MapGet("/suggestions", async (ClaimsPrincipal cp, AppDbContext db, PostService posts) =>
+        {
+            var me = cp.UserId();
+            var friends = await posts.FriendIdsAsync(me);
+            var blocked = await posts.BlockedIdsAsync(me);
+            var related = await db.Friendships.Where(f => f.RequesterId == me || f.AddresseeId == me)
+                .Select(f => f.RequesterId == me ? f.AddresseeId : f.RequesterId).ToListAsync();
+            var fof = await db.Friendships
+                .Where(f => f.Accepted && (friends.Contains(f.RequesterId) || friends.Contains(f.AddresseeId)))
+                .Select(f => friends.Contains(f.RequesterId) ? f.AddresseeId : f.RequesterId).ToListAsync();
+            var ranked = fof.Where(id => id != me && !related.Contains(id) && !blocked.Contains(id))
+                .GroupBy(id => id).OrderByDescending(g => g.Count()).Take(12).Select(g => g.Key).ToList();
+            if (ranked.Count < 12)
+                ranked.AddRange(await db.Users.Where(u => u.Id != me && !related.Contains(u.Id) && !blocked.Contains(u.Id) && !ranked.Contains(u.Id)
+                        && u.WhoCanFindMe == PrivacyAudience.Everyone && u.WhoCanSendFriendRequests == PrivacyAudience.Everyone)
+                    .OrderByDescending(u => u.CreatedAt).Take(12 - ranked.Count).Select(u => u.Id).ToListAsync());
+            var users = await db.Users.Where(u => ranked.Contains(u.Id)).ToListAsync();
+            return Results.Ok(ranked.Select(id => users.First(u => u.Id == id).ToSummary()).ToList());
+        });
+
+        // ---- Friends ----
+        var friends = app.MapGroup("/api/friends").WithTags("Friends").RequireAuthorization();
+
+        friends.MapGet("/", async (ClaimsPrincipal cp, AppDbContext db, PostService posts) =>
+        {
+            var ids = await posts.FriendIdsAsync(cp.UserId());
+            return await db.Users.Where(u => ids.Contains(u.Id)).OrderBy(u => u.DisplayName).Select(u => u.ToSummary()).ToListAsync();
+        });
+
+        // Friends' birthdays today and in the coming week (only from people who share theirs). offset: the viewer's UTC offset in minutes.
+        friends.MapGet("/birthdays", async (int? offset, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var me = cp.UserId();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddMinutes(offset ?? 0));
+            var ids = db.Friendships.Where(f => f.Accepted && (f.RequesterId == me || f.AddresseeId == me))
+                .Select(f => f.RequesterId == me ? f.AddresseeId : f.RequesterId);
+            var people = await db.Users.Where(u => ids.Contains(u.Id) && u.ShowBirthday && u.Birthday != null && !u.IsSuspended).ToListAsync();
+            return people.Select(u => (u, days: DaysUntil(u.Birthday!.Value, today)))
+                .Where(x => x.days <= 7).OrderBy(x => x.days)
+                .Select(x => new BirthdayDto(x.u.ToSummary(), x.u.Birthday!.Value.Month, x.u.Birthday.Value.Day, x.days)).ToList();
+        });
+
+        friends.MapGet("/requests", async (ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var me = cp.UserId();
+            return await db.Friendships.Include(f => f.Requester).Include(f => f.Addressee)
+                .Where(f => !f.Accepted && (f.AddresseeId == me || f.RequesterId == me))
+                .OrderByDescending(f => f.CreatedAt)
+                .Select(f => new FriendRequestDto(f.Id, f.Requester.ToSummary(), f.Addressee.ToSummary(), f.CreatedAt)).ToListAsync();
+        });
+
+        friends.MapPost("/{userId:guid}", async (Guid userId, ClaimsPrincipal cp, AppDbContext db, Notifier notifier, PrivacyService privacy) =>
+        {
+            var me = cp.UserId();
+            var target = await db.Users.FindAsync(userId);
+            if (userId == me || target is null) return Results.BadRequest();
+            var incoming = await db.Friendships.AnyAsync(f => f.RequesterId == userId && f.AddresseeId == me);
+            if (!incoming && !PrivacyService.Allows(target.WhoCanSendFriendRequests, await privacy.RelationAsync(me, userId)))
+                return Results.Problem($"{target.DisplayName} only accepts friend requests from {PrivacyService.Describe(target.WhoCanSendFriendRequests)}.", statusCode: 403);
+            if (await db.Blocks.AnyAsync(b => (b.BlockerId == me && b.BlockedId == userId) || (b.BlockerId == userId && b.BlockedId == me))) return Results.Forbid();
+            var existing = await db.Friendships.FirstOrDefaultAsync(f =>
+                (f.RequesterId == me && f.AddresseeId == userId) || (f.RequesterId == userId && f.AddresseeId == me));
+            var meUser = (await db.Users.FindAsync(me))!;
+            if (existing is not null)
+            {
+                // Sending a request to someone who already asked you accepts theirs.
+                if (!existing.Accepted && existing.RequesterId == userId)
+                {
+                    existing.Accepted = true;
+                    await db.SaveChangesAsync();
+                    await notifier.SendAsync(userId, me, NotificationType.FriendAccepted, $"{meUser.DisplayName} accepted your friend request.", $"/u/{meUser.UserName}");
+                }
+                return Results.Ok();
+            }
+            db.Friendships.Add(new Friendship { RequesterId = me, AddresseeId = userId });
+            if (!await db.Follows.AnyAsync(f => f.FollowerId == me && f.FolloweeId == userId))
+                db.Follows.Add(new Follow { FollowerId = me, FolloweeId = userId });
+            await db.SaveChangesAsync();
+            await notifier.SendAsync(userId, me, NotificationType.FriendRequest, $"{meUser.DisplayName} sent you a friend request.", "/friends");
+            return Results.Ok();
+        });
+
+        friends.MapPost("/{userId:guid}/accept", async (Guid userId, ClaimsPrincipal cp, AppDbContext db, Notifier notifier) =>
+        {
+            var me = cp.UserId();
+            var f = await db.Friendships.FirstOrDefaultAsync(x => x.RequesterId == userId && x.AddresseeId == me && !x.Accepted);
+            if (f is null) return Results.NotFound();
+            f.Accepted = true;
+            if (!await db.Follows.AnyAsync(x => x.FollowerId == me && x.FolloweeId == userId))
+                db.Follows.Add(new Follow { FollowerId = me, FolloweeId = userId });
+            await db.SaveChangesAsync();
+            var meUser = (await db.Users.FindAsync(me))!;
+            await notifier.SendAsync(userId, me, NotificationType.FriendAccepted, $"{meUser.DisplayName} accepted your friend request.", $"/u/{meUser.UserName}");
+            return Results.Ok();
+        });
+
+        // Decline, cancel or unfriend.
+        friends.MapDelete("/{userId:guid}", async (Guid userId, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var me = cp.UserId();
+            var f = await db.Friendships.FirstOrDefaultAsync(x =>
+                (x.RequesterId == me && x.AddresseeId == userId) || (x.RequesterId == userId && x.AddresseeId == me));
+            if (f is null) return Results.NotFound();
+            db.Friendships.Remove(f);
+            await db.FriendListMembers.Where(m => (m.UserId == userId && db.FriendLists.Any(l => l.Id == m.ListId && l.OwnerId == me))
+                || (m.UserId == me && db.FriendLists.Any(l => l.Id == m.ListId && l.OwnerId == userId))).ExecuteDeleteAsync();
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        // ---- Follow / block ----
+        users.MapPost("/{userId:guid}/follow", async (Guid userId, ClaimsPrincipal cp, AppDbContext db, Notifier notifier, PrivacyService privacy) =>
+        {
+            var me = cp.UserId();
+            var target = await db.Users.FindAsync(userId);
+            if (userId == me || target is null) return Results.BadRequest();
+            if (!PrivacyService.Allows(target.WhoCanFollow, await privacy.RelationAsync(me, userId)))
+                return Results.Problem($"{target.DisplayName} can only be followed by {PrivacyService.Describe(target.WhoCanFollow)}.", statusCode: 403);
+            if (await db.Follows.AnyAsync(f => f.FollowerId == me && f.FolloweeId == userId)) return Results.Ok();
+            db.Follows.Add(new Follow { FollowerId = me, FolloweeId = userId });
+            await db.SaveChangesAsync();
+            var meUser = (await db.Users.FindAsync(me))!;
+            await notifier.SendAsync(userId, me, NotificationType.Follow, $"{meUser.DisplayName} started following you.", $"/u/{meUser.UserName}");
+            return Results.Ok();
+        });
+
+        users.MapDelete("/{userId:guid}/follow", async (Guid userId, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            await db.Follows.Where(f => f.FollowerId == cp.UserId() && f.FolloweeId == userId).ExecuteDeleteAsync();
+            return Results.NoContent();
+        });
+
+        users.MapPost("/{userId:guid}/block", async (Guid userId, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var me = cp.UserId();
+            if (userId == me) return Results.BadRequest();
+            if (!await db.Blocks.AnyAsync(b => b.BlockerId == me && b.BlockedId == userId))
+                db.Blocks.Add(new Block { BlockerId = me, BlockedId = userId });
+            await db.Friendships.Where(x => (x.RequesterId == me && x.AddresseeId == userId) || (x.RequesterId == userId && x.AddresseeId == me)).ExecuteDeleteAsync();
+            await db.Follows.Where(x => (x.FollowerId == me && x.FolloweeId == userId) || (x.FollowerId == userId && x.FolloweeId == me)).ExecuteDeleteAsync();
+            await db.SaveChangesAsync();
+            return Results.Ok();
+        });
+
+        users.MapDelete("/{userId:guid}/block", async (Guid userId, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            await db.Blocks.Where(b => b.BlockerId == cp.UserId() && b.BlockedId == userId).ExecuteDeleteAsync();
+            return Results.NoContent();
+        });
+
+        // The member's personal invite link (created on first use) and who joined through it.
+        users.MapGet("/me/invites", async (ClaimsPrincipal cp, AppDbContext db, SeoOptions seo) =>
+        {
+            var u = await db.Users.FindAsync(cp.UserId());
+            if (u is null) return Results.Unauthorized();
+            if (u.InviteCode is null)
+            {
+                const string alphabet = "abcdefghjkmnpqrstuvwxyz23456789"; // no look-alike characters
+                do u.InviteCode = new string(Enumerable.Range(0, 8).Select(_ => alphabet[Random.Shared.Next(alphabet.Length)]).ToArray());
+                while (await db.Users.AnyAsync(x => x.InviteCode == u.InviteCode));
+                await db.SaveChangesAsync();
+            }
+            var joined = db.Users.Where(x => x.InvitedById == u.Id);
+            var recent = await joined.OrderByDescending(x => x.CreatedAt).Take(12).ToListAsync();
+            return Results.Ok(new InviteInfoDto(u.InviteCode, $"{seo.SiteUrl.TrimEnd('/')}/join/{u.InviteCode}",
+                await joined.CountAsync(), recent.Select(x => x.ToSummary()).ToList()));
+        });
+
+        users.MapPut("/me/notifications", async (NotificationSettingsDto req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var u = await db.Users.FindAsync(cp.UserId());
+            if (u is null) return Results.Unauthorized();
+            (u.NotifyShowPreview, u.NotifyDisappearing, u.DoNotDisturb, u.VipsBreakThrough) = (req.ShowPreview, req.Disappearing, req.DoNotDisturb, req.VipsBreakThrough);
+            await db.SaveChangesAsync();
+            return Results.Ok(u.ToDto());
+        });
+
+        users.MapPut("/me/birthday", async (BirthdaySettingsRequest req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var u = await db.Users.FindAsync(cp.UserId());
+            if (u is null) return Results.Unauthorized();
+            if (req.Birthday is { } b && (b > DateOnly.FromDateTime(DateTime.UtcNow) || b.Year < 1900)) return Results.BadRequest("Please enter a real birthday.");
+            (u.Birthday, u.ShowBirthday) = (req.Birthday, req.ShowBirthday);
+            await db.SaveChangesAsync();
+            return Results.Ok(u.ToDto());
+        });
+
+        users.MapPut("/me/faith", async (FaithSettingsRequest req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var u = await db.Users.FindAsync(cp.UserId());
+            if (u is null) return Results.Unauthorized();
+            u.FaithFeatures = req.FaithFeatures;
+            await db.SaveChangesAsync();
+            return Results.Ok(u.ToDto());
+        });
+
+        users.MapPut("/me/language", async (LanguageSettingsRequest req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var u = await db.Users.FindAsync(cp.UserId());
+            if (u is null) return Results.Unauthorized();
+            u.Language = Languages.Normalize(req.Language);
+            u.AutoTranslate = req.AutoTranslate;
+            await db.SaveChangesAsync();
+            return Results.Ok(u.ToDto());
+        });
+
+        users.MapPut("/me/privacy", async (PrivacySettingsDto req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var u = await db.Users.FindAsync(cp.UserId());
+            if (u is null) return Results.Unauthorized();
+            u.WhoCanMessage = req.WhoCanMessage;
+            // Friend requests and search can't be "only me", or nobody could ever connect with you.
+            u.WhoCanSendFriendRequests = req.WhoCanSendFriendRequests is PrivacyAudience.Friends or PrivacyAudience.OnlyMe ? PrivacyAudience.FriendsOfFriends : req.WhoCanSendFriendRequests;
+            u.WhoCanSeeFriendsList = req.WhoCanSeeFriendsList;
+            u.WhoCanFindMe = req.WhoCanFindMe == PrivacyAudience.OnlyMe ? PrivacyAudience.Friends : req.WhoCanFindMe;
+            u.WhoCanFollow = req.WhoCanFollow == PrivacyAudience.OnlyMe ? PrivacyAudience.Friends : req.WhoCanFollow;
+            await db.SaveChangesAsync();
+            return Results.Ok(u.ToDto());
+        });
+
+        // Muted people: no notifications from them (calls still ring); they aren't told.
+        users.MapGet("/me/muted", async (ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var me = cp.UserId();
+            return await db.MutedUsers.Where(m => m.OwnerId == me)
+                .Join(db.Users, m => m.MutedId, u => u.Id, (m, u) => u)
+                .OrderBy(u => u.DisplayName).Select(u => u.ToSummary()).ToListAsync();
+        });
+        users.MapPost("/{userId:guid}/mute", async (Guid userId, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var me = cp.UserId();
+            if (userId == me || !await db.Users.AnyAsync(u => u.Id == userId)) return Results.BadRequest();
+            if (!await db.MutedUsers.AnyAsync(m => m.OwnerId == me && m.MutedId == userId))
+            {
+                db.MutedUsers.Add(new MutedUser { OwnerId = me, MutedId = userId });
+                await db.SaveChangesAsync();
+            }
+            return Results.NoContent();
+        });
+        users.MapDelete("/{userId:guid}/mute", async (Guid userId, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            await db.MutedUsers.Where(m => m.OwnerId == cp.UserId() && m.MutedId == userId).ExecuteDeleteAsync();
+            return Results.NoContent();
+        });
+
+        users.MapGet("/me/blocked", async (ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var me = cp.UserId();
+            return await db.Blocks.Where(b => b.BlockerId == me)
+                .Join(db.Users, b => b.BlockedId, u => u.Id, (b, u) => u)
+                .OrderBy(u => u.DisplayName).Select(u => u.ToSummary()).ToListAsync();
+        });
+    }
+
+    /// <summary>Returns why <paramref name="me"/> can't post on <paramref name="ownerId"/>'s profile, or null if they can.</summary>
+    public static async Task<string?> CanPostOnProfileAsync(AppDbContext db, Guid me, Guid ownerId)
+    {
+        var owner = await db.Users.FindAsync(ownerId);
+        if (owner is null) return "That person doesn't exist.";
+        if (await db.Blocks.AnyAsync(b => (b.BlockerId == me && b.BlockedId == ownerId) || (b.BlockerId == ownerId && b.BlockedId == me)))
+            return "You can't post on this profile.";
+        return owner.WhoCanPost switch
+        {
+            ProfilePostPermission.Everyone => null,
+            ProfilePostPermission.OnlyMe => $"{owner.DisplayName} doesn't allow posts on their profile.",
+            _ => await db.Friendships.AnyAsync(f => f.Accepted && ((f.RequesterId == me && f.AddresseeId == ownerId) || (f.RequesterId == ownerId && f.AddresseeId == me)))
+                ? null : $"Only {owner.DisplayName}'s friends can post on their profile.",
+        };
+}
+
+    /// <summary>Days from today until the next birthday (29 February counts as 28 February in other years).</summary>
+    public static int DaysUntil(DateOnly birthday, DateOnly today)
+    {
+        DateOnly On(int year) => new(year, birthday.Month, Math.Min(birthday.Day, DateTime.DaysInMonth(year, birthday.Month)));
+        var next = On(today.Year);
+        if (next < today) next = On(today.Year + 1);
+        return next.DayNumber - today.DayNumber;
+    }
+}

@@ -1,0 +1,392 @@
+@page "/settings"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+@inject IJSRuntime JS
+
+<PageTitle>Settings · HalalBook</PageTitle>
+
+<div class="feed-column">
+    <div class="page-hero"><h1>Settings</h1><p>Your profile, location and prayer preferences.</p></div>
+
+    <div class="card stack">
+        <div class="card-title">Profile</div>
+        <div class="row">
+            <span class="avatar ring" style="--size:84px">@if (avatar is { } a) { <img src="@a" alt="" /> } else { @Ui.Initials(name ?? "?") }</span>
+            <div class="stack" style="gap:.4rem">
+                <label class="btn btn-outline btn-sm">Change photo<InputFile OnChange="e => Upload(e, true)" accept="image/*" style="display:none" /></label>
+                <label class="btn btn-outline btn-sm">Change cover<InputFile OnChange="e => Upload(e, false)" accept="image/*" style="display:none" /></label>
+            </div>
+            @if (cover is { } cv) { <img src="@cv" alt="" style="height:84px;border-radius:12px;margin-left:auto" /> }
+        </div>
+        <label class="field">Name<input class="input" @bind="name" /></label>
+        <label class="field">Bio<textarea class="input" @bind="bio" rows="3"></textarea></label>
+        <div class="row wrap">
+            <label class="field grow">Location<input class="input" @bind="location" placeholder="City, Country" /></label>
+            <label class="field grow">Website<input class="input" @bind="website" placeholder="https://" /></label>
+        </div>
+    </div>
+
+    <div class="card stack">
+        <div class="card-title">Prayer times</div>
+        <div class="row wrap">
+            <label class="field grow">Calculation method
+                <select class="input" @bind="method">
+                    @foreach (var m in methods) { <option value="@m.Key">@m.Name</option> }
+                </select>
+            </label>
+            <label class="field grow">Asr
+                <select class="input" @bind="asr">
+                    <option value="Shafi">Standard (Shafi'i, Maliki, Hanbali)</option>
+                    <option value="Hanafi">Hanafi</option>
+                </select>
+            </label>
+        </div>
+        <div class="row wrap">
+            <label class="field grow">Latitude<input class="input" type="number" step="any" @bind="lat" /></label>
+            <label class="field grow">Longitude<input class="input" type="number" step="any" @bind="lng" /></label>
+            <button class="btn btn-outline" style="align-self:flex-end" @onclick="Locate">📍 Use my location</button>
+        </div>
+    </div>
+
+    <div class="row mt" style="justify-content:flex-end">
+        <button class="btn btn-primary" disabled="@busy" @onclick="Save">Save changes</button>
+    </div>
+
+    <div class="card stack mt">
+        <div class="card-title">Account security</div>
+        <div class="row spread wrap">
+            <div><b>Email</b><div class="subtle">@Session.User?.Email</div></div>
+            @if (Session.User?.EmailConfirmed == true) { <span class="chip">✓ Confirmed</span> } else { <span class="chip gold">Not confirmed</span> }
+        </div>
+        <hr class="divider" />
+        <label class="row spread" style="cursor:pointer">
+            <div><b>Two-step sign-in</b><div class="subtle">We'll email you a code each time you sign in.</div></div>
+            <input type="checkbox" role="switch" class="switch" checked="@(Session.User?.TwoFactorEnabled == true)" @onchange="ToggleTwoFactor" />
+        </label>
+        <hr class="divider" />
+        <label class="row spread" style="cursor:pointer">
+            <div><b>Show when I'm active</b><div class="subtle">Friends and others can see a green dot when you're online. If you turn this off, you won't see other people's status either.</div></div>
+            <input type="checkbox" role="switch" class="switch" checked="@(Session.User?.ShowOnlineStatus != false)" @onchange="ToggleOnlineStatus" />
+        </label>
+        <hr class="divider" />
+        <label class="row spread">
+            <div><b>Who can post on my profile</b><div class="subtle">Posts others write on your profile appear there and in their friends' feeds.</div></div>
+            <select class="input" style="width:auto" value="@Session.User?.WhoCanPost" @onchange="ChangeWhoCanPost">
+                <option value="@ProfilePostPermission.Friends">Friends</option>
+                <option value="@ProfilePostPermission.Everyone">Everyone</option>
+                <option value="@ProfilePostPermission.OnlyMe">Only me</option>
+            </select>
+        </label>
+        <hr class="divider" />
+        <b>Change password</b>
+        <div class="row wrap">
+            <input class="input grow" type="password" placeholder="Current password" autocomplete="current-password" @bind="currentPassword" />
+            <input class="input grow" type="password" placeholder="New password (8+ characters)" autocomplete="new-password" @bind="newPassword" />
+            <button class="btn btn-outline" disabled="@(string.IsNullOrEmpty(currentPassword) || (newPassword?.Length ?? 0) < 8)" @onclick="ChangePassword">Update password</button>
+        </div>
+    </div>
+
+    <div class="mt"><AppSetupCard InSettings="true" /></div>
+
+    <div class="card stack mt">
+        <div class="card-title">🔔 @T("Notification style")</div>
+        @foreach (var (key, title, hint) in NotifyOptions)
+        {
+            <label class="row spread privacy-row" style="cursor:pointer">
+                <div class="grow"><b>@T(title)</b><div class="subtle">@T(hint)</div></div>
+                <input type="checkbox" role="switch" class="switch" checked="@NotifyValue(key)" @onchange="e => SetNotify(key, e.Value is true)" />
+            </label>
+        }
+        <div class="notify-vip">
+            ⭐ <b>@T("Your VIPs")</b> @T("are the people in your Family and Best friends lists.") <a href="/friends">@T("Manage lists")</a><br />
+            🚨 @T("A VIP can mark a message urgent: it stays on your screen, vibrates strongly and gets through Do Not Disturb.")
+        </div>
+    </div>
+
+    <div class="card stack mt">
+        <div class="card-title">🌗 @T("Appearance")</div>
+        <div class="row" style="gap:.4rem;flex-wrap:wrap">
+            @foreach (var (key, label) in new[] { ("auto", "📱 Match my phone"), ("light", "☀️ Light"), ("dark", "🌙 Dark") })
+            {
+                <button class="chip @(theme == key ? "active" : "")" @onclick="() => SetTheme(key)">@T(label)</button>
+            }
+        </div>
+    </div>
+
+    <div class="card stack mt">
+        <div class="card-title">🎂 @T("Birthday")</div>
+        <div class="row wrap" style="gap:.6rem;align-items:center">
+            <input class="input" type="date" style="width:auto" value="@Session.User?.Birthday?.ToString("yyyy-MM-dd")" @onchange="SetBirthday" />
+            <span class="subtle">@T("Friends see the day and month, never the year.")</span>
+        </div>
+        <label class="row spread privacy-row" style="cursor:pointer">
+            <div class="grow"><b>@T("Show my birthday to friends")</b><div class="subtle">@T("They'll be reminded on the day and can send you a wish.")</div></div>
+            <input type="checkbox" role="switch" class="switch" checked="@(Session.User?.ShowBirthday != false)" @onchange="ToggleShowBirthday" />
+        </label>
+    </div>
+
+    <MuteBlockSettings />
+
+    <div class="card stack mt">
+        <div class="card-title">🕌 @T("Islamic features")</div>
+        <label class="row spread privacy-row" style="border-top:0;cursor:pointer">
+            <div class="grow"><b>@T("Show Islamic tools")</b><div class="subtle">@T("Prayer times, Qibla, Hijri dates, verse of the day, dua wall, Quran khatm, Zakat, Tasbeeh and nearby masjids. Turn off to keep HalalBook general.")</div></div>
+            <input type="checkbox" role="switch" class="switch" checked="@Session.ShowFaith" @onchange="ToggleFaith" />
+        </label>
+    </div>
+
+    <div class="card stack mt">
+        <div class="card-title">@T("Language")</div>
+        <label class="row spread wrap privacy-row" style="border-top:0">
+            <div class="grow"><b>@T("App language")</b><div class="subtle">@T("Menus, buttons and messages appear in this language.")</div></div>
+            <LanguagePicker />
+        </label>
+        <label class="row spread privacy-row" style="cursor:pointer">
+            <div class="grow"><b>@T("Show posts translated into my language")</b><div class="subtle">@T("Posts written in other languages appear translated, with a link to the original.")</div></div>
+            <input type="checkbox" role="switch" class="switch" checked="@(Session.User?.AutoTranslate != false)" @onchange="ToggleAutoTranslate" />
+        </label>
+    </div>
+
+    <div class="card stack mt">
+        <div class="card-title">Privacy</div>
+        <p class="subtle" style="margin:0">Choose who can reach you and find you, just like on Facebook.</p>
+        @foreach (var (key, label, hint, options) in PrivacyRows)
+        {
+            <label class="row spread wrap privacy-row">
+                <div class="grow"><b>@label</b><div class="subtle">@hint</div></div>
+                <select class="input" style="width:auto" value="@Get(key)" @onchange="e => SetPrivacy(key, e.Value?.ToString())">
+                    @foreach (var o in options) { <option value="@o">@AudienceName(o)</option> }
+                </select>
+            </label>
+        }
+    </div>
+
+    <div class="card stack mt">
+        <div class="card-title">Blocked people</div>
+        <p class="subtle" style="margin:0">Blocked people can't see your posts or profile, message you, post on your profile or add you as a friend.</p>
+        @if (blocked is null) { <div class="spinner"></div> }
+        else if (blocked.Count == 0) { <p class="muted">You haven't blocked anyone.</p> }
+        @foreach (var b in blocked ?? [])
+        {
+            <div class="list-item"><Avatar User="b" Size="36" Link="false" /><b class="grow">@b.DisplayName</b><button class="btn btn-outline btn-sm" @onclick="() => Unblock(b)">Unblock</button></div>
+        }
+    </div>
+</div>
+
+@code {
+    private string? name, bio, location, website, avatar, cover, method, asr, currentPassword, newPassword;
+    private double? lat, lng;
+    private bool busy;
+    private List<PrayerMethodDto> methods = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var u = Session.User!;
+        (name, bio, location, website, avatar, cover, method, asr, lat, lng) =
+            (u.DisplayName, u.Bio, u.Location, u.Website, u.AvatarUrl, u.CoverUrl, u.PrayerMethod, u.AsrSchool, u.Latitude, u.Longitude);
+        try { methods = await Api.GetAsync<List<PrayerMethodDto>>("api/islamic/methods"); } catch (Exception) { }
+    }
+
+    private async Task Upload(InputFileChangeEventArgs e, bool isAvatar)
+    {
+        try
+        {
+            var r = await Api.UploadAsync(e.File, 8_000_001, isAvatar ? "profile" : "cover");
+            if (isAvatar) avatar = r.Url; else cover = r.Url;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Locate()
+    {
+        var c = await JS.InvokeAsync<PrayerWidget.Coords?>("halalbook.getLocation");
+        if (c is null) { Toasts.Show("Location permission was denied.", true); return; }
+        lat = Math.Round(c.Latitude, 4); lng = Math.Round(c.Longitude, 4);
+    }
+
+    private async Task ToggleTwoFactor(ChangeEventArgs e)
+    {
+        try
+        {
+            var u = await Api.PutAsync<UserDto>("api/users/me/two-factor", new TwoFactorRequest(e.Value is true));
+            await Session.UpdateUserAsync(u);
+            Toasts.Show(u.TwoFactorEnabled ? "Two-step sign-in is on" : "Two-step sign-in is off");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    [Inject] private Realtime Realtime { get; set; } = default!;
+
+    private List<UserSummaryDto>? blocked;
+
+    private static readonly PrivacyAudience[] AllFour = [PrivacyAudience.Everyone, PrivacyAudience.FriendsOfFriends, PrivacyAudience.Friends, PrivacyAudience.OnlyMe];
+    private static readonly (string, string, string, PrivacyAudience[])[] PrivacyRows =
+    [
+        ("message", "Who can message you", "People outside this audience can't start a new chat with you.", AllFour),
+        ("friend", "Who can send you friend requests", "", [PrivacyAudience.Everyone, PrivacyAudience.FriendsOfFriends]),
+        ("friends", "Who can see your friends list", "", AllFour),
+        ("find", "Who can find you in search", "", [PrivacyAudience.Everyone, PrivacyAudience.FriendsOfFriends, PrivacyAudience.Friends]),
+        ("follow", "Who can follow you", "Followers see your public posts in their feed.", [PrivacyAudience.Everyone, PrivacyAudience.FriendsOfFriends, PrivacyAudience.Friends]),
+    ];
+
+    private static string AudienceName(PrivacyAudience a) => a switch
+    {
+        PrivacyAudience.Everyone => "🌐 Everyone", PrivacyAudience.FriendsOfFriends => "👥 Friends of friends",
+        PrivacyAudience.Friends => "👥 Friends", _ => "🔒 Only me",
+    };
+
+    private PrivacySettingsDto Privacy => Session.User?.Privacy ?? new(PrivacyAudience.Everyone, PrivacyAudience.Everyone, PrivacyAudience.Everyone, PrivacyAudience.Everyone, PrivacyAudience.Everyone);
+
+    private PrivacyAudience Get(string key) => key switch
+    {
+        "message" => Privacy.WhoCanMessage, "friend" => Privacy.WhoCanSendFriendRequests, "friends" => Privacy.WhoCanSeeFriendsList,
+        "find" => Privacy.WhoCanFindMe, _ => Privacy.WhoCanFollow,
+    };
+
+    private async Task SetPrivacy(string key, string? value)
+    {
+        if (!Enum.TryParse<PrivacyAudience>(value, out var a)) return;
+        var p = key switch
+        {
+            "message" => Privacy with { WhoCanMessage = a }, "friend" => Privacy with { WhoCanSendFriendRequests = a },
+            "friends" => Privacy with { WhoCanSeeFriendsList = a }, "find" => Privacy with { WhoCanFindMe = a }, _ => Privacy with { WhoCanFollow = a },
+        };
+        try
+        {
+            var u = await Api.PutAsync<UserDto>("api/users/me/privacy", p);
+            await Session.UpdateUserAsync(u);
+            Toasts.Show("Privacy updated");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try { blocked = await Api.GetAsync<List<UserSummaryDto>>("api/users/me/blocked"); } catch (Exception) { }
+        try { theme = await JS.InvokeAsync<string>("halalbook.getTheme"); } catch (JSException) { }
+        StateHasChanged();
+    }
+
+    private async Task Unblock(UserSummaryDto u)
+    {
+        try { await Api.DeleteAsync($"api/users/{u.Id}/block"); blocked?.Remove(u); Toasts.Show($"Unblocked {u.DisplayName}"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task ChangeWhoCanPost(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<ProfilePostPermission>(e.Value?.ToString(), out var who)) return;
+        try
+        {
+            var u = await Api.PutAsync<UserDto>("api/users/me", new UpdateProfileRequest(null, null, null, null, null, null, null, null, null, null, who));
+            await Session.UpdateUserAsync(u);
+            Toasts.Show("Saved");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private static readonly (string Key, string Title, string Hint)[] NotifyOptions =
+    [
+        ("preview", "Show message text", "Off: notifications just say \"New message\", so nobody can read over your shoulder."),
+        ("disappear", "Disappearing notifications", "They close by themselves after a few seconds. You'll still find them in Notifications."),
+        ("dnd", "Do Not Disturb", "Silence all phone notifications."),
+        ("vip", "Let VIPs through", "Even in Do Not Disturb, messages and calls from your Family and Best friends still reach you."),
+    ];
+
+    private NotificationSettingsDto Notify => Session.User?.Notifications ?? new();
+
+    private bool NotifyValue(string key) => key switch
+    {
+        "preview" => Notify.ShowPreview, "disappear" => Notify.Disappearing, "dnd" => Notify.DoNotDisturb, _ => Notify.VipsBreakThrough,
+    };
+
+    private async Task SetNotify(string key, bool on)
+    {
+        var n = key switch
+        {
+            "preview" => Notify with { ShowPreview = on }, "disappear" => Notify with { Disappearing = on },
+            "dnd" => Notify with { DoNotDisturb = on }, _ => Notify with { VipsBreakThrough = on },
+        };
+        try { await Session.UpdateUserAsync(await Api.PutAsync<UserDto>("api/users/me/notifications", n)); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private string theme = "auto";
+
+    private async Task SetTheme(string t)
+    {
+        theme = t;
+        try { await JS.InvokeVoidAsync("halalbook.setTheme", t); } catch (JSException) { }
+    }
+
+    private async Task SetBirthday(ChangeEventArgs e)
+    {
+        DateOnly? b = DateOnly.TryParse(e.Value?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
+        try { await Session.UpdateUserAsync(await Api.PutAsync<UserDto>("api/users/me/birthday", new BirthdaySettingsRequest(b, Session.User?.ShowBirthday != false))); Toasts.Show(T("Birthday saved")); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task ToggleShowBirthday(ChangeEventArgs e)
+    {
+        try { await Session.UpdateUserAsync(await Api.PutAsync<UserDto>("api/users/me/birthday", new BirthdaySettingsRequest(Session.User?.Birthday, e.Value is true))); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task ToggleFaith(ChangeEventArgs e)
+    {
+        try
+        {
+            await Session.UpdateUserAsync(await Api.PutAsync<UserDto>("api/users/me/faith", new FaithSettingsRequest(e.Value is true)));
+            Toasts.Show(e.Value is true ? T("Islamic features are on") : T("Islamic features are hidden"));
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task ToggleAutoTranslate(ChangeEventArgs e)
+    {
+        try
+        {
+            var u = await Api.PutAsync<UserDto>("api/users/me/language", new LanguageSettingsRequest(I18n.Language, e.Value is true));
+            await Session.UpdateUserAsync(u);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task ToggleOnlineStatus(ChangeEventArgs e)
+    {
+        try
+        {
+            var u = await Api.PutAsync<UserDto>("api/users/me/online-status", new OnlineStatusRequest(e.Value is true));
+            await Session.UpdateUserAsync(u);
+            await Realtime.RefreshOnlineAsync();
+            Toasts.Show(u.ShowOnlineStatus ? "Your active status is visible" : "Your active status is hidden");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task ChangePassword()
+    {
+        try
+        {
+            await Api.PutAsync("api/users/me/password", new ChangePasswordRequest(currentPassword ?? "", newPassword ?? ""));
+            currentPassword = newPassword = null;
+            Toasts.Show("Password updated. We've emailed you a confirmation.");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Save()
+    {
+        busy = true;
+        try
+        {
+            var u = await Api.PutAsync<UserDto>("api/users/me", new UpdateProfileRequest(name, bio, avatar, cover, location, website, lat, lng, method, asr));
+            await Session.UpdateUserAsync(u);
+            Toasts.Show("Saved, jazakAllahu khayran!");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+}

@@ -1,0 +1,65 @@
+@inject ApiClient Api
+@inject AuthSession Session
+@inject IJSRuntime JS
+
+<div class="card prayer-card">
+    <div class="card-title">Prayer times</div>
+    @if (times is null)
+    {
+        <div class="hijri">@hijri?.Formatted</div>
+        <p style="opacity:.8;margin-top:.5rem">@(status ?? "Finding your location…")</p>
+        @if (status is not null) { <a href="/settings">Set your location</a> }
+    }
+    else
+    {
+        <div class="row spread">
+            <div>
+                <div style="opacity:.75;font-size:.8rem">Next prayer</div>
+                <div class="prayer-next">@times.NextPrayer · @Ui.Time(times.NextPrayerTime)</div>
+            </div>
+        </div>
+        <div class="hijri" style="margin-top:.4rem">@times.Hijri.Day @times.Hijri.MonthNameArabic @times.Hijri.Year</div>
+        <div style="font-size:.8rem;opacity:.75">@times.Hijri.Formatted</div>
+        <div class="prayer-list">
+            @foreach (var (name, t) in Items(times))
+            {
+                <div class="@(name == times.NextPrayer ? "next" : "")"><b>@name</b>@Ui.Time(t)</div>
+            }
+        </div>
+        <div class="row spread" style="margin-top:.75rem;font-size:.85rem">
+            <a href="/prayer">Full timetable</a>
+            <a href="/qibla">🧭 Qibla</a>
+        </div>
+    }
+</div>
+
+@code {
+    private PrayerTimesDto? times;
+    private HijriDateDto? hijri;
+    private string? status;
+
+    public record Coords(double Latitude, double Longitude);
+
+    public static IEnumerable<(string, TimeOnly)> Items(PrayerTimesDto t) =>
+        [("Fajr", t.Fajr), ("Sunrise", t.Sunrise), ("Dhuhr", t.Dhuhr), ("Asr", t.Asr), ("Maghrib", t.Maghrib), ("Isha", t.Isha)];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { hijri = await Api.GetAsync<HijriDateDto>("api/islamic/hijri"); } catch (Exception) { }
+        var user = Session.User;
+        double? lat = user?.Latitude, lng = user?.Longitude;
+        if (lat is null || lng is null)
+        {
+            var c = await JS.InvokeAsync<Coords?>("halalbook.getLocation");
+            lat = c?.Latitude; lng = c?.Longitude;
+        }
+        if (lat is null || lng is null) { status = "Allow location access or set your city to see prayer times."; return; }
+        var offset = await JS.InvokeAsync<int>("halalbook.utcOffset");
+        try
+        {
+            times = await Api.GetAsync<PrayerTimesDto>(FormattableString.Invariant(
+                $"api/islamic/prayer-times?lat={lat}&lng={lng}&offset={offset}&method={user?.PrayerMethod}&asr={user?.AsrSchool}"));
+        }
+        catch (Exception) { status = "Prayer times are unavailable right now."; }
+    }
+}

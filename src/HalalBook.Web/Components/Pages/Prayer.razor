@@ -1,0 +1,97 @@
+@page "/prayer"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject ClientClock Clock
+@inject IJSRuntime JS
+
+<PageTitle>Prayer times · HalalBook</PageTitle>
+
+<div class="page-hero">
+    <div class="ar">حَيَّ عَلَى الصَّلَاةِ</div>
+    <h1>Prayer times</h1>
+    <p>@(today is null ? "Calculated for your location." : $"{today.Method} · Asr: {today.AsrSchool} · {today.Hijri.Formatted}")</p>
+</div>
+
+@if (error is not null)
+{
+    <div class="card"><Empty Title="We need your location" Text="@error"><a class="btn btn-primary" href="/settings">Set location</a></Empty></div>
+}
+else if (today is null) { <div class="spinner"></div> }
+else
+{
+    <div class="prayer-big">
+        @foreach (var (name, time) in PrayerWidget.Items(today))
+        {
+            <div class="prayer-tile @(name == today.NextPrayer ? "next" : "")">
+                <div class="ar">@Arabic(name)</div>
+                <div class="name">@name</div>
+                <div class="t">@Ui.Time(time)</div>
+            </div>
+        }
+    </div>
+
+    <div class="card mt">
+        <div class="row spread">
+            <div class="card-title" style="margin:0">@monthStart.ToString("MMMM yyyy") timetable</div>
+            <div class="row">
+                <button class="btn btn-sm btn-outline" @onclick="() => Month(-1)">‹</button>
+                <button class="btn btn-sm btn-outline" @onclick="() => Month(1)">›</button>
+            </div>
+        </div>
+        <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;margin-top:.75rem;font-size:.9rem">
+                <thead><tr style="text-align:left;color:var(--text-3)"><th>Date</th><th>Hijri</th><th>Fajr</th><th>Sunrise</th><th>Dhuhr</th><th>Asr</th><th>Maghrib</th><th>Isha</th></tr></thead>
+                <tbody>
+                    @foreach (var d in month)
+                    {
+                        var isToday = d.Date == DateOnly.FromDateTime(Clock.Now);
+                        <tr style="border-top:1px solid var(--border);@(isToday ? "background:var(--gold-100);font-weight:700" : "")">
+                            <td style="padding:.4rem">@d.Date.ToString("ddd d")</td>
+                            <td class="arabic" style="direction:ltr;color:var(--emerald-500)">@d.Hijri.Day @d.Hijri.MonthName</td>
+                            <td>@Ui.Time(d.Fajr)</td><td>@Ui.Time(d.Sunrise)</td><td>@Ui.Time(d.Dhuhr)</td><td>@Ui.Time(d.Asr)</td><td>@Ui.Time(d.Maghrib)</td><td>@Ui.Time(d.Isha)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private PrayerTimesDto? today;
+    private List<PrayerTimesDto> month = [];
+    private DateOnly monthStart;
+    private string? error;
+    private double lat, lng;
+    private int offset;
+
+    private static string Arabic(string n) => n switch
+    {
+        "Fajr" => "الفجر", "Sunrise" => "الشروق", "Dhuhr" => "الظهر", "Asr" => "العصر", "Maghrib" => "المغرب", _ => "العشاء",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var u = Session.User;
+        if (u?.Latitude is double la && u.Longitude is double lo) (lat, lng) = (la, lo);
+        else
+        {
+            var c = await JS.InvokeAsync<PrayerWidget.Coords?>("halalbook.getLocation");
+            if (c is null) { error = "Allow location access in your browser, or set your coordinates in Settings."; return; }
+            (lat, lng) = (c.Latitude, c.Longitude);
+        }
+        offset = Clock.OffsetMinutes;
+        today = await Api.GetAsync<PrayerTimesDto>(Q($"api/islamic/prayer-times?lat={lat}&lng={lng}&offset={offset}"));
+        var now = Clock.Now;
+        monthStart = new DateOnly(now.Year, now.Month, 1);
+        await LoadMonth();
+    }
+
+    private string Q(FormattableString url) =>
+        FormattableString.Invariant(url) + $"&method={Session.User?.PrayerMethod}&asr={Session.User?.AsrSchool}";
+
+    private async Task Month(int delta) { monthStart = monthStart.AddMonths(delta); await LoadMonth(); }
+
+    private async Task LoadMonth() =>
+        month = await Api.GetAsync<List<PrayerTimesDto>>(Q($"api/islamic/prayer-times/month?lat={lat}&lng={lng}&year={monthStart.Year}&month={monthStart.Month}&offset={offset}"));
+}

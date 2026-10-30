@@ -1,0 +1,101 @@
+@page "/nearby"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject IJSRuntime JS
+
+<PageTitle>@T("Masjids and halal food nearby") · HalalBook</PageTitle>
+
+<div class="feed-column nearby-page">
+    <div class="page-hero">
+        <h1>🕌 @T("Nearby")</h1>
+        <p>@T("Masjids for your next salah, and halal food when you're hungry, wherever you are.")</p>
+    </div>
+
+    <div class="row spread wrap" style="gap:.5rem">
+        <div class="row" style="gap:.4rem">
+            <button class="chip @(kind == "masjid" ? "active" : "")" @onclick='() => Switch("masjid")'>🕌 @T("Masjids")</button>
+            <button class="chip @(kind == "food" ? "active" : "")" @onclick='() => Switch("food")'>🍽️ @T("Halal food")</button>
+        </div>
+        <select class="input" style="width:auto" value="@radius" @onchange="ChangeRadius">
+            @foreach (var r in new[] { 1000, 3000, 5000, 10000, 15000 }) { <option value="@r">@(r / 1000) km</option> }
+        </select>
+    </div>
+
+    <div class="card nearby-map mt" @ref="mapEl"></div>
+
+    @if (status is not null) { <p class="subtle center mt">@status</p> }
+    @foreach (var p in places)
+    {
+        <div class="card nearby-item mt">
+            <div class="nearby-icon">@(p.Type == "Masjid" ? "🕌" : "🍽️")</div>
+            <div class="grow">
+                <b>@p.Name</b>
+                <div class="subtle">@T(p.Type)@(p.Cuisine is { } c ? $" · {c}" : "") · @(p.DistanceKm < 1 ? $"{p.DistanceKm * 1000:0} m" : $"{p.DistanceKm:0.0} km")</div>
+                @if (p.Address is { } a) { <div class="subtle">📍 @a</div> }
+                @if (p.OpeningHours is { } h) { <div class="subtle">🕒 @h</div> }
+                <div class="row mt" style="gap:.4rem;flex-wrap:wrap">
+                    <a class="btn btn-primary btn-sm" target="_blank" rel="noopener"
+                       href="@FormattableString.Invariant($"https://www.google.com/maps/dir/?api=1&destination={p.Latitude},{p.Longitude}")">🧭 @T("Directions")</a>
+                    <button class="btn btn-ghost btn-sm" @onclick="() => Focus(p)">🗺️ @T("Show on map")</button>
+                    @if (p.Phone is { } ph) { <a class="btn btn-ghost btn-sm" href="tel:@ph">📞 @T("Call")</a> }
+                    @if (p.Website is { } w) { <a class="btn btn-ghost btn-sm" href="@w" target="_blank" rel="noopener">🌐 @T("Website")</a> }
+                </div>
+            </div>
+        </div>
+    }
+    <p class="subtle center mt" style="font-size:.75rem">@T("Places come from OpenStreetMap. Missing a masjid or halal restaurant? Anyone can add it at openstreetmap.org.")</p>
+</div>
+
+@code {
+    private ElementReference mapEl;
+    private string kind = "masjid";
+    private int radius = 5000;
+    private double? lat, lng;
+    private List<PlaceDto> places = [];
+    private string? status;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        status = T("Finding your location…");
+        StateHasChanged();
+        lat = Session.User?.Latitude; lng = Session.User?.Longitude;
+        try
+        {
+            var c = await JS.InvokeAsync<PrayerWidget.Coords?>("halalbook.getLocation");
+            if (c is not null) (lat, lng) = (c.Latitude, c.Longitude);
+        }
+        catch (JSException) { }
+        if (lat is null || lng is null) { status = T("Allow location access or set your city in Settings to see places near you."); StateHasChanged(); return; }
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        status = T("Searching…");
+        StateHasChanged();
+        try
+        {
+            places = await Api.GetAsync<List<PlaceDto>>(FormattableString.Invariant($"api/islamic/nearby?lat={lat}&lng={lng}&kind={kind}&radius={radius}"));
+            status = places.Count == 0 ? T("Nothing found nearby on the map yet. Try a larger distance.") : null;
+            await JS.InvokeVoidAsync("halalbook.placesMap", mapEl, lat, lng,
+                places.Select(p => new { name = p.Name, lat = p.Latitude, lng = p.Longitude, icon = p.Type == "Masjid" ? "🕌" : "🍽️" }));
+        }
+        catch (Exception) { status = T("The map service is busy. Please try again in a minute."); }
+        StateHasChanged();
+    }
+
+    private async Task Switch(string k) { kind = k; await Load(); }
+
+    private async Task ChangeRadius(ChangeEventArgs e)
+    {
+        radius = int.TryParse(e.Value?.ToString(), out var r) ? r : 5000;
+        await Load();
+    }
+
+    private async Task Focus(PlaceDto p)
+    {
+        try { await JS.InvokeVoidAsync("halalbook.placesFocus", p.Latitude, p.Longitude); await JS.InvokeVoidAsync("halalbook.scrollPageTop"); }
+        catch (JSException) { }
+    }
+}

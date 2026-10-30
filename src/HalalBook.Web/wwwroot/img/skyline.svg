@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" preserveAspectRatio="xMidYMax slice" role="img" aria-label="Masjid skyline under a crescent moon">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#06261d"/>
+      <stop offset=".6" stop-color="#0d4a39"/>
+      <stop offset="1" stop-color="#17795f"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f6e3a1"/>
+      <stop offset="1" stop-color="#c9a227"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".72" cy=".2" r=".35">
+      <stop offset="0" stop-color="#f6e3a1" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#f6e3a1" stop-opacity="0"/>
+    </radialGradient>
+    <mask id="moon"><rect width="800" height="520" fill="#fff"/><circle cx="598" cy="92" r="40" fill="#000"/></mask>
+  </defs>
+  <rect width="800" height="520" fill="url(#sky)"/>
+  <rect width="800" height="520" fill="url(#glow)"/>
+  <circle cx="575" cy="105" r="44" fill="url(#gold)" mask="url(#moon)"/>
+  <g fill="#f6e3a1">
+    <circle cx="120" cy="70" r="1.6"/><circle cx="210" cy="140" r="1.2"/><circle cx="330" cy="60" r="1.8"/>
+    <circle cx="420" cy="150" r="1.1"/><circle cx="690" cy="190" r="1.4"/><circle cx="740" cy="60" r="1.2"/>
+    <circle cx="60" cy="190" r="1.1"/><circle cx="480" cy="40" r="1.3"/>
+    <g transform="translate(250 95)"><rect x="-4" y="-4" width="8" height="8"/><rect x="-4" y="-4" width="8" height="8" transform="rotate(45)"/></g>
+  </g>
+  <!-- Back layer -->
+  <g fill="#0a3a2c" opacity=".85">
+    <path d="M0 520V380h60v-40c0-30 25-55 55-62 30 7 55 32 55 62v40h40V300h14v-30l7-16 7 16v30h14v220z"/>
+    <path d="M560 520V360h30c0-45 35-80 80-92 45 12 80 47 80 92h50v160z"/>
+  </g>
+  <!-- Main masjid -->
+  <g fill="#052119">
+    <rect x="140" y="250" width="22" height="270"/><path d="M137 250h28l-14-52z"/><rect x="146" y="228" width="10" height="10" fill="#c9a227"/>
+    <rect x="638" y="250" width="22" height="270"/><path d="M635 250h28l-14-52z"/><rect x="644" y="228" width="10" height="10" fill="#c9a227"/>
+    <path d="M200 520V360c0-12 10-22 22-22h356c12 0 22 10 22 22v160z"/>
+    <path d="M270 345c0-75 58-125 130-150 72 25 130 75 130 150z"/>
+    <path d="M400 195v-30" stroke="#c9a227" stroke-width="4"/>
+    <circle cx="400" cy="158" r="7" fill="#c9a227"/>
+    <path d="M215 345c0-32 22-52 50-62 28 10 50 30 50 62zM485 345c0-32 22-52 50-62 28 10 50 30 50 62z"/>
+  </g>
+  <!-- Arched windows with warm light -->
+  <g fill="#f3d27a" opacity=".9">
+    <path d="M240 520v-90c0-14 10-26 22-30 12 4 22 16 22 30v90z"/>
+    <path d="M310 520v-90c0-14 10-26 22-30 12 4 22 16 22 30v90z"/>
+    <path d="M370 520v-110c0-18 13-33 30-38 17 5 30 20 30 38v110z"/>
+    <path d="M446 520v-90c0-14 10-26 22-30 12 4 22 16 22 30v90z"/>
+    <path d="M516 520v-90c0-14 10-26 22-30 12 4 22 16 22 30v90z"/>
+  </g>
+  <rect y="508" width="800" height="12" fill="#c9a227" opacity=".6"/>
+</svg>

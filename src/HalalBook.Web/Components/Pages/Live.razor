@@ -1,0 +1,122 @@
+@page "/live"
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject NavigationManager Nav
+@inject ClientClock Clock
+
+<PageTitle>Live · HalalBook</PageTitle>
+
+<div class="page-hero row spread wrap">
+    <div>
+        <h1>Live</h1>
+        <p>Live shows, halaqas and events, podcasts and video calls with your community.</p>
+    </div>
+    <button class="btn btn-gold" @onclick="() => creating = true">🔴 Go live</button>
+</div>
+
+<div class="tabs">
+    <button class="@(filter == null ? "active" : "")" @onclick="() => SetFilter(null)">🔴 Live now</button>
+    <button class="@(filter == "upcoming" ? "active" : "")" @onclick='() => SetFilter("upcoming")'>Upcoming</button>
+    <button class="@(filter == "mine" ? "active" : "")" @onclick='() => SetFilter("mine")'>Yours</button>
+    <button class="@(filter == "past" ? "active" : "")" @onclick='() => SetFilter("past")'>Past</button>
+</div>
+
+@if (sessions is null) { <div class="spinner"></div> }
+else if (sessions.Count == 0)
+{
+    <div class="card"><Empty Title="@(filter == "upcoming" ? "Nothing scheduled yet" : "No one is live right now")" Text="Start a live show, a podcast or a video call and invite your community.">
+        <button class="btn btn-primary" @onclick="() => creating = true">🔴 Go live</button></Empty></div>
+}
+else
+{
+    <div class="grid-cards">
+        @foreach (var s in sessions)
+        {
+            <a class="tile tile-arch live-card" href="/live/@s.Id">
+                <div class="tile-cover">
+                    @if (s.CoverUrl is { } c) { <img src="@c" alt="" /> }
+                    <span class="live-kind">@KindIcon(s.Kind) @KindName(s.Kind)</span>
+                    @if (s.Status == LiveStatus.Live) { <span class="live-badge">LIVE · @s.ViewerCount</span> }
+                </div>
+                <div class="tile-body">
+                    <b>@s.Title</b>
+                    <div class="row" style="gap:.4rem"><Avatar User="s.Host" Size="24" Link="false" /><span class="subtle">@s.Host.DisplayName</span></div>
+                    <span class="subtle">
+                        @(s.Status switch
+                        {
+                            LiveStatus.Live => $"Started {Ui.TimeAgo(s.StartedAt ?? DateTime.UtcNow)} ago",
+                            LiveStatus.Scheduled => s.ScheduledFor is { } at ? Clock.Local(at).ToString("ddd, MMM d · h:mm tt") : "Starting soon",
+                            _ => $"Ended {Ui.TimeAgo(s.EndedAt ?? DateTime.UtcNow)} · {s.PeakViewers} joined",
+                        })
+                    </span>
+                </div>
+            </a>
+        }
+    </div>
+}
+
+@if (creating)
+{
+    <div class="overlay" @onclick="() => creating = false">
+        <div class="modal stack" @onclick:stopPropagation>
+            <h2>Go live</h2>
+            <div class="live-kinds">
+                @foreach (var k in Enum.GetValues<LiveKind>())
+                {
+                    <button class="live-kind-option @(kind == k ? "active" : "")" @onclick="() => kind = k">
+                        <span style="font-size:1.6rem">@KindIcon(k)</span><b>@KindName(k)</b><small>@KindHint(k)</small>
+                    </button>
+                }
+            </div>
+            <label class="field">Title<input class="input" @bind="title" placeholder="e.g. Friday halaqa: Surah Al-Kahf" /></label>
+            <label class="field">Description<textarea class="input" rows="2" @bind="description"></textarea></label>
+            <label class="row" style="gap:.5rem"><input type="checkbox" @bind="schedule" /> Schedule for later</label>
+            @if (schedule) { <input class="input" type="datetime-local" @bind="scheduledFor" /> }
+            <div class="row" style="justify-content:flex-end">
+                <button class="btn btn-ghost" @onclick="() => creating = false">Cancel</button>
+                <button class="btn btn-gold" disabled="@busy" @onclick="Create">@(schedule ? "Schedule" : "🔴 Start now")</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<LiveSessionDto>? sessions;
+    private string? filter, title, description;
+    private bool creating, schedule, busy;
+    private LiveKind kind = LiveKind.Show;
+    private DateTime scheduledFor = DateTime.UtcNow.Date.AddDays(1).AddHours(18);
+
+    public static string KindIcon(LiveKind k) => k switch { LiveKind.Podcast => "🎙️", LiveKind.Conference => "👥", LiveKind.Event => "🕌", _ => "📺" };
+    public static string KindName(LiveKind k) => k switch { LiveKind.Podcast => "Podcast", LiveKind.Conference => "Video call", LiveKind.Event => "Live event", _ => "Live show" };
+    private static string KindHint(LiveKind k) => k switch
+    {
+        LiveKind.Podcast => "Audio only",
+        LiveKind.Conference => "Everyone on camera",
+        LiveKind.Event => "Halaqa, talk, class",
+        _ => "You broadcast, others watch",
+    };
+
+    protected override async Task OnInitializedAsync() => await Load();
+    private async Task SetFilter(string? f) { filter = f; await Load(); }
+
+    private async Task Load()
+    {
+        sessions = null;
+        try { sessions = await Api.GetAsync<List<LiveSessionDto>>(filter is null ? "api/live" : $"api/live?filter={filter}"); }
+        catch (Exception ex) { sessions = []; Toasts.Error(ex); }
+    }
+
+    private async Task Create()
+    {
+        busy = true;
+        try
+        {
+            var s = await Api.PostAsync<LiveSessionDto>("api/live", new CreateLiveRequest(title ?? "", description, kind,
+                schedule ? Clock.ToUtc(scheduledFor) : null, StartNow: !schedule));
+            Nav.NavigateTo($"/live/{s.Id}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+}

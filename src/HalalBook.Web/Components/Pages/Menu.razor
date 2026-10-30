@@ -1,0 +1,40 @@
+@page "/menu"
+@inject AuthSession Session
+
+<PageTitle>Menu · HalalBook</PageTitle>
+
+@* Facebook-style "Menu" tab: every section in one place on phones. *@
+<a class="card row" href="/u/@Session.User?.UserName" style="color:var(--text);text-decoration:none">
+    <span class="avatar ring" style="--size:48px">@if (Session.User?.AvatarUrl is { } a) { <img src="@a" alt="" /> } else { @Ui.Initials(Session.User?.DisplayName ?? "?") }</span>
+    <div class="grow"><b>@Session.User?.DisplayName</b><div class="subtle">See your profile</div></div>
+</a>
+
+<div class="menu-grid mt">
+    @foreach (var (href, icon, name) in Items.Where(i => Session.ShowFaith || !FaithPages.Contains(i.Item1)))
+    {
+        <a class="card menu-tile" href="@href"><span>@icon</span><b>@T(name)</b></a>
+    }
+    @if (Session.IsModerator) { <a class="card menu-tile" href="/moderation"><span>🛡️</span><b>Moderation</b></a> }
+</div>
+
+<div class="card mt stack" style="gap:.25rem">
+    <div class="menu-link" style="cursor:default">🌍 @T("Language") <LanguagePicker /></div>
+    <a class="menu-link" href="/invite">💌 @T("Invite friends")</a>
+    <a class="menu-link" href="/settings">⚙️ @T("Settings & privacy")</a>
+    <a class="menu-link" href="/feedback">💬 @T("Help & feedback")</a>
+    @if (Session.User?.Role == UserRole.Admin) { <a class="menu-link" href="/admin">🧭 Admin console</a> }
+    <a class="menu-link" href="/terms">📜 @T("Community Agreement")</a>
+    <button class="menu-link" @onclick="Session.SignOutAsync">🚪 @T("Sign out")</button>
+</div>
+
+@code {
+    /// <summary>Islamic tools, hidden for members who turned faith features off.</summary>
+    private static readonly HashSet<string> FaithPages = ["/prayer", "/qibla", "/calendar", "/duas", "/khatm", "/tasbeeh", "/zakat", "/nearby"];
+
+    private static readonly (string, string, string)[] Items =
+    [
+        ("/friends", "🤝", "Friends"), ("/groups", "🕌", "Groups"), ("/messages", "💬", "Messages"), ("/live", "🔴", "Live"),
+        ("/reels", "🎬", "Reels"), ("/events", "📅", "Events"), ("/pages", "📜", "Pages"), ("/market", "🛍️", "Marketplace"), ("/bookmarks", "🔖", "Saved"),
+        ("/prayer", "🕋", "Prayer times"), ("/qibla", "🧭", "Qibla finder"), ("/calendar", "🌙", "Hijri calendar"), ("/noor", "✨", "Ask Noor AI"), ("/duas", "🤲", "Dua wall"), ("/khatm", "📖", "Quran khatm"), ("/tasbeeh", "📿", "Tasbeeh"), ("/zakat", "💰", "Zakat calculator"), ("/nearby", "🕌", "Masjids & halal food"),
+    ];
+}

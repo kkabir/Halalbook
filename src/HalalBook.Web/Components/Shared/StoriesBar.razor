@@ -1,0 +1,177 @@
+@implements IDisposable
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+@inject MediaGuard Guard
+
+<div class="stories">
+    <div class="story add" @onclick="() => creating = true">
+        <div><div class="plus">+</div>@T("Add story")</div>
+    </div>
+    @foreach (var reel in reels)
+    {
+        var first = reel.Stories.FirstOrDefault(s => !s.Seen) ?? reel.Stories[0];
+        <div class="story @(reel.AllSeen ? "seen" : "")" @onclick="() => Open(reel)">
+            @if (first.MediaUrl is { } url)
+            {
+                @if (first.MediaType == MediaType.Video) { <video src="@url" muted preload="metadata"></video> } else { <img src="@url" alt="" /> }
+            }
+            else
+            {
+                <div class="bg" style="background:@Ui.StoryBackground(first.Background)">@first.Text</div>
+            }
+            <div class="shade"></div>
+            <Avatar User="reel.Author" Size="36" Ring="!reel.AllSeen" />
+            <div class="who">@(reel.Author.Id == Session.User?.Id ? "Your story" : reel.Author.DisplayName)</div>
+        </div>
+    }
+</div>
+
+@if (viewing is not null)
+{
+    var s = viewing.Stories[index];
+    <div class="overlay" @onclick="Close">
+        <div class="story-viewer" @onclick:stopPropagation>
+            @if (s.MediaUrl is { } url)
+            {
+                @if (s.MediaType == MediaType.Video) { <video src="@url" autoplay playsinline></video> } else { <img src="@url" alt="" /> }
+                @if (s.Text is { Length: > 0 }) { <div class="bg" style="align-items:end;padding-bottom:3rem;text-shadow:0 2px 8px #000">@s.Text</div> }
+            }
+            else
+            {
+                <div class="bg" style="background:@Ui.StoryBackground(s.Background)">@s.Text</div>
+            }
+            <div class="story-progress">
+                @for (int i = 0; i < viewing.Stories.Count; i++) { <span class="@(i <= index ? "done" : "")"></span> }
+            </div>
+            <div class="story-top">
+                <Avatar User="viewing.Author" Size="34" />
+                <span class="grow">@viewing.Author.DisplayName <span style="opacity:.7;font-weight:500">· @Ui.TimeAgo(s.CreatedAt)</span></span>
+                @if (viewing.Author.Id == Session.User?.Id) { <span style="font-size:.8rem;opacity:.85">👁 @s.ViewCount</span> }
+                <button class="icon-btn" style="background:rgba(0,0,0,.35);color:#fff" @onclick="Close">✕</button>
+            </div>
+            <div class="story-nav">
+                <button @onclick="Prev" aria-label="Previous"></button>
+                <button @onclick="Next" aria-label="Next"></button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (creating)
+{
+    <div class="overlay" @onclick="() => creating = false">
+        <div class="modal" @onclick:stopPropagation>
+            <h2>Create a story</h2>
+            <p class="subtle">Stories disappear after 24 hours.</p>
+            <div class="story" style="width:160px;height:260px;margin:0 auto 1rem;cursor:default">
+                @if (newMedia is not null)
+                {
+                    @if (newMedia.Type == MediaType.Video) { <video src="@newMedia.Url" muted autoplay loop></video> } else { <img src="@newMedia.Url" alt="" /> }
+                }
+                else
+                {
+                    <div class="bg" style="background:@Ui.StoryBackground(newBg)">@(string.IsNullOrWhiteSpace(newText) ? "Your words here" : newText)</div>
+                }
+            </div>
+            <textarea class="input" placeholder="Write a reminder, dua or thought…" @bind="newText" @bind:event="oninput" rows="2"></textarea>
+            <div class="row wrap mt">
+                @foreach (var bg in new[] { "emerald", "gold", "night", "sunset", "sky" })
+                {
+                    <button class="chip @(newBg == bg ? "active" : "")" style="background:@Ui.StoryBackground(bg);color:#fff;border:0" @onclick="() => newBg = bg">@bg</button>
+                }
+            </div>
+            <div class="row spread mt">
+                <label class="btn btn-outline">🖼️ Add photo/video<InputFile @ref="storyInput" OnChange="Upload" accept="image/*,video/*" style="display:none" /></label>
+                <button class="btn btn-gold" disabled="@(busy || (newMedia is null && string.IsNullOrWhiteSpace(newText)))" @onclick="Create">Share story</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<StoryReelDto> reels = [];
+    private StoryReelDto? viewing;
+    private int index;
+    private bool creating, busy;
+    private string? newText;
+    private string newBg = "emerald";
+    private MediaDto? newMedia;
+    private InputFile? storyInput;
+    private System.Threading.Timer? timer;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        try { reels = await Api.GetAsync<List<StoryReelDto>>("api/stories"); }
+        catch (Exception) { reels = []; }
+    }
+
+    private void Open(StoryReelDto reel)
+    {
+        viewing = reel;
+        index = Math.Max(0, reel.Stories.FindIndex(s => !s.Seen));
+        Show();
+    }
+
+    private void Show()
+    {
+        var s = viewing!.Stories[index];
+        if (!s.Seen) _ = Api.PostAsync($"api/stories/{s.Id}/view");
+        timer?.Dispose();
+        timer = new System.Threading.Timer(_ => InvokeAsync(Next), null, s.MediaType == MediaType.Video ? 15000 : 6000, Timeout.Infinite);
+    }
+
+    private void Next()
+    {
+        if (viewing is null) return;
+        if (index < viewing.Stories.Count - 1) { index++; Show(); }
+        else
+        {
+            var i = reels.IndexOf(viewing);
+            if (i >= 0 && i < reels.Count - 1) { viewing = reels[i + 1]; index = 0; Show(); }
+            else Close();
+        }
+        StateHasChanged();
+    }
+
+    private void Prev()
+    {
+        if (index > 0) { index--; Show(); }
+    }
+
+    private void Close()
+    {
+        timer?.Dispose();
+        viewing = null;
+        _ = Load().ContinueWith(_ => InvokeAsync(StateHasChanged));
+    }
+
+    private async Task Upload(InputFileChangeEventArgs e)
+    {
+        busy = true;
+        try
+        {
+            var r = (await Guard.UploadAsync([e.File], "story", storyInput?.Element)).FirstOrDefault();
+            if (r is not null) newMedia = new MediaDto(r.Url, r.Type);
+        }
+        finally { busy = false; }
+    }
+
+    private async Task Create()
+    {
+        busy = true;
+        try
+        {
+            await Api.PostAsync<StoryDto>("api/stories", new CreateStoryRequest(newMedia?.Url, newMedia?.Type ?? MediaType.Image, newText, newBg));
+            creating = false; newText = null; newMedia = null;
+            Toasts.Show("Story shared");
+            await Load();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    public void Dispose() => timer?.Dispose();
+}

@@ -1,0 +1,354 @@
+@page "/u/{UserName}"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+@inject NavigationManager Nav
+@inject Realtime Realtime
+@inject MediaGuard Guard
+
+<PageTitle>@(profile?.User.DisplayName ?? UserName) · HalalBook</PageTitle>
+
+@if (profile is null)
+{
+    @if (missing) { <div class="card"><Empty Title="Profile not found" Text="This account doesn't exist or isn't available." /></div> }
+    else { <div class="spinner"></div> }
+}
+else
+{
+    var p = profile;
+    <div class="card" style="padding:0;overflow:hidden">
+        <div class="cover" style="cursor:@(p.CoverUrl is null ? "default" : "zoom-in")" @onclick="() => viewing = p.CoverUrl">
+            @if (p.CoverUrl is { } c) { <img src="@c" alt="Cover photo" /> }
+            @if (IsSelf)
+            {
+                <label class="btn btn-sm cover-btn" @onclick:stopPropagation>📷 @(p.CoverUrl is null ? "Add cover photo" : "Edit cover")
+                    <InputFile OnChange="e => ChangePhoto(e, cover: true)" accept="image/*" style="display:none" /></label>
+            }
+        </div>
+        <div class="profile-head">
+            <div class="avatar-wrap">
+                <span class="avatar" style="cursor:pointer" @onclick="() => photoMenu = !photoMenu">@if (p.User.AvatarUrl is { } a) { <img src="@a" alt="@p.User.DisplayName" /> } else { @Ui.Initials(p.User.DisplayName) }</span>
+                @if (IsSelf) { <label class="cam-btn" title="Update profile picture">📷<InputFile OnChange="e => ChangePhoto(e, cover: false)" accept="image/*" style="display:none" /></label> }
+                @if (photoMenu)
+                {
+                    <div class="menu-pop photo-menu" @onclick="() => photoMenu = false">
+                        @if (p.User.AvatarUrl is { } full) { <button @onclick="() => viewing = full">🖼️ View profile picture</button> }
+                        @if (IsSelf)
+                        {
+                            <label class="btn-like" style="display:flex;gap:.6rem;padding:.55rem .7rem;cursor:pointer">📷 Upload new picture<InputFile OnChange="e => ChangePhoto(e, cover: false)" accept="image/*" style="display:none" /></label>
+                            @if (p.User.AvatarUrl is not null) { <button @onclick="RemovePhoto">🗑️ Remove picture</button> }
+                        }
+                    </div>
+                }
+            </div>
+            <div class="grow" style="padding-bottom:.5rem">
+                <div class="profile-name">@p.User.DisplayName @if (p.User.IsVerified) { <span class="verified">✦</span> }</div>
+                <div class="muted">@@@p.User.UserName · @p.FriendCount friends · @p.FollowerCount followers</div>
+                @if (p.MutualFriends > 0) { <div class="subtle">👥 @p.MutualFriends mutual friend@(p.MutualFriends == 1 ? "" : "s")</div> }
+                @if (p.Friendship != FriendshipStatus.Self && Ui.LastSeen(p.IsOnline || Realtime.IsOnline(p.User.Id), p.LastSeenAt) is { Length: > 0 } seen)
+                {
+                    <div class="active-text">● @seen</div>
+                }
+            </div>
+            <div class="row wrap" style="padding-bottom:.75rem">
+                @switch (p.Friendship)
+                {
+                    case FriendshipStatus.Self:
+                        <a class="btn btn-primary" href="/settings">✏️ Edit profile</a>
+                        break;
+                    case FriendshipStatus.Accepted:
+                        <button class="btn btn-outline" @onclick="Unfriend">✓ Friends</button>
+                        break;
+                    case FriendshipStatus.OutgoingRequest:
+                        <button class="btn btn-outline" @onclick="Unfriend">Cancel request</button>
+                        break;
+                    case FriendshipStatus.IncomingRequest:
+                        <button class="btn btn-primary" @onclick="Accept">Accept request</button>
+                        <button class="btn btn-outline" @onclick="Unfriend">Decline</button>
+                        break;
+                    default:
+                        @if (p.CanAddFriend) { <button class="btn btn-primary" @onclick="AddFriend">+ Add friend</button> }
+                        break;
+                }
+                @if (p.Friendship != FriendshipStatus.Self)
+                {
+                    @if (p.CanFollow || p.IsFollowing) { <button class="btn btn-outline" @onclick="ToggleFollow">@(p.IsFollowing ? "Following" : "Follow")</button> }
+                    @if (p.CanMessage) { <button class="btn btn-gold" @onclick="Message">💬 Message</button> }
+                    <div class="menu">
+                        <button class="icon-btn" @onclick="() => menu = !menu">⋯</button>
+                        @if (menu)
+                        {
+                            <div class="menu-pop" @onclick="() => menu = false">
+                                <button @onclick="ToggleBlock">@(p.IsBlocked ? "Unblock" : "🚫 Block")</button>
+                                <button @onclick="Report">🚩 Report profile</button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+        <div class="tabs" style="padding:0 1rem;margin-bottom:0">
+            @foreach (var (key, label) in Tabs(p))
+            {
+                <button class="@(tab == key ? "active" : "")" @onclick="() => ShowTab(key)">@label</button>
+            }
+        </div>
+    </div>
+
+    @if (tab == "posts")
+    {
+        <div class="timeline mt">
+            <aside class="timeline-side">
+                <div class="card intro-card">
+                    <div class="card-title">Intro</div>
+                    @if (p.Bio is { Length: > 0 }) { <p class="center" style="white-space:pre-wrap">@p.Bio</p> }
+                    else if (IsSelf) { <a class="btn btn-outline btn-sm btn-block" href="/settings">Add a bio</a> }
+                    @if (p.Location is { Length: > 0 }) { <div>📍 Lives in <b>@p.Location</b></div> }
+                    @if (p.Website is { Length: > 0 }) { <div>🔗 <a href="@p.Website" target="_blank" rel="noopener nofollow">@p.Website.Replace("https://", "")</a></div> }
+                    <div>🗓️ Joined @p.JoinedAt.ToString("MMMM yyyy")</div>
+                    <div>👥 Followed by @p.FollowerCount @(p.FollowerCount == 1 ? "person" : "people")</div>
+                </div>
+
+                @if (lifeEvents is { Count: > 0 })
+                {
+                    <div class="card">
+                        <div class="card-title">Life journey</div>
+                        <div class="journey">
+                            @foreach (var e in lifeEvents.Take(6))
+                            {
+                                var kind = LifeEvents.Find(e.LifeEvent);
+                                <a class="journey-item" href="/post/@e.Id"><span>@kind?.Icon</span><div><b>@kind?.Title</b><small>@e.LifeEventDate?.ToString("MMMM yyyy")</small></div></a>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <div class="card">
+                    <div class="row spread"><div class="card-title" style="margin:0">Photos</div><a href="javascript:void(0)" @onclick='() => ShowTab("photos")'>See all</a></div>
+                    @if (photos is null) { <div class="spinner"></div> }
+                    else if (photos.Count == 0) { <p class="subtle">No photos yet.</p> }
+                    else
+                    {
+                        <div class="mini-grid">@foreach (var m in photos.Take(9)) { <a href="/post/@m.PostId"><img src="@m.Url" alt="@(m.AltText ?? "")" loading="lazy" /></a> }</div>
+                    }
+                </div>
+
+                @if (p.CanSeeFriends)
+                {
+                    <div class="card">
+                        <div class="row spread"><div class="card-title" style="margin:0">Friends</div><a href="javascript:void(0)" @onclick='() => ShowTab("friends")'>See all</a></div>
+                        <div class="subtle">@p.FriendCount friends</div>
+                        <div class="mini-grid friends">
+                            @foreach (var f in (friends ?? []).Take(9))
+                            {
+                                <a href="/u/@f.UserName"><span class="avatar" style="--size:100%;border-radius:12px;aspect-ratio:1">@if (f.AvatarUrl is { } fa) { <img src="@fa" alt="" style="border-radius:12px" /> } else { @Ui.Initials(f.DisplayName) }</span><small>@f.DisplayName</small></a>
+                            }
+                        </div>
+                    </div>
+                }
+            </aside>
+
+            <div class="timeline-main">
+                @if (p.Friendship == FriendshipStatus.Self) { <Composer OnPosted="p => list?.Prepend(p)" /> <div class="mt"></div> }
+                else if (p.CanPost)
+                {
+                    <Composer TargetUserId="p.User.Id" AllowReel="false" Placeholder="@($"Write something to {p.User.DisplayName.Split(' ')[0]}…")" OnPosted="p => list?.Prepend(p)" />
+                    <div class="mt"></div>
+                }
+                @if (pinned is not null) { <div class="pinned-label">📌 Pinned post</div><PostCard @key="pinned.Id" Post="pinned" /> }
+                <PostList @ref="list" Url="@($"api/users/{p.User.UserName}/posts")" EmptyTitle="No posts yet" GroupByMonth="true" />
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="feed-column mt">
+            @switch (tab)
+            {
+                case "about":
+                    <div class="card stack">
+                        <div class="card-title">About</div>
+                        @if (p.Bio is { Length: > 0 }) { <p style="white-space:pre-wrap">@p.Bio</p> }
+                        @if (p.Location is { Length: > 0 }) { <div>📍 Lives in <b>@p.Location</b></div> }
+                        @if (p.Website is { Length: > 0 }) { <div>🔗 <a href="@p.Website" target="_blank" rel="noopener nofollow">@p.Website</a></div> }
+                        <div>🗓️ Joined @p.JoinedAt.ToString("MMMM yyyy")</div>
+                        <div>📝 @p.PostCount posts · @p.FriendCount friends · @p.FollowerCount followers · following @p.FollowingCount</div>
+                    </div>
+                    break;
+                case "life":
+                    <PostList Url="@($"api/users/{p.User.UserName}/posts?filter=life")" EmptyTitle="No life events yet"
+                              EmptyText="Share milestones like your Shahada, Hajj, Nikah or graduation with 🌟 Life event when you post." />
+                    break;
+                case "photos":
+                case "videos":
+                    var items = (tab == "photos" ? photos : videos) ?? [];
+                    @if ((tab == "photos" ? photos : videos) is null) { <div class="spinner"></div> }
+                    else if (items.Count == 0) { <div class="card"><Empty Title="@(tab == "photos" ? "No photos yet" : "No videos yet")" /></div> }
+                    else
+                    {
+                        <div class="photo-wall">
+                            @foreach (var m in items)
+                            {
+                                <a href="/post/@m.PostId" class="photo-cell">
+                                    @if (m.Type == MediaType.Video) { <video src="@(m.Url)#t=0.1" preload="metadata" muted playsinline></video><span class="play-badge">▶</span> }
+                                    else { <img src="@m.Url" alt="@(m.AltText ?? "")" loading="lazy" /> }
+                                </a>
+                            }
+                        </div>
+                    }
+                    break;
+                case "friends":
+                    <div class="card">
+                        <div class="card-title">Friends</div>
+                        @if (friends is null) { <div class="spinner"></div> }
+                        else if (friends.Count == 0) { <p class="muted">No friends to show yet.</p> }
+                        else
+                        {
+                            <div class="grid-cards">
+                                @foreach (var f in friends)
+                                {
+                                    <a class="tile" href="/u/@f.UserName" style="align-items:center;padding:1rem;text-align:center"><Avatar User="f" Size="72" Link="false" /><b class="mt">@f.DisplayName</b></a>
+                                }
+                            </div>
+                        }
+                    </div>
+                    break;
+            }
+        </div>
+    }
+}
+
+@if (viewing is not null)
+{
+    <div class="overlay lightbox" @onclick="() => viewing = null">
+        <button class="icon-btn lb-close" aria-label="Close">✕</button>
+        <div class="lb-stage"><img src="@viewing" alt="" /></div>
+    </div>
+}
+@if (uploadingPhoto) { <div class="toasts"><div class="toast">Uploading photo…</div></div> }
+
+@code {
+    [Parameter] public string UserName { get; set; } = "";
+    private ProfileDto? profile;
+    private List<UserSummaryDto>? friends;
+    private List<TimelineMediaDto>? photos, videos;
+    private List<PostDto>? lifeEvents;
+    private PostDto? pinned;
+
+    private static IEnumerable<(string, string)> Tabs(ProfileDto p)
+    {
+        yield return ("posts", "Posts");
+        yield return ("photos", "Photos");
+        yield return ("videos", "Videos");
+        yield return ("life", "Life events");
+        yield return ("about", "About");
+        if (p.CanSeeFriends) yield return ("friends", "Friends");
+    }
+
+    private async Task ShowTab(string key)
+    {
+        tab = key;
+        try
+        {
+            if (key == "photos") photos ??= await Api.GetAsync<List<TimelineMediaDto>>($"api/users/{UserName}/media?type=Image");
+            if (key == "videos") videos ??= await Api.GetAsync<List<TimelineMediaDto>>($"api/users/{UserName}/media?type=Video");
+            if (key == "friends") await ShowFriends();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    /// <summary>Loads the side column: photos, friends, life events and the pinned post.</summary>
+    private async Task LoadTimelineExtras()
+    {
+        var p = profile!;
+        try
+        {
+            photos = await Api.GetAsync<List<TimelineMediaDto>>($"api/users/{UserName}/media?type=Image");
+            lifeEvents = (await Api.GetAsync<PagedResult<PostDto>>($"api/users/{UserName}/posts?filter=life")).Items;
+            if (p.CanSeeFriends) friends = await Api.GetAsync<List<UserSummaryDto>>($"api/users/{UserName}/friends");
+            pinned = p.PinnedPostId is Guid pin ? await Api.GetAsync<PostDto>($"api/posts/{pin}") : null;
+        }
+        catch (Exception) { }
+    }
+    private PostList? list;
+    private string tab = "posts";
+    private bool missing, menu, photoMenu, uploadingPhoto;
+    private string? viewing;
+    private bool IsSelf => profile?.Friendship == FriendshipStatus.Self;
+
+    /// <summary>Like Facebook: change your profile or cover picture from your profile, and share the new picture with friends.</summary>
+    private async Task ChangePhoto(InputFileChangeEventArgs e, bool cover)
+    {
+        photoMenu = false;
+        uploadingPhoto = true;
+        try
+        {
+            var up = (await Guard.UploadAsync([e.File], cover ? "cover" : "profile")).FirstOrDefault();
+            if (up is null) return;
+            var u = await Api.PutAsync<UserDto>("api/users/me", cover
+                ? new UpdateProfileRequest(null, null, null, up.Url, null, null, null, null, null, null)
+                : new UpdateProfileRequest(null, null, up.Url, null, null, null, null, null, null, null));
+            await Session.UpdateUserAsync(u);
+            await Api.PostAsync<PostDto>("api/posts", new CreatePostRequest(cover ? "Updated my cover photo 🌙" : "Updated my profile picture 🌙",
+                Visibility.Friends, [new MediaDto(up.Url, MediaType.Image, up.AltText)]));
+            Toasts.Show(cover ? "Cover photo updated" : "Profile picture updated");
+            await Load();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { uploadingPhoto = false; }
+    }
+
+    private async Task RemovePhoto()
+    {
+        try
+        {
+            var u = await Api.PutAsync<UserDto>("api/users/me", new UpdateProfileRequest(null, null, "", null, null, null, null, null, null, null));
+            await Session.UpdateUserAsync(u);
+            await Load();
+            Toasts.Show("Profile picture removed");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        profile = null; missing = false; friends = null; photos = videos = null; lifeEvents = null; pinned = null; tab = "posts";
+        await Load();
+        if (profile is not null) await LoadTimelineExtras();
+    }
+
+    private async Task Load()
+    {
+        try { profile = await Api.GetAsync<ProfileDto>($"api/users/{UserName}"); }
+        catch (Exception) { missing = true; }
+    }
+
+    private async Task Do(Func<Task> action, string? toast = null)
+    {
+        try { await action(); await Load(); if (toast is not null) Toasts.Show(toast); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private Task AddFriend() => Do(() => Api.PostAsync($"api/friends/{profile!.User.Id}"), "Friend request sent");
+    private Task Accept() => Do(() => Api.PostAsync($"api/friends/{profile!.User.Id}/accept"), "You're now friends");
+    private Task Unfriend() => Do(() => Api.DeleteAsync($"api/friends/{profile!.User.Id}"));
+    private Task ToggleFollow() => Do(() => profile!.IsFollowing ? Api.DeleteAsync($"api/users/{profile.User.Id}/follow") : Api.PostAsync($"api/users/{profile.User.Id}/follow"));
+    private Task ToggleBlock() => Do(() => profile!.IsBlocked ? Api.DeleteAsync($"api/users/{profile.User.Id}/block") : Api.PostAsync($"api/users/{profile.User.Id}/block"), profile!.IsBlocked ? "Unblocked" : "Blocked");
+    private Task Report() => Do(() => Api.PostAsync("api/reports", new ReportRequest(ReportTarget.User, profile!.User.Id, "Reported from profile")), "Thank you. Our moderators will review it.");
+
+    private async Task ShowFriends()
+    {
+        tab = "friends";
+        friends ??= await Api.GetAsync<List<UserSummaryDto>>($"api/users/{UserName}/friends");
+    }
+
+    private async Task Message()
+    {
+        try
+        {
+            var conv = await Api.PostAsync<ConversationDto>("api/conversations", new StartConversationRequest([profile!.User.Id], null));
+            Nav.NavigateTo($"/messages/{conv.Id}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

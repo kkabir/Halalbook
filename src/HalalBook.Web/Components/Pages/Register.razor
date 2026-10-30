@@ -1,0 +1,80 @@
+@page "/register"
+@layout AuthLayout
+@inject ApiClient Api
+@inject AuthSession Session
+@inject NavigationManager Nav
+
+<PageTitle>Join · HalalBook</PageTitle>
+
+@if (showTerms)
+{
+    <div class="card agreement-card">
+        <div class="center"><h1 style="font-family:var(--font-display);font-weight:700">Community Agreement</h1><p class="muted">Please read each page to the end.</p></div>
+        <AgreementReader Busy="busy" AgreeText="I agree and create my account" OnAgree="CreateAccount" />
+        @if (error is not null) { <div class="error mt">@error</div> }
+        <button class="btn btn-ghost btn-block mt" @onclick="() => showTerms = false">← Back to the form</button>
+    </div>
+}
+else
+{
+<div class="card">
+    <div class="center" style="margin-bottom:1.25rem">
+        <div class="arabic" style="font-size:1.6rem;color:var(--gold-600)">أَهْلًا وَسَهْلًا</div>
+        <h1 style="font-family:var(--font-display);font-weight:700">@T("Join HalalBook")</h1>
+        <p class="muted">It's free, and always will be.</p>
+        @if (!string.IsNullOrEmpty(Invite)) { <p class="subtle">🤝 You'll be friends with the person who invited you as soon as you join.</p> }
+    </div>
+    <form class="stack" @onsubmit="Submit">
+        <label class="field">@T("Your name")<input class="input" @bind="name" required /></label>
+        <label class="field">@T("Username")<input class="input" @bind="userName" autocomplete="username" required placeholder="letters, numbers, dots or _" /></label>
+        <label class="field">@T("Email")<input class="input" type="email" @bind="email" autocomplete="email" required /></label>
+        <label class="field">@T("Password")<input class="input" type="password" @bind="password" autocomplete="new-password" required minlength="8" /></label>
+        <div class="faith-choice">
+            <span>@T("Islamic features")</span>
+            <label class="@(faith ? "on" : "")"><input type="radio" name="faith" checked="@faith" @onchange="() => faith = true" /> 🕌 @T("Show prayer times, Qibla, dua wall and more")</label>
+            <label class="@(!faith ? "on" : "")"><input type="radio" name="faith" checked="@(!faith)" @onchange="() => faith = false" /> 🌐 @T("Keep it general")</label>
+            <small class="subtle">@T("HalalBook is a clean, safe place for everyone. You can change this any time in Settings.")</small>
+        </div>
+        @if (error is not null) { <div class="error">@error</div> }
+        <button class="btn btn-gold btn-block" type="submit">@T("Continue")</button>
+        <p class="subtle center" style="margin:0">Next, you'll read and accept the Community Agreement.</p>
+    </form>
+    <hr class="ornament" style="margin:1.25rem 0" />
+    <p class="center muted">Already have an account? <a href="/login">Sign in</a></p>
+</div>
+
+}
+
+@code {
+    /// <summary>Code from a friend's invite link (/join/{code}).</summary>
+    [SupplyParameterFromQuery] public string? Invite { get; set; }
+    private string? name, userName, email, password, error;
+    private bool faith = true;
+    private bool busy;
+
+    private bool showTerms;
+
+    private void Submit()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(email) || (password?.Length ?? 0) < 8)
+        {
+            error = "Fill in every field. Passwords need at least 8 characters.";
+            return;
+        }
+        showTerms = true;
+    }
+
+    private async Task CreateAccount()
+    {
+        busy = true; error = null;
+        try
+        {
+            var result = await Api.PostAsync<AuthResult>("api/auth/register", new RegisterRequest(userName ?? "", email ?? "", password ?? "", name ?? "", Terms.Version, Invite, faith));
+            await AuthFlow.ContinueAsync(result, Session, Nav, null);
+        }
+        catch (ApiException ex) { error = ex.Message; showTerms = false; }
+        catch (Exception) { error = "We couldn't reach HalalBook. Please try again."; }
+        finally { busy = false; }
+    }
+}

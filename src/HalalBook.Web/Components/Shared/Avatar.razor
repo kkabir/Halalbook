@@ -1,0 +1,37 @@
+@inject Realtime Realtime
+@if (Link && User is not null)
+{
+    <a href="/u/@User.UserName" class="avatar @(Ring ? "ring" : "") @Class" style="--size:@(Size)px" title="@User.DisplayName">@Inner</a>
+}
+else
+{
+    <span class="avatar @(Ring ? "ring" : "") @Class" style="--size:@(Size)px" title="@User?.DisplayName">@Inner</span>
+}
+
+@code {
+    [Parameter] public UserSummaryDto? User { get; set; }
+    [Parameter] public int Size { get; set; } = 40;
+    [Parameter] public bool Ring { get; set; }
+    [Parameter] public string? Class { get; set; }
+    /// <summary>Set false when the avatar sits inside another link.</summary>
+    [Parameter] public bool Link { get; set; } = true;
+
+    /// <summary>Show the green "active now" dot when this person is online.</summary>
+    [Parameter] public bool ShowStatus { get; set; } = true;
+
+    private RenderFragment Inner => __builder =>
+    {
+        if (ShowStatus && User is not null && Realtime.IsOnline(User.Id))
+        {
+            <span class="online-dot" title="Active now"></span>
+        }
+        if (!string.IsNullOrEmpty(User?.AvatarUrl))
+        {
+            <img src="@User.AvatarUrl" alt="" loading="lazy" />
+        }
+        else
+        {
+            @Ui.Initials(User?.DisplayName ?? "?")
+        }
+    };
+}

@@ -1,0 +1,59 @@
+@inject AuthSession Session
+@inject ApiClient Api
+@inject MediaGuard Guard
+@inject Toasts Toasts
+
+@* Shown on the home page until the person has a profile picture and a cover photo, so friends recognize them everywhere. *@
+@if (Session.User is { } me && !dismissed && (me.AvatarUrl is null || me.CoverUrl is null))
+{
+    <div class="card setup-card">
+        <div class="setup-preview">
+            <div class="setup-cover" style="@(me.CoverUrl is { } c ? $"background-image:url('{c}')" : "")">
+                <label class="btn btn-sm cover-btn">📷 @T(me.CoverUrl is null ? "Add cover photo" : "Edit cover")
+                    <InputFile OnChange="e => Upload(e, cover: true)" accept="image/*" style="display:none" />
+                </label>
+            </div>
+            <label class="setup-avatar" title="@T("Add profile picture")">
+                <span class="avatar" style="--size:92px">@if (me.AvatarUrl is { } a) { <img src="@a" alt="" /> } else { @Ui.Initials(me.DisplayName) }</span>
+                <span class="cam-btn">📷</span>
+                <InputFile OnChange="e => Upload(e, cover: false)" accept="image/*" style="display:none" />
+            </label>
+        </div>
+        <div class="setup-text">
+            <b>@T(me.AvatarUrl is null ? "Add a profile picture so friends know it's you" : "Add a cover photo to finish your profile")</b>
+            <div class="subtle">@T("Your picture appears in a small circle beside your posts, comments and messages.")</div>
+            <div class="row mt" style="gap:.5rem;flex-wrap:wrap">
+                @if (me.AvatarUrl is null)
+                {
+                    <label class="btn btn-primary btn-sm">@(busy ? T("Uploading…") : "📷 " + T("Add profile picture"))
+                        <InputFile OnChange="e => Upload(e, cover: false)" accept="image/*" style="display:none" />
+                    </label>
+                }
+                <button class="btn btn-ghost btn-sm" @onclick="() => dismissed = true">@T("Later")</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool dismissed, busy;
+
+    private async Task Upload(InputFileChangeEventArgs e, bool cover)
+    {
+        busy = true;
+        try
+        {
+            var up = (await Guard.UploadAsync([e.File], cover ? "cover" : "profile")).FirstOrDefault();
+            if (up is null) return;
+            var u = await Api.PutAsync<UserDto>("api/users/me", cover
+                ? new UpdateProfileRequest(null, null, null, up.Url, null, null, null, null, null, null)
+                : new UpdateProfileRequest(null, null, up.Url, null, null, null, null, null, null, null));
+            await Session.UpdateUserAsync(u);
+            await Api.PostAsync<PostDto>("api/posts", new CreatePostRequest(cover ? "Updated my cover photo 🌙" : "Updated my profile picture 🌙",
+                Visibility.Friends, [new MediaDto(up.Url, MediaType.Image, up.AltText)]));
+            Toasts.Show(T(cover ? "Cover photo updated" : "Profile picture updated"));
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+}

@@ -1,0 +1,66 @@
+@* Paged list of posts from any endpoint returning PagedResult<PostDto>. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject ClientClock Clock
+
+@{ string? lastMonth = null; }
+@foreach (var p in posts)
+{
+    @if (GroupByMonth && Clock.Local(p.CreatedAt).ToString("MMMM yyyy") is var month && month != lastMonth)
+    {
+        lastMonth = month;
+        <div class="month-divider"><span>@month</span></div>
+    }
+    <PostCard @key="p.Id" Post="p" ShowGroup="ShowGroup" />
+}
+@if (loading)
+{
+    <div class="spinner"></div>
+}
+else if (posts.Count == 0)
+{
+    <div class="card"><Empty Title="@EmptyTitle" Text="@EmptyText" /></div>
+}
+else if (hasMore)
+{
+    <div class="center mt"><button class="btn btn-outline" @onclick="More">Show more</button></div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Url { get; set; } = "";
+    [Parameter] public bool ShowGroup { get; set; } = true;
+    [Parameter] public string EmptyTitle { get; set; } = "No posts yet";
+    [Parameter] public string? EmptyText { get; set; }
+    /// <summary>Show "October 2026" style dividers between months, like a timeline.</summary>
+    [Parameter] public bool GroupByMonth { get; set; }
+
+    private readonly List<PostDto> posts = [];
+    private string? loadedUrl;
+    private int page = 1;
+    private bool loading = true, hasMore;
+
+    public void Prepend(PostDto p) { posts.Insert(0, p); StateHasChanged(); }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Url == loadedUrl) return;
+        loadedUrl = Url; page = 1; posts.Clear();
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        try
+        {
+            var sep = Url.Contains('?') ? '&' : '?';
+            var res = await Api.GetAsync<PagedResult<PostDto>>($"{Url}{sep}page={page}");
+            posts.AddRange(res.Items);
+            hasMore = res.HasMore;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { loading = false; }
+    }
+
+    private async Task More() { page++; await Load(); }
+}

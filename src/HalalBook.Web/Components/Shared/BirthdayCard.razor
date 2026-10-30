@@ -1,0 +1,60 @@
+@inject ApiClient Api
+@inject AuthSession Session
+@inject ClientClock Clock
+@inject Toasts Toasts
+
+@* Friends' birthdays today (with a one-tap wish) and in the next few days. *@
+
+@if (birthdays is { Count: > 0 })
+{
+    var today = birthdays.Where(b => b.DaysAway == 0).ToList();
+    var soon = birthdays.Where(b => b.DaysAway > 0).ToList();
+    <div class="card birthday-card">
+        @foreach (var b in today)
+        {
+            <div class="birthday-today">
+                <Avatar User="b.User" Size="48" />
+                <div class="grow">
+                    <b>🎂 @T("Today is") @b.User.DisplayName@T("'s birthday")</b>
+                    <div class="subtle">@T("Send a warm wish")</div>
+                </div>
+                @if (sent.Contains(b.User.Id)) { <span class="birthday-sent">✓ @T("Sent")</span> }
+                else { <button class="btn btn-gold btn-sm" disabled="@busy" @onclick="() => Wish(b.User)">🎉 @T("Wish")</button> }
+            </div>
+        }
+        @if (soon.Count > 0)
+        {
+            <div class="subtle birthday-soon">🎈 @T("Coming up"): @string.Join(", ", soon.Select(s => $"{s.User.DisplayName.Split(' ')[0]} ({(s.DaysAway == 1 ? T("tomorrow") : $"{new DateTime(2000, s.Month, s.Day):d MMM}")})"))</div>
+        }
+    </div>
+}
+
+@code {
+    private List<BirthdayDto>? birthdays;
+    private readonly HashSet<Guid> sent = [];
+    private bool busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Clock.LoadAsync();
+        try { birthdays = await Api.GetAsync<List<BirthdayDto>>($"api/friends/birthdays?offset={Clock.OffsetMinutes}"); } catch (Exception) { }
+    }
+
+    private async Task Wish(UserSummaryDto u)
+    {
+        busy = true;
+        try
+        {
+            var first = u.DisplayName.Split(' ')[0];
+            var text = Session.ShowFaith
+                ? $"Happy birthday, {first}! 🎂 May Allah bless you with health, happiness and barakah in the year ahead. 🤲"
+                : $"Happy birthday, {first}! 🎂 Wishing you a wonderful year full of health and happiness. 🎉";
+            var chat = await Api.PostAsync<ConversationDto>("api/conversations", new StartConversationRequest([u.Id], null));
+            await Api.PostAsync<MessageDto>($"api/conversations/{chat.Id}/messages", new SendMessageRequest(text, null));
+            sent.Add(u.Id);
+            Toasts.Show($"{T("Birthday wish sent to")} {first} 🎉");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+}

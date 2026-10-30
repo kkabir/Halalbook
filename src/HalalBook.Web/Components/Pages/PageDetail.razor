@@ -1,0 +1,59 @@
+@page "/pages/{Handle}"
+@inject ApiClient Api
+@inject Toasts Toasts
+
+<PageTitle>@(pg?.Name ?? "Page") · HalalBook</PageTitle>
+
+@if (pg is null) { <div class="spinner"></div> }
+else
+{
+    <div class="card" style="padding:0;overflow:hidden">
+        <div class="cover" style="height:240px">@if (pg.CoverUrl is { } c) { <img src="@c" alt="" /> }</div>
+        <div class="profile-head" style="margin-top:-60px">
+            <span class="avatar" style="--size:120px">@if (pg.AvatarUrl is { } a) { <img src="@a" alt="" /> } else { @Ui.Initials(pg.Name) }</span>
+            <div class="grow" style="padding-bottom:.5rem">
+                <div class="profile-name">@pg.Name @if (pg.IsVerified) { <span class="verified" title="Verified">✦</span> }</div>
+                <div class="muted">@@@pg.Handle · @pg.Category · @pg.FollowerCount followers</div>
+            </div>
+            <div style="padding-bottom:.75rem">
+                @if (!pg.IsOwner)
+                {
+                    <button class="btn @(pg.IsFollowing ? "btn-outline" : "btn-primary")" @onclick="ToggleFollow">@(pg.IsFollowing ? "✓ Following" : "+ Follow")</button>
+                }
+            </div>
+        </div>
+        @if (pg.Description is { Length: > 0 }) { <p style="padding:1rem 1.5rem 0" class="muted">@pg.Description</p> }
+        @if (pg.Website is { Length: > 0 }) { <p style="padding:0 1.5rem"><a href="@pg.Website" target="_blank" rel="noopener nofollow">🔗 @pg.Website</a></p> }
+        <div style="height:1rem"></div>
+    </div>
+
+    <div class="feed-column mt">
+        @if (pg.IsOwner) { <Composer PageId="pg.Id" Placeholder="Post as your page…" OnPosted="p => list?.Prepend(p)" /> <div class="mt"></div> }
+        <PostList @ref="list" Url="@($"api/pages/{pg.Id}/posts")" EmptyTitle="No posts yet" />
+    </div>
+}
+
+@code {
+    [Parameter] public string Handle { get; set; } = "";
+    private PageDto? pg;
+    private PostList? list;
+
+    protected override async Task OnParametersSetAsync() => await Load();
+
+    private async Task Load()
+    {
+        try { pg = await Api.GetAsync<PageDto>($"api/pages/{Handle}"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task ToggleFollow()
+    {
+        try
+        {
+            if (pg!.IsFollowing) await Api.DeleteAsync($"api/pages/{pg.Id}/follow");
+            else await Api.PostAsync($"api/pages/{pg.Id}/follow");
+            await Load();
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

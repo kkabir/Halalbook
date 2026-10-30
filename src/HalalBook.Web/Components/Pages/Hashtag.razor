@@ -1,0 +1,11 @@
+﻿@page "/hashtag/{Tag}"
+
+<PageTitle>#@Tag · HalalBook</PageTitle>
+<div class="feed-column">
+    <div class="page-hero"><h1>#@Tag</h1><p>Posts from the community tagged #@Tag</p></div>
+    <PostList Url="@($"api/hashtags/{Uri.EscapeDataString(Tag)}")" EmptyTitle="No posts with this hashtag yet" />
+</div>
+
+@code {
+    [Parameter] public string Tag { get; set; } = "";
+}

@@ -1,0 +1,50 @@
+@page "/login"
+@layout AuthLayout
+@inject ApiClient Api
+@inject AuthSession Session
+@inject NavigationManager Nav
+
+<PageTitle>Sign in · HalalBook</PageTitle>
+
+<div class="card">
+    <div class="center" style="margin-bottom:1.25rem">
+        <div class="arabic" style="font-size:1.6rem;color:var(--gold-600)">السَّلَامُ عَلَيْكُمْ</div>
+        <h1 style="font-family:var(--font-display);font-weight:700">@T("Welcome back")</h1>
+        <p class="muted">@T("Sign in to continue to HalalBook")</p>
+    </div>
+    <form class="stack" @onsubmit="Submit">
+        <label class="field">@T("Username or email")<input class="input" @bind="user" autocomplete="username" required /></label>
+        <label class="field">@T("Password")<input class="input" type="password" @bind="password" autocomplete="current-password" required /></label>
+        <div style="text-align:right;margin-top:-.5rem"><a href="/forgot-password" style="font-size:.88rem">@T("Forgot password?")</a></div>
+        @if (error is not null) { <div class="error">@error</div> }
+        <button class="btn btn-primary btn-block" type="submit" disabled="@busy">@(busy ? T("Signing in…") : T("Sign in"))</button>
+    </form>
+    <hr class="ornament" style="margin:1.25rem 0" />
+    <p class="center muted">@T("New to HalalBook?") <a href="/register">@T("Create an account")</a></p>
+    <p class="center subtle"><a href="/contact">Need help? Contact us</a> · <a href="/terms">Community Agreement</a></p>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    private string? user, password, error;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.LoadAsync();
+        if (Session.IsAuthenticated) Nav.NavigateTo("/");
+    }
+
+    private async Task Submit()
+    {
+        busy = true; error = null;
+        try
+        {
+            var result = await Api.PostAsync<AuthResult>("api/auth/login", new LoginRequest(user ?? "", password ?? ""));
+            await AuthFlow.ContinueAsync(result, Session, Nav, ReturnUrl);
+        }
+        catch (ApiException ex) { error = ex.Message; }
+        catch (Exception) { error = "We couldn't reach HalalBook. Please try again."; }
+        finally { busy = false; }
+    }
+}

@@ -1,0 +1,63 @@
+@page "/search"
+@inject ApiClient Api
+@inject ClientClock Clock
+
+<PageTitle>Search · HalalBook</PageTitle>
+
+<div class="feed-column">
+    <h1>Results for “@Q”</h1>
+    @if (result is null) { <div class="spinner"></div> }
+    else if (result.People.Count + result.Posts.Count + result.Groups.Count + result.Pages.Count + result.Events.Count + result.Hashtags.Count == 0)
+    {
+        <div class="card"><Empty Title="No results" Text="Try a different word or a #hashtag." /></div>
+    }
+    else
+    {
+        @if (result.People.Count > 0)
+        {
+            <div class="card"><div class="card-title">People</div>
+                @foreach (var p in result.People) { <div class="list-item"><Avatar User="p" /><a class="grow" href="/u/@p.UserName"><b>@p.DisplayName</b> <span class="subtle">@@@p.UserName</span></a></div> }
+            </div>
+        }
+        @if (result.Hashtags.Count > 0)
+        {
+            <div class="card"><div class="card-title">Hashtags</div><div class="row wrap">
+                @foreach (var h in result.Hashtags) { <a class="chip gold" href="/hashtag/@h.Tag">#@h.Tag · @h.PostCount</a> }
+            </div></div>
+        }
+        @if (result.Groups.Count > 0)
+        {
+            <div class="card"><div class="card-title">Groups</div>
+                @foreach (var g in result.Groups) { <div class="list-item"><span class="avatar">🕌</span><a class="grow" href="/groups/@g.Id"><b>@g.Name</b> <span class="subtle">@g.MemberCount members</span></a></div> }
+            </div>
+        }
+        @if (result.Pages.Count > 0)
+        {
+            <div class="card"><div class="card-title">Pages</div>
+                @foreach (var p in result.Pages) { <div class="list-item"><span class="avatar">📜</span><a class="grow" href="/pages/@p.Handle"><b>@p.Name</b> <span class="subtle">@p.FollowerCount followers</span></a></div> }
+            </div>
+        }
+        @if (result.Events.Count > 0)
+        {
+            <div class="card"><div class="card-title">Events</div>
+                @foreach (var e in result.Events) { <div class="list-item"><span class="avatar">📅</span><a class="grow" href="/events/@e.Id"><b>@e.Title</b> <span class="subtle">@Clock.Local(e.StartsAt).ToString("ddd, MMM d")</span></a></div> }
+            </div>
+        }
+        @if (result.Posts.Count > 0)
+        {
+            <h2 class="mt">Posts</h2>
+            @foreach (var p in result.Posts) { <PostCard @key="p.Id" Post="p" /> }
+        }
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Q { get; set; }
+    private SearchResultDto? result;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        result = null;
+        result = await Api.GetAsync<SearchResultDto>($"api/search?q={Uri.EscapeDataString(Q ?? "")}");
+    }
+}

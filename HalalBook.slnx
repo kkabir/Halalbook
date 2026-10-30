@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HalalBook.Api/HalalBook.Api.csproj" />
+    <Project Path="src/HalalBook.Shared/HalalBook.Shared.csproj" />
+    <Project Path="src/HalalBook.Web/HalalBook.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HalalBook.Api.Tests/HalalBook.Api.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,117 @@
+@page "/zakat"
+@inject ApiClient Api
+
+<PageTitle>@T("Zakat calculator") · HalalBook</PageTitle>
+
+<div class="feed-column">
+    <div class="page-hero">
+        <h1>💰 @T("Zakat calculator")</h1>
+        <p>@T("Work out your zakat with today's gold and silver prices. 2.5% of what you've held for a full lunar year, once it reaches the nisab.")</p>
+    </div>
+
+    <div class="card zakat-card">
+        <div class="row spread wrap" style="gap:.6rem">
+            <label class="field" style="margin:0">@T("Currency")
+                <select class="input" value="@currency" @onchange="ChangeCurrency">
+                    @foreach (var c in nisab?.Currencies ?? [currency]) { <option value="@c">@c</option> }
+                </select>
+            </label>
+            <div class="zakat-nisab-choice">
+                <span class="subtle">@T("Nisab based on")</span>
+                <div class="row" style="gap:.3rem">
+                    <button class="chip @(useSilver ? "active" : "")" @onclick="() => useSilver = true">🥈 @T("Silver")</button>
+                    <button class="chip @(!useSilver ? "active" : "")" @onclick="() => useSilver = false">🥇 @T("Gold")</button>
+                </div>
+            </div>
+        </div>
+        @if (nisab is { } n)
+        {
+            <div class="zakat-prices">
+                <span>🥇 @Money(n.GoldPerGram)/g</span><span>🥈 @Money(n.SilverPerGram)/g</span>
+                <span>@T("Nisab"): <b>@Money(Nisab)</b></span>
+            </div>
+        }
+        else if (pricesFailed) { <p class="subtle">@T("Live prices are unavailable right now. Enter gold and silver values as money instead.")</p> }
+
+        <div class="zakat-grid">
+            @foreach (var f in Fields)
+            {
+                <label class="field">
+                    <span>@f.Icon @T(f.Label)</span>
+                    <input class="input" type="number" min="0" step="any" inputmode="decimal" placeholder="0"
+                           value="@(values.TryGetValue(f.Key, out var v) && v != 0 ? v : null)"
+                           @oninput="e => values[f.Key] = double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d) ? Math.Max(0, d) : 0" />
+                    @if (f.Hint is { } h) { <small class="subtle">@T(h)</small> }
+                </label>
+            }
+        </div>
+    </div>
+
+    <div class="card zakat-result mt @(Due > 0 ? "due" : "")">
+        <div class="zakat-row"><span>@T("Your zakatable wealth")</span><b>@Money(Wealth)</b></div>
+        <div class="zakat-row"><span>@T("Nisab")</span><b>@(nisab is null ? "—" : Money(Nisab))</b></div>
+        @if (Due > 0)
+        {
+            <div class="zakat-due"><span>@T("Zakat due")</span><b>@Money(Due)</b></div>
+            <p class="subtle" style="margin:.5rem 0 0">@T("If this wealth has been with you for one full lunar year (hawl), give 2.5% to those entitled: the poor, the needy, those in debt and the other groups named in Surah At-Tawbah 9:60.")</p>
+        }
+        else if (Wealth > 0 && nisab is not null)
+        {
+            <p style="margin:.5rem 0 0">✅ @T("Your wealth is below the nisab, so no zakat is due. Sadaqah is always rewarded.")</p>
+        }
+        <p class="subtle" style="margin:.75rem 0 0;font-size:.78rem">@T("This is a guide. For special cases (business partnerships, retirement funds, jewellery you wear), please ask a trusted scholar.")</p>
+    </div>
+</div>
+
+@code {
+    private record Field(string Key, string Icon, string Label, string? Hint = null);
+
+    private static readonly Field[] Fields =
+    [
+        new("cash", "💵", "Cash at home and in bank accounts"),
+        new("gold", "🥇", "Gold (grams)", "Jewellery and coins; 1 tola ≈ 11.66 g"),
+        new("silver", "🥈", "Silver (grams)"),
+        new("invest", "📈", "Shares, funds and investments", "Their current market value"),
+        new("business", "🏪", "Business stock for sale"),
+        new("owed", "🤝", "Money others owe you", "Only what you expect to be repaid"),
+        new("debts", "📉", "Debts and bills due now", "Subtracted from your wealth"),
+    ];
+
+    private readonly Dictionary<string, double> values = [];
+    private NisabDto? nisab;
+    private string currency = "USD";
+    private bool useSilver = true, pricesFailed;
+
+    private double V(string k) => values.GetValueOrDefault(k);
+    private double Wealth => Math.Max(0, V("cash") + V("gold") * (nisab?.GoldPerGram ?? 0) + V("silver") * (nisab?.SilverPerGram ?? 0)
+        + V("invest") + V("business") + V("owed") - V("debts"));
+    private double Nisab => nisab is null ? double.MaxValue : useSilver ? nisab.SilverNisab : nisab.GoldNisab;
+    private double Due => nisab is not null && Wealth >= Nisab ? Math.Round(Wealth * 0.025, 2) : 0;
+    private string Money(double v) => $"{v.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)} {currency}";
+
+    /// <summary>A sensible first currency from the reader's language.</summary>
+    private static string GuessCurrency(string lang) => lang switch
+    {
+        "bn" => "BDT", "ur" => "PKR", "hi" => "INR", "id" => "IDR", "ms" => "MYR", "tr" => "TRY", "ar" => "SAR", "fa" => "IRR",
+        "fr" or "de" or "es" => "EUR", "so" => "SOS", "ha" => "NGN", "sw" => "KES", "ru" => "RUB", "zh" => "CNY", "uz" => "UZS", "ps" => "AFN",
+        _ => "USD",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        currency = GuessCurrency(I18n.Language);
+        await LoadPrices();
+    }
+
+    private async Task LoadPrices()
+    {
+        try { nisab = await Api.GetAsync<NisabDto>($"api/islamic/nisab?currency={currency}"); currency = nisab.Currency; pricesFailed = false; }
+        catch (Exception) { pricesFailed = true; }
+    }
+
+    private async Task ChangeCurrency(ChangeEventArgs e)
+    {
+        currency = e.Value?.ToString() ?? "USD";
+        await LoadPrices();
+    }
+}

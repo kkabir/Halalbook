@@ -1,0 +1,110 @@
+@* Family, Close friends, Best friends and custom lists: manage members and open each list's feed. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+
+<div class="row spread"><h2 style="margin:0">Your lists</h2><button class="btn btn-outline btn-sm" @onclick="() => creating = true">+ New list</button></div>
+<p class="subtle">Use lists to share posts with just these people, or to read a feed of only their posts.</p>
+@if (lists is null) { <div class="spinner"></div> }
+else
+{
+    <div class="grid-cards list-cards">
+        @foreach (var l in lists)
+        {
+            <div class="tile list-tile">
+                <div class="list-icon">@l.Icon</div>
+                <b>@l.Name</b>
+                <span class="subtle">@l.Members.Count @(l.Members.Count == 1 ? "person" : "people")</span>
+                <div class="avatar-stack">@foreach (var m in l.Members.Take(5)) { <Avatar User="m" Size="26" Link="false" /> }</div>
+                <div class="row" style="gap:.35rem;margin-top:.4rem">
+                    <button class="btn btn-sm btn-outline" @onclick="() => Manage(l)">Manage</button>
+                    <a class="btn btn-sm btn-primary" href="/lists/@l.Id">Feed</a>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (managing is { } list)
+{
+    <div class="overlay" @onclick="() => managing = null">
+        <div class="modal stack" @onclick:stopPropagation>
+            <div class="row spread"><h2 style="margin:0">@list.Icon @list.Name</h2><button class="icon-btn" @onclick="() => managing = null">✕</button></div>
+            <input class="input" placeholder="Search friends" @bind="search" @bind:event="oninput" />
+            <div class="share-list">
+                @foreach (var f in (friends ?? []).Where(f => string.IsNullOrWhiteSpace(search) || f.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase)))
+                {
+                    var inList = list.Members.Any(m => m.Id == f.Id);
+                    <label class="audience-row compact"><input type="checkbox" checked="@inList" @onchange="e => Toggle(list, f, e.Value is true)" /><Avatar User="f" Size="32" Link="false" /><span>@f.DisplayName</span></label>
+                }
+                @if (friends is { Count: 0 }) { <p class="muted">Add friends first, then put them in your lists.</p> }
+            </div>
+            @if (list.Kind == FriendListKind.Custom) { <button class="btn btn-ghost btn-sm" style="color:var(--danger)" @onclick="() => Delete(list)">Delete this list</button> }
+        </div>
+    </div>
+}
+
+@if (creating)
+{
+    <div class="overlay" @onclick="() => creating = false">
+        <div class="modal stack" @onclick:stopPropagation>
+            <h2>New list</h2>
+            <div class="row wrap">@foreach (var i in Icons) { <button class="chip @(icon == i ? "active" : "")" @onclick="() => icon = i">@i</button> }</div>
+            <input class="input" placeholder="e.g. Masjid brothers, Study circle, Neighbours" @bind="newName" maxlength="60" />
+            <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" @onclick="() => creating = false">Cancel</button><button class="btn btn-primary" @onclick="Create">Create</button></div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<FriendListDto>? lists;
+    private List<UserSummaryDto>? friends;
+    private FriendListDto? managing;
+    private bool creating;
+    private string? search, newName;
+    private string icon = "📋";
+    private static readonly string[] Icons = ["📋", "🕌", "📖", "🏠", "🎓", "💼", "⚽", "🤲", "🌙", "❤️"];
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        try { lists = await Api.GetAsync<List<FriendListDto>>("api/friend-lists"); } catch (Exception ex) { lists = []; Toasts.Error(ex); }
+    }
+
+    private async Task Manage(FriendListDto l)
+    {
+        managing = l;
+        friends ??= await Api.GetAsync<List<UserSummaryDto>>("api/friends");
+    }
+
+    private async Task Toggle(FriendListDto l, UserSummaryDto f, bool add)
+    {
+        try
+        {
+            if (add) await Api.PostAsync($"api/friend-lists/{l.Id}/members/{f.Id}");
+            else await Api.DeleteAsync($"api/friend-lists/{l.Id}/members/{f.Id}");
+            var updated = l with { Members = add ? [.. l.Members, f] : l.Members.Where(m => m.Id != f.Id).ToList() };
+            lists![lists.IndexOf(l)] = updated;
+            managing = updated;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Create()
+    {
+        try
+        {
+            var l = await Api.PostAsync<FriendListDto>("api/friend-lists", new SaveFriendListRequest(newName ?? "", icon));
+            lists?.Add(l);
+            creating = false; newName = null;
+            await Manage(l);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Delete(FriendListDto l)
+    {
+        try { await Api.DeleteAsync($"api/friend-lists/{l.Id}"); lists?.Remove(l); managing = null; Toasts.Show("List deleted"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

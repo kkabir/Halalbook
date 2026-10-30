@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <!-- Eight-point star (khatam) tessellation tile -->
+  <g fill="none" stroke="#c9a227" stroke-width="1" stroke-opacity=".28">
+    <g transform="translate(48 48)">
+      <rect x="-17" y="-17" width="34" height="34"/>
+      <rect x="-17" y="-17" width="34" height="34" transform="rotate(45)"/>
+      <circle r="9"/>
+    </g>
+    <g id="q">
+      <rect x="-17" y="-17" width="34" height="34"/>
+      <rect x="-17" y="-17" width="34" height="34" transform="rotate(45)"/>
+    </g>
+    <use href="#q" x="96"/>
+    <use href="#q" y="96"/>
+    <use href="#q" x="96" y="96"/>
+    <path d="M24 0 48 24 72 0M24 96 48 72 72 96M0 24 24 48 0 72M96 24 72 48 96 72"/>
+  </g>
+</svg>

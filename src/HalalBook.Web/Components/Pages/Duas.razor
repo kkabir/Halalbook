@@ -1,0 +1,37 @@
+@page "/duas"
+@inject ApiClient Api
+@inject Toasts Toasts
+
+<PageTitle>@T("Dua wall") · HalalBook</PageTitle>
+
+<div class="feed-column">
+    <div class="page-hero">
+        <h1>🤲 @T("Dua wall")</h1>
+        <p>@T("Ask for dua, and pray for your brothers and sisters. The angels say: and for you the same.")</p>
+    </div>
+    <Composer OnPosted="p => { if (p.Kind == PostKind.Dua) posts.Insert(0, p); }" Placeholder="@T("What would you like dua for?")" />
+    @foreach (var p in posts) { <PostCard @key="p.Id" Post="p" /> }
+    @if (!loading && posts.Count == 0) { <Empty Title="No dua requests yet" Text="Tap 🤲 Ask for dua when you post, and your friends will pray for you." /> }
+    @if (more) { <button class="btn btn-ghost btn-block" disabled="@loading" @onclick="Load">@(loading ? T("Loading…") : T("Show more"))</button> }
+</div>
+
+@code {
+    private readonly List<PostDto> posts = [];
+    private int page;
+    private bool loading, more = true;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        loading = true;
+        try
+        {
+            var result = await Api.GetAsync<PagedResult<PostDto>>($"api/posts/duas?page={++page}");
+            posts.AddRange(result.Items.Where(p => posts.All(x => x.Id != p.Id)));
+            more = result.HasMore;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { loading = false; }
+    }
+}

@@ -1,0 +1,81 @@
+@page "/noor"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+@inject IJSRuntime JS
+
+<PageTitle>Noor AI · HalalBook</PageTitle>
+
+<div class="feed-column assistant">
+    <div class="page-hero" style="margin-bottom:.75rem">
+        <div class="ar">نُور</div>
+        <h1>Ask Noor</h1>
+        <p>Your AI companion for questions about Islam, Muslim life and HalalBook. Noor isn't a mufti: for personal rulings, please ask a qualified scholar.</p>
+    </div>
+
+    <div class="assistant-body" @ref="body">
+        @if (turns.Count == 0)
+        {
+            <div class="row wrap" style="justify-content:center">
+                @foreach (var s in suggestions)
+                {
+                    <button class="chip gold" @onclick="() => Ask(s)">@s</button>
+                }
+            </div>
+        }
+        @foreach (var t in turns)
+        {
+            @if (t.Role == "user")
+            {
+                <div class="bubble mine">@t.Content</div>
+            }
+            else
+            {
+                <div class="row" style="align-items:flex-start">
+                    <span class="avatar noor-avatar" style="--size:36px">✦</span>
+                    <div class="bubble">@t.Content</div>
+                </div>
+            }
+        }
+        @if (busy) { <div class="row"><span class="avatar noor-avatar" style="--size:36px">✦</span><div class="bubble subtle">Noor is thinking…</div></div> }
+    </div>
+
+    <form class="chat-input card" style="border-radius:999px;padding:.4rem" @onsubmit="() => Ask(text)">
+        <input class="input" style="border:0;border-radius:999px" placeholder="Ask anything… e.g. What are the sunnahs of Jumu'ah?" @bind="text" />
+        <button class="btn btn-gold" type="submit" disabled="@(busy || string.IsNullOrWhiteSpace(text))">Ask ✨</button>
+    </form>
+</div>
+
+@code {
+    private readonly List<AiChatTurn> turns = [];
+    private string? text;
+    private bool busy;
+    private ElementReference body;
+
+    private readonly string[] suggestions =
+    [
+        "What are the sunnahs of Friday?",
+        "Give me a short dua for anxiety",
+        "How do I make up missed fasts?",
+        "Ideas for a family Ramadan routine",
+        "Explain the five pillars simply for kids",
+    ];
+
+    private async Task Ask(string? question)
+    {
+        if (string.IsNullOrWhiteSpace(question) || busy) return;
+        text = null; busy = true;
+        var history = turns.ToList();
+        turns.Add(new AiChatTurn("user", question));
+        StateHasChanged();
+        try
+        {
+            var res = await Api.PostAsync<AiTextResponse>("api/ai/ask", new AiAskRequest(question, history));
+            turns.Add(new AiChatTurn("assistant", res.Text));
+        }
+        catch (Exception ex) { turns.RemoveAt(turns.Count - 1); Toasts.Error(ex); }
+        finally { busy = false; }
+        StateHasChanged();
+        await JS.InvokeVoidAsync("halalbook.scrollToBottom", body);
+    }
+}

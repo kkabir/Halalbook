@@ -1,0 +1,133 @@
+@implements IDisposable
+@inject ApiClient Api
+@inject AuthSession Session
+@inject ClientClock Clock
+@inject IJSRuntime JS
+@inject Toasts Toasts
+
+@* The day in Islamic terms, at the top of the feed: Ramadan countdown, Jummah, upcoming occasions and the verse of the day. *@
+
+@if (ramadan && times is not null)
+{
+    var (label, target) = RamadanTarget();
+    <div class="card today-ramadan">
+        <div class="today-moon" aria-hidden="true">🌙</div>
+        <div class="grow">
+            <div class="subtle">@T("Ramadan") @hijri?.Day · @T(label)</div>
+            <div class="today-countdown">@Countdown(target)</div>
+            <div class="subtle">@T("Suhoor ends") @Ui.Time(times.Fajr) · @T("Iftar") @Ui.Time(times.Maghrib)</div>
+        </div>
+    </div>
+}
+else if (Clock.Now.DayOfWeek == DayOfWeek.Friday)
+{
+    <div class="card today-jummah">
+        <div class="grow">
+            <b>🕌 @T("Jummah Mubarak")</b>
+            <div class="subtle">@T("Read Surah Al-Kahf, send salawat on the Prophet ﷺ and make plenty of dua today.")</div>
+        </div>
+        <a class="btn btn-gold btn-sm" href="https://quran.com/18" target="_blank" rel="noopener">@T("Read Al-Kahf")</a>
+    </div>
+}
+@if (soon is { } o)
+{
+    var days = o.GregorianDate.DayNumber - DateOnly.FromDateTime(Clock.Now).DayNumber;
+    <div class="card today-occasion">
+        ✨ <b>@o.Name</b> · @(days == 0 ? T("today") : days == 1 ? T("tomorrow") : $"{T("in")} {days} {T("days")}")
+        <span class="subtle">· @o.Hijri.Formatted</span>
+    </div>
+}
+@if (ayah is not null)
+{
+    <div class="card today-ayah">
+        <div class="row spread">
+            <div class="card-title" style="margin:0">📖 @T("Verse of the day")</div>
+            <span class="subtle">@ayah.SurahName · @ayah.Reference</span>
+        </div>
+        <p class="arabic today-arabic" lang="ar" dir="rtl">@ayah.Arabic</p>
+        @if (ayah.Translation is { } tr) { <p class="today-translation" lang="@ayah.Language" dir="auto">@tr</p> }
+        <div class="row" style="gap:.5rem">
+            <button class="btn btn-ghost btn-sm" @onclick="Share">📤 @T("Share")</button>
+            <a class="btn btn-ghost btn-sm" href="https://quran.com/@ayah.Reference.Replace(':', '/')" target="_blank" rel="noopener">@T("Read in context")</a>
+        </div>
+    </div>
+}
+
+@code {
+    private AyahDto? ayah;
+    private HijriDateDto? hijri;
+    private PrayerTimesDto? times;
+    private IslamicOccasionDto? soon;
+    private bool ramadan;
+    private Timer? tick;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Clock.LoadAsync();
+        try { ayah = await Api.GetAsync<AyahDto>($"api/islamic/ayah-of-the-day?lang={I18n.Language}"); } catch (Exception) { }
+        try
+        {
+            hijri = await Api.GetAsync<HijriDateDto>("api/islamic/hijri");
+            ramadan = hijri.Month == 9;
+            var today = DateOnly.FromDateTime(Clock.Now);
+            soon = (await Api.GetAsync<List<IslamicOccasionDto>>("api/islamic/occasions"))
+                .FirstOrDefault(x => x.GregorianDate.DayNumber - today.DayNumber is >= 0 and <= 7);
+        }
+        catch (Exception) { }
+        if (ramadan) await LoadTimesAsync();
+    }
+
+    private async Task LoadTimesAsync()
+    {
+        var user = Session.User;
+        double? lat = user?.Latitude, lng = user?.Longitude;
+        if (lat is null || lng is null)
+        {
+            try { var c = await JS.InvokeAsync<PrayerWidget.Coords?>("halalbook.getLocation"); lat = c?.Latitude; lng = c?.Longitude; }
+            catch (JSException) { }
+        }
+        if (lat is null || lng is null) return;
+        try
+        {
+            times = await Api.GetAsync<PrayerTimesDto>(FormattableString.Invariant(
+                $"api/islamic/prayer-times?lat={lat}&lng={lng}&offset={Clock.OffsetMinutes}&method={user?.PrayerMethod}&asr={user?.AsrSchool}"));
+            tick = new Timer(_ => InvokeAsync(StateHasChanged), null, 1000, 1000);
+        }
+        catch (Exception) { }
+    }
+
+    /// <summary>Before Maghrib we count down to iftar; after it, to the end of suhoor (tomorrow's Fajr, close enough to today's).</summary>
+    private (string Label, DateTime Target) RamadanTarget()
+    {
+        var now = Clock.Now;
+        var maghrib = now.Date + times!.Maghrib.ToTimeSpan();
+        var fajr = now.Date + times.Fajr.ToTimeSpan();
+        if (now < fajr) return ("until suhoor ends", fajr);
+        if (now < maghrib) return ("until iftar", maghrib);
+        return ("until suhoor ends", fajr.AddDays(1));
+    }
+
+    private string Countdown(DateTime target)
+    {
+        var left = target - Clock.Now;
+        return left <= TimeSpan.Zero ? "00:00:00" : $"{(int)left.TotalHours:00}:{left.Minutes:00}:{left.Seconds:00}";
+    }
+
+    private async Task Share()
+    {
+        if (ayah is null) return;
+        var text = $"{ayah.Arabic}\n\n{ayah.Translation}\n\n— {ayah.SurahName} {ayah.Reference}";
+        var url = $"https://quran.com/{ayah.Reference.Replace(':', '/')}";
+        try
+        {
+            if (!await JS.InvokeAsync<bool>("halalbook.nativeShare", text, url))
+            {
+                await JS.InvokeVoidAsync("navigator.clipboard.writeText", $"{text}\n{url}");
+                Toasts.Show(T("Copied, ready to paste anywhere"));
+            }
+        }
+        catch (JSException) { }
+    }
+
+    public void Dispose() => tick?.Dispose();
+}
