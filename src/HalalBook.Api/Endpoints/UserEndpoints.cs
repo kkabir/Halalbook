@@ -278,6 +278,15 @@ public static partial class UserEndpoints
                 await joined.CountAsync(), recent.Select(x => x.ToSummary()).ToList()));
         });
 
+        users.MapPut("/me/notifications", async (NotificationSettingsDto req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var u = await db.Users.FindAsync(cp.UserId());
+            if (u is null) return Results.Unauthorized();
+            (u.NotifyShowPreview, u.NotifyDisappearing, u.DoNotDisturb, u.VipsBreakThrough) = (req.ShowPreview, req.Disappearing, req.DoNotDisturb, req.VipsBreakThrough);
+            await db.SaveChangesAsync();
+            return Results.Ok(u.ToDto());
+        });
+
         users.MapPut("/me/faith", async (FaithSettingsRequest req, ClaimsPrincipal cp, AppDbContext db) =>
         {
             var u = await db.Users.FindAsync(cp.UserId());

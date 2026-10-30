@@ -7,17 +7,28 @@ self.addEventListener('activate', event => event.waitUntil(self.clients.claim())
 self.addEventListener('push', event => {
     let data = {};
     try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data && event.data.text() }; }
-    const isCall = (data.tag || '').startsWith('call-');
-    event.waitUntil(self.registration.showNotification(data.title || 'HalalBook', {
-        body: data.body || '',
-        icon: '/img/icon-192.png',
-        badge: '/img/icon-192.png',
-        tag: data.tag || undefined,
-        renotify: !!data.tag,
-        requireInteraction: isCall,
-        vibrate: isCall ? [400, 200, 400, 200, 400] : [120],
-        data: { url: data.url || '/' },
-    }));
+    // Field names arrive in either case depending on the server's JSON settings.
+    const get = k => data[k] ?? data[k.charAt(0).toUpperCase() + k.slice(1)];
+    const tag = get('tag') || undefined;
+    const isCall = (tag || '').startsWith('call-');
+    const urgent = !!get('urgent');
+    event.waitUntil((async () => {
+        await self.registration.showNotification(get('title') || 'HalalBook', {
+            body: get('body') || '',
+            icon: '/img/icon-192.png',
+            badge: '/img/icon-192.png',
+            tag,
+            renotify: !!tag,
+            requireInteraction: isCall || urgent,
+            vibrate: isCall || urgent ? [500, 200, 500, 200, 500, 200, 500] : [120],
+            data: { url: get('url') || '/' },
+        });
+        // Disappearing notifications close themselves after a few seconds (they stay in HalalBook's own list).
+        if (get('disappear')) {
+            await new Promise(r => setTimeout(r, 8000));
+            (await self.registration.getNotifications({ tag })).forEach(n => n.close());
+        }
+    })());
 });
 
 self.addEventListener('notificationclick', event => {

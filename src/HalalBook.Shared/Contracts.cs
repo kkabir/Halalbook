@@ -54,7 +54,12 @@ public record UserDto(
     string? Location, string? Website, UserRole Role, bool IsVerified, DateTime JoinedAt,
     double? Latitude, double? Longitude, string PrayerMethod, string AsrSchool, bool EmailConfirmed = false, bool TwoFactorEnabled = false, bool ShowOnlineStatus = true,
     ProfilePostPermission WhoCanPost = ProfilePostPermission.Friends, string? AcceptedTermsVersion = null,
-    PrivacySettingsDto? Privacy = null, string Language = "en", bool AutoTranslate = true, bool FaithFeatures = true);
+    PrivacySettingsDto? Privacy = null, string Language = "en", bool AutoTranslate = true, bool FaithFeatures = true,
+    NotificationSettingsDto? Notifications = null);
+/// <summary>
+/// How phone notifications behave. Vips are the Family and Best friends lists: they always get through, and only they can send urgent messages.
+/// </summary>
+public record NotificationSettingsDto(bool ShowPreview = true, bool Disappearing = false, bool DoNotDisturb = false, bool VipsBreakThrough = true);
 /// <summary>Turns the Islamic tools (prayer times, Qibla, Hijri dates, dua wall, khatm, zakat, tasbeeh...) on or off for this member.</summary>
 public record FaithSettingsRequest(bool FaithFeatures);
 
@@ -139,7 +144,7 @@ public record MuteRequest(bool Muted);
 public record ChatSummaryDto(string Summary, bool UsedAi);
 public record MessageDto(Guid Id, Guid ConversationId, UserSummaryDto Sender, string Content, string? MediaUrl, DateTime SentAt,
     SharedPostPreview? SharedPost = null, string? OriginalLanguage = null, Dictionary<string, string>? Translations = null,
-    ReplyPreviewDto? ReplyTo = null, List<MessageReactionDto>? Reactions = null);
+    ReplyPreviewDto? ReplyTo = null, List<MessageReactionDto>? Reactions = null, bool Urgent = false);
 /// <summary>Short videos on the same subject (one hashtag), played one after another.</summary>
 public record ShortVideoGroupDto(string Topic, string? Tag, List<PostDto> Videos);
 public record ReplyPreviewDto(Guid Id, string SenderName, string Text);
@@ -153,7 +158,7 @@ public record MessageTranslatedDto(Guid MessageId, Guid ConversationId, string? 
 /// <summary>A post shared into a chat, shown as a small card.</summary>
 public record SharedPostPreview(Guid PostId, string AuthorName, string? Text, string? ImageUrl);
 public record StartConversationRequest(List<Guid> ParticipantIds, string? Title);
-public record SendMessageRequest(string Content, string? MediaUrl, Guid? SharedPostId = null, Guid? ReplyToId = null);
+public record SendMessageRequest(string Content, string? MediaUrl, Guid? SharedPostId = null, Guid? ReplyToId = null, bool Urgent = false);
 /// <summary>Send a post to several people at once (each gets it in their chat with you).</summary>
 public record SendPostRequest(Guid PostId, List<Guid> UserIds, string? Note);
 

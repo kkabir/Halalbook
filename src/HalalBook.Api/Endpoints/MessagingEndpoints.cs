@@ -93,7 +93,7 @@ public static class MessagingEndpoints
             var mod = moderator.Check(content);
             if (!mod.Allowed) return Results.Problem(string.Join(" ", mod.Reasons), statusCode: 422);
 
-            var msg = new Message { ConversationId = id, SenderId = me, Content = content, MediaUrl = req.MediaUrl };
+            var msg = new Message { ConversationId = id, SenderId = me, Content = content, MediaUrl = req.MediaUrl, Urgent = req.Urgent };
             if (req.ReplyToId is Guid rid)
             {
                 msg.ReplyTo = await db.Messages.Include(m => m.Sender).FirstOrDefaultAsync(m => m.Id == rid && m.ConversationId == id);
@@ -109,7 +109,8 @@ public static class MessagingEndpoints
             await hub.Clients.Users(conv.Participants.Select(p => p.UserId.ToString())).SendAsync("message", dto);
             var preview = content.Length > 0 ? content : msg.MediaUrl is not null ? "📷 Photo" : "Shared a post";
             foreach (var p in conv.Participants.Where(p => p.UserId != me && !p.Muted))
-                push.Enqueue(p.UserId, msg.Sender.DisplayName, preview, $"/messages/{conv.Id}", $"chat-{conv.Id}");
+                push.Enqueue(p.UserId, (msg.Urgent ? "🚨 " : "") + msg.Sender.DisplayName, preview, $"/messages/{conv.Id}", $"chat-{conv.Id}",
+                    senderId: me, urgent: msg.Urgent, isMessage: true);
             if (content.Length > 0) translations.Enqueue(msg.Id);
             return Results.Ok(dto);
         });
@@ -246,7 +247,7 @@ public static class MessagingEndpoints
         m.Language, string.IsNullOrEmpty(m.Translations) ? null : JsonSerializer.Deserialize<Dictionary<string, string>>(m.Translations),
         m.ReplyTo is { } r ? new ReplyPreviewDto(r.Id, r.Sender?.DisplayName ?? "",
             r.Content.Length > 0 ? (r.Content.Length > 120 ? r.Content[..120] + "…" : r.Content) : r.MediaUrl is not null ? "📎" : "") : null,
-        m.Reactions.Count == 0 ? null : m.Reactions.Select(x => new MessageReactionDto(x.UserId, x.Emoji)).ToList());
+        m.Reactions.Count == 0 ? null : m.Reactions.Select(x => new MessageReactionDto(x.UserId, x.Emoji)).ToList(), m.Urgent);
 
     /// <summary>Tells the others in the chat how far this person has read, for "Seen".</summary>
     private static async Task AnnounceReadAsync(AppDbContext db, IHubContext<RealtimeHub> hub, Guid conversationId, Guid userId, DateTime at)

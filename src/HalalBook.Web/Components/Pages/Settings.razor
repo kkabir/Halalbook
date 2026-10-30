@@ -90,6 +90,21 @@
     <div class="mt"><AppSetupCard InSettings="true" /></div>
 
     <div class="card stack mt">
+        <div class="card-title">🔔 @T("Notification style")</div>
+        @foreach (var (key, title, hint) in NotifyOptions)
+        {
+            <label class="row spread privacy-row" style="cursor:pointer">
+                <div class="grow"><b>@T(title)</b><div class="subtle">@T(hint)</div></div>
+                <input type="checkbox" role="switch" class="switch" checked="@NotifyValue(key)" @onchange="e => SetNotify(key, e.Value is true)" />
+            </label>
+        }
+        <div class="notify-vip">
+            ⭐ <b>@T("Your VIPs")</b> @T("are the people in your Family and Best friends lists.") <a href="/friends">@T("Manage lists")</a><br />
+            🚨 @T("A VIP can mark a message urgent: it stays on your screen, vibrates strongly and gets through Do Not Disturb.")
+        </div>
+    </div>
+
+    <div class="card stack mt">
         <div class="card-title">🕌 @T("Islamic features")</div>
         <label class="row spread privacy-row" style="border-top:0;cursor:pointer">
             <div class="grow"><b>@T("Show Islamic tools")</b><div class="subtle">@T("Prayer times, Qibla, Hijri dates, verse of the day, dua wall, Quran khatm, Zakat, Tasbeeh and nearby masjids. Turn off to keep HalalBook general.")</div></div>
@@ -243,6 +258,32 @@
             await Session.UpdateUserAsync(u);
             Toasts.Show("Saved");
         }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private static readonly (string Key, string Title, string Hint)[] NotifyOptions =
+    [
+        ("preview", "Show message text", "Off: notifications just say \"New message\", so nobody can read over your shoulder."),
+        ("disappear", "Disappearing notifications", "They close by themselves after a few seconds. You'll still find them in Notifications."),
+        ("dnd", "Do Not Disturb", "Silence all phone notifications."),
+        ("vip", "Let VIPs through", "Even in Do Not Disturb, messages and calls from your Family and Best friends still reach you."),
+    ];
+
+    private NotificationSettingsDto Notify => Session.User?.Notifications ?? new();
+
+    private bool NotifyValue(string key) => key switch
+    {
+        "preview" => Notify.ShowPreview, "disappear" => Notify.Disappearing, "dnd" => Notify.DoNotDisturb, _ => Notify.VipsBreakThrough,
+    };
+
+    private async Task SetNotify(string key, bool on)
+    {
+        var n = key switch
+        {
+            "preview" => Notify with { ShowPreview = on }, "disappear" => Notify with { Disappearing = on },
+            "dnd" => Notify with { DoNotDisturb = on }, _ => Notify with { VipsBreakThrough = on },
+        };
+        try { await Session.UpdateUserAsync(await Api.PutAsync<UserDto>("api/users/me/notifications", n)); }
         catch (Exception ex) { Toasts.Error(ex); }
     }
 

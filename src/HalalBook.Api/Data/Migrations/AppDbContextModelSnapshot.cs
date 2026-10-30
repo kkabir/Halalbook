@@ -750,6 +750,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<string>("Translations")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("Urgent")
+                        .HasColumnType("bit");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ReplyToId");
@@ -1325,6 +1328,9 @@ namespace HalalBook.Api.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<bool>("DoNotDisturb")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -1376,6 +1382,12 @@ namespace HalalBook.Api.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
+                    b.Property<bool>("NotifyDisappearing")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("NotifyShowPreview")
+                        .HasColumnType("bit");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -1400,6 +1412,9 @@ namespace HalalBook.Api.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
+
+                    b.Property<bool>("VipsBreakThrough")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Website")
                         .HasColumnType("nvarchar(max)");

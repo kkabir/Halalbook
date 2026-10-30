@@ -38,7 +38,7 @@ public static class CallEndpoints
                 await hub.Clients.User(p.UserId.ToString()).SendAsync("incomingCall", ToDto(call, conv, p.UserId));
                 // Ring locked phones too, even when the app is open in a background tab.
                 push.Enqueue(p.UserId, call.IsVideo ? "🎥 Incoming video call" : "📞 Incoming voice call",
-                    $"{call.Caller.DisplayName} is calling you", $"/call/{call.Id}", $"call-{call.Id}", onlyWhenAway: false);
+                    $"{call.Caller.DisplayName} is calling you", $"/call/{call.Id}", $"call-{call.Id}", onlyWhenAway: false, senderId: me, isCall: true);
             }
             return Results.Ok(ToDto(call, conv, me));
         });

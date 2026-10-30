@@ -1114,3 +1114,10 @@ input.switch:checked::before { transform: translateX(22px); }
 input.switch:focus-visible { outline: 2px solid var(--gold-500); outline-offset: 2px; }
 [dir="rtl"] input.switch::before { left: auto; right: 3px; }
 [dir="rtl"] input.switch:checked::before { transform: translateX(-22px); }
+
+/* ---------- Notification style & urgent messages ---------- */
+.notify-vip { margin-top: .4rem; padding: .7rem .85rem; border-radius: 12px; background: var(--gold-100, #fbf3da); font-size: .85rem; line-height: 1.5; }
+.urgent-toggle { opacity: .55; }
+.urgent-toggle.on { opacity: 1; background: #ffe3e0; box-shadow: 0 0 0 2px #e74c3c; }
+.chat-input .input.urgent { box-shadow: 0 0 0 2px #e74c3c; }
+.bubble-urgent { display: inline-block; font-size: .7rem; font-weight: 800; color: #fff; background: #e74c3c; border-radius: 999px; padding: .05rem .5rem; margin-bottom: .25rem; }

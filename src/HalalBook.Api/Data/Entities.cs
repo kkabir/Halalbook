@@ -30,6 +30,11 @@ public class User
     public bool AutoTranslate { get; set; } = true;
     /// <summary>HalalBook is open to everyone: members who aren't Muslim can hide the Islamic tools.</summary>
     public bool FaithFeatures { get; set; } = true;
+    /// <summary>Phone notification settings (see NotificationSettingsDto).</summary>
+    public bool NotifyShowPreview { get; set; } = true;
+    public bool NotifyDisappearing { get; set; }
+    public bool DoNotDisturb { get; set; }
+    public bool VipsBreakThrough { get; set; } = true;
     /// <summary>The post shown first on this person's profile.</summary>
     public Guid? PinnedPostId { get; set; }
     /// <summary>Code in this person's invite link (halalbook.app/join/{code}), and who invited them.</summary>
@@ -361,6 +366,8 @@ public class Message
     /// <summary>The message this one answers, shown as a quote above it.</summary>
     public Guid? ReplyToId { get; set; }
     public Message? ReplyTo { get; set; }
+    /// <summary>Marked urgent by the sender; it breaks through Do Not Disturb when the sender is one of the reader's VIPs.</summary>
+    public bool Urgent { get; set; }
     public List<MessageReaction> Reactions { get; set; } = [];
 }
 

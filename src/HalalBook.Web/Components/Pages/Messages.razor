@@ -120,6 +120,7 @@
                                 </div>
                             }
                             @if (current.IsGroup && !mine) { <b class="bubble-name">@m.Sender.DisplayName</b> }
+                            @if (m.Urgent) { <span class="bubble-urgent">🚨 @T("Urgent")</span> }
                             @if (m.ReplyTo is { } rq) { <div class="bubble-quote"><b>@rq.SenderName</b><span>@rq.Text</span></div> }
                             @if (m.MediaUrl is { } au && IsAudio(au)) { <audio class="bubble-audio" src="@au" controls preload="metadata" @onclick:stopPropagation></audio> }
                             else if (m.MediaUrl is { } url) { <img src="@url" alt="" class="bubble-img" /> }
@@ -179,7 +180,8 @@
             {
                 <div class="chat-input">
                     <label class="icon-btn" title="@T("Send a photo")">🖼️<InputFile OnChange="SendPhoto" accept="image/*" style="display:none" /></label>
-                    <input class="input" placeholder="@T("Write a message…")" @bind="text" @bind:event="oninput" @onkeydown="OnKey" dir="auto" />
+                    <button class="icon-btn urgent-toggle @(urgent ? "on" : "")" title="@T("Mark as urgent")" @onclick="() => urgent = !urgent">🚨</button>
+                    <input class="input @(urgent ? "urgent" : "")" placeholder="@(urgent ? T("Urgent message…") : T("Write a message…"))" @bind="text" @bind:event="oninput" @onkeydown="OnKey" dir="auto" />
                     @if (string.IsNullOrWhiteSpace(text))
                     {
                         <button class="send-btn mic" @onclick="StartVoice" title="@T("Record a voice note")">🎤</button>
@@ -235,7 +237,7 @@
     private static readonly string[] QuickReactions = ["❤️", "👍", "😂", "😮", "🤲", "😢"];
     private Guid? selected;
     private MessageDto? replyTo;
-    private bool recording, sendingVoice;
+    private bool recording, sendingVoice, urgent;
     private int recSeconds;
     private System.Threading.Timer? recTimer;
 
@@ -439,8 +441,9 @@
         var content = text; text = null;
         try
         {
-            var m = await Api.PostAsync<MessageDto>($"api/conversations/{current.Id}/messages", new SendMessageRequest(content, null, null, replyTo?.Id));
+            var m = await Api.PostAsync<MessageDto>($"api/conversations/{current.Id}/messages", new SendMessageRequest(content, null, null, replyTo?.Id, urgent));
             replyTo = null;
+            urgent = false;
             if (messages.All(x => x.Id != m.Id)) messages.Add(m);
             scroll = true;
         }

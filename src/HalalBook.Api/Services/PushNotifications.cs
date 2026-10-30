@@ -12,14 +12,18 @@ namespace HalalBook.Api.Services;
 /// </summary>
 public class PushQueue
 {
-    public record Item(Guid UserId, string Title, string Body, string Url, string Tag, bool OnlyWhenAway);
+    public record Item(Guid UserId, string Title, string Body, string Url, string Tag, bool OnlyWhenAway,
+        Guid? SenderId = null, bool Urgent = false, bool IsMessage = false, bool IsCall = false);
 
     private readonly Channel<Item> _channel = Channel.CreateUnbounded<Item>();
     public ChannelReader<Item> Reader => _channel.Reader;
 
     /// <param name="onlyWhenAway">Skip people who have HalalBook open, since they already see it in the app.</param>
-    public void Enqueue(Guid userId, string title, string body, string url, string tag, bool onlyWhenAway = true) =>
-        _channel.Writer.TryWrite(new Item(userId, title, body.Length > 180 ? body[..180] + "…" : body, url, tag, onlyWhenAway));
+    /// <param name="senderId">Who it's from, so VIPs (Family and Best friends) can get through Do Not Disturb.</param>
+    public void Enqueue(Guid userId, string title, string body, string url, string tag, bool onlyWhenAway = true,
+        Guid? senderId = null, bool urgent = false, bool isMessage = false, bool isCall = false) =>
+        _channel.Writer.TryWrite(new Item(userId, title, body.Length > 180 ? body[..180] + "…" : body, url, tag, onlyWhenAway,
+            senderId, urgent, isMessage, isCall));
 }
 
 /// <summary>
@@ -67,7 +71,12 @@ public class PushWorker(PushQueue queue, VapidKeys vapid, PresenceTracker presen
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 var subs = await db.PushSubscriptions.Where(s => s.UserId == item.UserId).ToListAsync(stoppingToken);
                 if (subs.Count == 0) continue;
-                var payload = JsonSerializer.Serialize(new { title = item.Title, body = item.Body, url = item.Url, tag = item.Tag });
+                var user = await db.Users.FindAsync([item.UserId], stoppingToken);
+                if (user is null) continue;
+                var vip = item.SenderId is Guid from && await IsVipAsync(db, item.UserId, from, stoppingToken);
+                var plan = Plan(item, user.NotifyShowPreview, user.NotifyDisappearing, user.DoNotDisturb, user.VipsBreakThrough, vip);
+                if (plan is null) continue;
+                var payload = JsonSerializer.Serialize(plan);
                 foreach (var s in subs)
                 {
                     try { await client.SendNotificationAsync(new WebPush.PushSubscription(s.Endpoint, s.P256dh, s.Auth), payload, details, stoppingToken); }
@@ -80,5 +89,26 @@ public class PushWorker(PushQueue queue, VapidKeys vapid, PresenceTracker presen
             }
             catch (Exception ex) when (ex is not OperationCanceledException) { log.LogWarning(ex, "Push notification failed"); }
         }
+    }
+
+    /// <summary>VIPs are the people in the reader's Family and Best friends lists.</summary>
+    public static Task<bool> IsVipAsync(AppDbContext db, Guid reader, Guid sender, CancellationToken ct) =>
+        db.FriendListMembers.AnyAsync(m => m.UserId == sender && db.FriendLists.Any(l => l.Id == m.ListId && l.OwnerId == reader
+            && (l.Kind == HalalBook.Shared.FriendListKind.Family || l.Kind == HalalBook.Shared.FriendListKind.BestFriends)), ct);
+
+    public record Payload(string Title, string Body, string Url, string Tag, bool Disappear, bool Urgent);
+
+    /// <summary>
+    /// Applies the reader's settings: Do Not Disturb holds everything except VIPs (when allowed); urgent only counts from a VIP;
+    /// hidden previews replace the text; disappearing alerts close themselves after a few seconds (never calls or urgent ones).
+    /// Returns null when the notification shouldn't be sent at all.
+    /// </summary>
+    public static Payload? Plan(PushQueue.Item item, bool showPreview, bool disappearing, bool doNotDisturb, bool vipsBreakThrough, bool vip)
+    {
+        var urgent = item.Urgent && vip;
+        if (doNotDisturb && !(vip && vipsBreakThrough)) return null;
+        var body = showPreview || item.IsCall ? item.Body : item.IsMessage ? "New message" : "You have a new notification";
+        var title = item.Urgent && !urgent ? item.Title.Replace("🚨 ", "") : item.Title;
+        return new Payload(title, body, item.Url, item.Tag, disappearing && !urgent && !item.IsCall, urgent);
     }
 }

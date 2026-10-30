@@ -159,3 +159,32 @@ public class VisitorTests
     [InlineData("https://www.example.org/page", "example.org")]
     public void NamesSources(string referrer, string expected) => Assert.Equal(expected, HalalBook.Api.Endpoints.VisitorEndpoints.Source(referrer, "halalbook.app"));
 }
+
+public class NotificationRuleTests
+{
+    private static PushQueue.Item Msg(bool urgent = false, bool call = false) =>
+        new(Guid.NewGuid(), urgent ? "🚨 Mum" : "Mum", "Come home for dinner", "/messages/x", "chat-x", true, Guid.NewGuid(), urgent, !call, call);
+
+    [Fact]
+    public void HidesTextWhenPreviewsAreOff() => Assert.Equal("New message", PushWorker.Plan(Msg(), false, false, false, true, false)!.Body);
+
+    [Fact]
+    public void DoNotDisturbHoldsAllButVips()
+    {
+        Assert.Null(PushWorker.Plan(Msg(), true, false, true, true, vip: false));
+        Assert.NotNull(PushWorker.Plan(Msg(), true, false, true, true, vip: true));
+        Assert.Null(PushWorker.Plan(Msg(), true, false, true, false, vip: true)); // VIPs not allowed through
+    }
+
+    [Fact]
+    public void UrgentOnlyFromVipsAndNeverDisappears()
+    {
+        var fromVip = PushWorker.Plan(Msg(urgent: true), true, true, false, true, vip: true)!;
+        Assert.True(fromVip.Urgent);
+        Assert.False(fromVip.Disappear);
+        var fromOther = PushWorker.Plan(Msg(urgent: true), true, true, false, true, vip: false)!;
+        Assert.False(fromOther.Urgent);
+        Assert.Equal("Mum", fromOther.Title);
+        Assert.True(fromOther.Disappear);
+    }
+}
