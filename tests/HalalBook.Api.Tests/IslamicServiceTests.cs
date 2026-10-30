@@ -1,3 +1,4 @@
+using System.Text.Json;
 using HalalBook.Api.Services;
 using HalalBook.Shared;
 
@@ -120,4 +121,23 @@ public class LanguageTests
     [InlineData("pt-BR", "en")]
     [InlineData(null, "en")]
     public void NormalizesCodes(string? code, string expected) => Assert.Equal(expected, Languages.Normalize(code));
+}
+
+public class TurnTests
+{
+    [Fact]
+    public void ParsesProviderShapes()
+    {
+        // Cloudflare: one server with a list of urls.
+        var cf = IceServerProvider.Parse(JsonDocument.Parse("""{"urls":["turn:turn.cloudflare.com:3478?transport=udp","turns:turn.cloudflare.com:5349"],"username":"u","credential":"c"}""").RootElement);
+        Assert.Single(cf);
+        Assert.Equal(2, cf[0].Urls.Length);
+        Assert.Equal("c", cf[0].Credential);
+
+        // Metered: a list, each with a single url string.
+        var m = IceServerProvider.Parse(JsonDocument.Parse("""[{"urls":"stun:stun.relay.metered.ca:80"},{"urls":"turn:global.relay.metered.ca:80","username":"a","credential":"b"}]""").RootElement);
+        Assert.Equal(2, m.Count);
+        Assert.Null(m[0].Username);
+        Assert.Equal("turn:global.relay.metered.ca:80", m[1].Urls[0]);
+    }
 }

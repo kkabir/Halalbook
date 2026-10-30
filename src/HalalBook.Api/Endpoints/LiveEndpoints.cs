@@ -93,7 +93,7 @@ public static class LiveEndpoints
             return Results.Ok(ToDto(s, cp.UserId(), rooms));
         });
 
-        live.MapGet("/ice-servers", (LiveOptions options) => options.IceServers);
+        live.MapGet("/ice-servers", (IceServerProvider ice, CancellationToken ct) => ice.GetAsync(ct));
     }
 
     /// <summary>Notifies the host's friends and followers that they're live.</summary>

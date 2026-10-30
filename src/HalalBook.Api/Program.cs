@@ -67,6 +67,8 @@ builder.Logging.Services.AddSingleton<ILoggerProvider, DbLoggerProvider>();
 builder.Services.AddSingleton<HalalBook.Api.Hubs.LiveRoomTracker>();
 builder.Services.AddSingleton<HalalBook.Api.Hubs.CallRoomTracker>();
 builder.Services.AddSingleton(config.GetSection("Live").Get<LiveOptions>() ?? new LiveOptions());
+builder.Services.AddSingleton(config.GetSection("Turn").Get<TurnOptions>() ?? new TurnOptions());
+builder.Services.AddSingleton<IceServerProvider>();
 builder.Services.AddScoped<Mailer>();
 
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
