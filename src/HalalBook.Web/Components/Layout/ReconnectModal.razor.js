@@ -14,7 +14,9 @@ function handleReconnectStateChanged(event) {
     } else if (event.detail.state === "hide") {
         reconnectModal.close();
     } else if (event.detail.state === "failed") {
+        // The server restarted (a new release, or the host recycled it): keep trying on our own instead of waiting for a tap.
         document.addEventListener("visibilitychange", retryWhenDocumentBecomesVisible);
+        setTimeout(retry, 2000);
     } else if (event.detail.state === "rejected") {
         location.reload();
     }
@@ -40,8 +42,9 @@ async function retry() {
             }
         }
     } catch (err) {
-        // We got an exception, server is currently unavailable
+        // We got an exception, server is currently unavailable; try again shortly.
         document.addEventListener("visibilitychange", retryWhenDocumentBecomesVisible);
+        setTimeout(retry, 3000);
     }
 }
 
@@ -53,6 +56,7 @@ async function resume() {
         }
     } catch {
         reconnectModal.classList.replace("components-reconnect-paused", "components-reconnect-resume-failed");
+        setTimeout(() => location.reload(), 1500);
     }
 }
 
