@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Security.Claims;
 using HalalBook.Api.Data;
 using HalalBook.Api.Hubs;
@@ -76,11 +77,15 @@ public static class MessagingEndpoints
         });
 
         chats.MapPost("/{id:guid}/messages", async (Guid id, SendMessageRequest req, ClaimsPrincipal cp, AppDbContext db,
-            IHubContext<RealtimeHub> hub, ContentModerator moderator, PostService svc, PushQueue push) =>
+            IHubContext<RealtimeHub> hub, ContentModerator moderator, PostService svc, PushQueue push, MessageTranslationQueue translations) =>
         {
             var me = cp.UserId();
             var conv = await db.Conversations.Include(c => c.Participants).FirstOrDefaultAsync(c => c.Id == id);
             if (conv is null || conv.Participants.All(p => p.UserId != me)) return Results.NotFound();
+            // A block on either side stops the conversation, even an old one.
+            var blocked = await svc.BlockedIdsAsync(me);
+            if (!conv.IsGroup && conv.Participants.Any(p => p.UserId != me && blocked.Contains(p.UserId)))
+                return Results.Problem("You can't message this person.", statusCode: 403);
             var content = (req.Content ?? "").Trim();
             if (content.Length == 0 && string.IsNullOrEmpty(req.MediaUrl) && req.SharedPostId is null) return Results.BadRequest();
             var mod = moderator.Check(content);
@@ -96,8 +101,9 @@ public static class MessagingEndpoints
             var dto = ToDto(msg);
             await hub.Clients.Users(conv.Participants.Select(p => p.UserId.ToString())).SendAsync("message", dto);
             var preview = content.Length > 0 ? content : msg.MediaUrl is not null ? "📷 Photo" : "Shared a post";
-            foreach (var p in conv.Participants.Where(p => p.UserId != me))
+            foreach (var p in conv.Participants.Where(p => p.UserId != me && !p.Muted))
                 push.Enqueue(p.UserId, msg.Sender.DisplayName, preview, $"/messages/{conv.Id}", $"chat-{conv.Id}");
+            if (content.Length > 0) translations.Enqueue(msg.Id);
             return Results.Ok(dto);
         });
 
@@ -132,6 +138,29 @@ public static class MessagingEndpoints
             }
             return Results.Ok(sent);
         });
+
+        // Mute: keep the chat, but no notifications or sounds.
+        chats.MapPut("/{id:guid}/mute", async (Guid id, MuteRequest req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var p = await db.ConversationParticipants.FirstOrDefaultAsync(p => p.ConversationId == id && p.UserId == cp.UserId());
+            if (p is null) return Results.NotFound();
+            p.Muted = req.Muted;
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        // Noor's recap of the latest messages, in the reader's language.
+        chats.MapGet("/{id:guid}/summary", async (Guid id, ClaimsPrincipal cp, AppDbContext db, AiService ai, CancellationToken ct) =>
+        {
+            var me = cp.UserId();
+            if (!await db.ConversationParticipants.AnyAsync(p => p.ConversationId == id && p.UserId == me, ct)) return Results.NotFound();
+            var user = await db.Users.FindAsync([me], ct);
+            var msgs = await db.Messages.Include(m => m.Sender).Where(m => m.ConversationId == id && m.Content != "")
+                .OrderByDescending(m => m.SentAt).Take(60).ToListAsync(ct);
+            msgs.Reverse();
+            var lines = msgs.Select(m => (m.Sender.DisplayName, m.Content)).ToList();
+            return Results.Ok(await ai.SummarizeChatAsync(lines, Languages.Get(user?.Language).EnglishName, ct));
+        }).RequireRateLimiting("ai");
 
         chats.MapPost("/{id:guid}/read", async (Guid id, ClaimsPrincipal cp, AppDbContext db) =>
         {
@@ -178,11 +207,13 @@ public static class MessagingEndpoints
     {
         var others = c.Participants.Where(p => p.UserId != me).Select(p => p.User.ToSummary()).ToList();
         var title = c.Title ?? (others.Count == 0 ? "Notes to self" : string.Join(", ", others.Select(o => o.DisplayName)));
-        return new ConversationDto(c.Id, title, c.IsGroup, others, last is null ? null : ToDto(last), unread);
+        return new ConversationDto(c.Id, title, c.IsGroup, others, last is null ? null : ToDto(last), unread,
+            c.Participants.FirstOrDefault(p => p.UserId == me)?.Muted ?? false);
     }
 
     private static MessageDto ToDto(Message m) => new(m.Id, m.ConversationId, m.Sender.ToSummary(), m.Content, m.MediaUrl, m.SentAt,
-        m.SharedPostId is Guid pid ? new SharedPostPreview(pid, m.SharedAuthorName ?? "", m.SharedPreview, m.SharedImageUrl) : null);
+        m.SharedPostId is Guid pid ? new SharedPostPreview(pid, m.SharedAuthorName ?? "", m.SharedPreview, m.SharedImageUrl) : null,
+        m.Language, string.IsNullOrEmpty(m.Translations) ? null : JsonSerializer.Deserialize<Dictionary<string, string>>(m.Translations));
 
     /// <summary>Attaches a preview of a post the sender is allowed to see.</summary>
     private static async Task<bool> AttachPostAsync(Message msg, Guid postId, Guid me, PostService svc)

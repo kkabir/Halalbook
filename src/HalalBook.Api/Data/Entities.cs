@@ -306,6 +306,8 @@ public class ConversationParticipant
     public Guid UserId { get; set; }
     public User User { get; set; } = null!;
     public DateTime LastReadAt { get; set; } = DateTime.UtcNow;
+    /// <summary>Muted chats still receive messages, but without notifications or sounds.</summary>
+    public bool Muted { get; set; }
 }
 
 public class Message
@@ -321,6 +323,9 @@ public class Message
     public Guid? SharedPostId { get; set; }
     public string? SharedPreview { get; set; }
     public string? SharedImageUrl { get; set; }
+    /// <summary>Detected language and translations by language code (JSON), so everyone reads the chat in their own language.</summary>
+    public string? Language { get; set; }
+    public string? Translations { get; set; }
     public string? SharedAuthorName { get; set; }
 }
 

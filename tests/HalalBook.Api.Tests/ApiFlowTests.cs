@@ -661,4 +661,24 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Contains(v.TopPages, p => p.Name == "/login");
         Assert.Equal(14, v.Daily.Count);
     }
+
+    [Fact]
+    public async Task Chat_MuteBlockAndRecap()
+    {
+        var (a, aId) = await SignUpWithId("chatA");
+        var (b, bId) = await SignUpWithId("chatB");
+        await a.PostAsync($"/api/friends/{bId}/request", null);
+        await b.PostAsync($"/api/friends/{aId}/accept", null);
+        var conv = (await (await a.PostAsJsonAsync("/api/conversations", new StartConversationRequest([bId], null), Json)).Content.ReadFromJsonAsync<ConversationDto>(Json))!;
+        (await a.PostAsJsonAsync($"/api/conversations/{conv.Id}/messages", new SendMessageRequest("Assalamu alaikum, iftar at 6?", null), Json)).EnsureSuccessStatusCode();
+
+        Assert.Equal(HttpStatusCode.NoContent, (await b.PutAsJsonAsync($"/api/conversations/{conv.Id}/mute", new MuteRequest(true), Json)).StatusCode);
+        Assert.True((await b.GetFromJsonAsync<List<ConversationDto>>("/api/conversations", Json))!.First(c => c.Id == conv.Id).Muted);
+
+        var recap = (await b.GetFromJsonAsync<ChatSummaryDto>($"/api/conversations/{conv.Id}/summary", Json))!;
+        Assert.False(string.IsNullOrWhiteSpace(recap.Summary));
+
+        (await b.PostAsync($"/api/users/{aId}/block", null)).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Forbidden, (await a.PostAsJsonAsync($"/api/conversations/{conv.Id}/messages", new SendMessageRequest("hello?", null), Json)).StatusCode);
+    }
 }

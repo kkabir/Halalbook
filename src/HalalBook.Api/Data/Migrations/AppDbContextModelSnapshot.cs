@@ -164,6 +164,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<DateTime>("LastReadAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("Muted")
+                        .HasColumnType("bit");
+
                     b.HasKey("ConversationId", "UserId");
 
                     b.HasIndex("UserId");
@@ -653,6 +656,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<Guid>("ConversationId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Language")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("MediaUrl")
                         .HasColumnType("nvarchar(max)");
 
@@ -672,6 +678,9 @@ namespace HalalBook.Api.Data.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("SharedPreview")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Translations")
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");

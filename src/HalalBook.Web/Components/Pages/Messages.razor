@@ -7,82 +7,211 @@
 @inject ClientClock Clock
 @inject Toasts Toasts
 @inject IJSRuntime JS
+@inject I18n I18n
+@inject MediaGuard Guard
 
-<PageTitle>Messages · HalalBook</PageTitle>
+<PageTitle>@T("Messages") · HalalBook</PageTitle>
 
 <div class="chat @(Id is null ? "" : "open")">
     <div class="chat-list">
-        <div style="padding:1rem 1rem .5rem"><h2 style="margin:0">Messages</h2></div>
-        @foreach (var c in conversations)
+        <div class="chat-list-head">
+            <h2>@T("Chats")</h2>
+            <button class="icon-btn" title="@T("New group chat")" @onclick="OpenNewGroup">👥＋</button>
+        </div>
+        <input class="input chat-search" placeholder="🔍 @T("Search chats")" @bind="filter" @bind:event="oninput" />
+        @if (Realtime.OnlineUsers.Count > 0)
         {
-            <a class="chat-item @(c.Id == Id ? "active" : "")" href="/messages/@c.Id">
-                @if (c.Participants.FirstOrDefault() is { } other) { <Avatar User="other" Size="48" Link="false" /> } else { <span class="avatar" style="--size:48px">📝</span> }
-                <div class="grow">
-                    <div style="font-weight:@(c.UnreadCount > 0 ? 800 : 600)">@c.Title</div>
-                    <div class="subtle" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@(c.LastMessage is { } m ? (m.Sender.Id == Session.User?.Id ? "You: " : "") + m.Content : "Say salaam 👋")</div>
+            <div class="active-strip">
+                @foreach (var o in Realtime.OnlineUsers.Take(20))
+                {
+                    <button class="active-person" @onclick="() => OpenChatWith(o.User.Id)" title="@o.User.DisplayName">
+                        <Avatar User="o.User" Size="52" Link="false" />
+                        <span>@o.User.DisplayName.Split(' ')[0]</span>
+                    </button>
+                }
+            </div>
+        }
+        @foreach (var c in Filtered)
+        {
+            <a class="chat-item @(c.Id == Id ? "active" : "") @(c.UnreadCount > 0 ? "has-unread" : "")" href="/messages/@c.Id">
+                @if (c.IsGroup) { <span class="avatar group-avatar" style="--size:50px">👥</span> }
+                else if (c.Participants.FirstOrDefault() is { } other) { <Avatar User="other" Size="50" Link="false" /> }
+                else { <span class="avatar" style="--size:50px">📝</span> }
+                <div class="grow chat-item-text">
+                    <div class="row spread"><b>@c.Title</b><small>@(c.LastMessage is { } lm ? When(lm.SentAt) : "")</small></div>
+                    <div class="subtle">@(c.Muted ? "🔕 " : "")@Preview(c)</div>
                 </div>
-                @if (c.UnreadCount > 0) { <span class="unread"></span> }
+                @if (c.UnreadCount > 0) { <span class="unread-count">@c.UnreadCount</span> }
             </a>
         }
-        @if (conversations.Count == 0) { <Empty Title="No conversations yet" Text="Visit a profile and tap Message to start one." /> }
+        @if (conversations.Count == 0) { <Empty Title="No conversations yet" Text="Tap someone who's active now, or visit a profile and tap Message." /> }
     </div>
 
     <div class="chat-main">
         @if (current is null)
         {
-            <div style="display:grid;place-items:center;height:100%"><Empty Title="Select a conversation" Text="Your messages are private between you and the people you talk to." /></div>
+            <div class="chat-empty">
+                <div style="font-size:3rem">💬</div>
+                <h3>@T("Your messages")</h3>
+                <p class="muted">@T("Private chats with friends and family, in your own language. Messages in other languages are translated for you automatically.")</p>
+            </div>
         }
         else
         {
             <div class="chat-head">
-                <a href="/messages" class="icon-btn" title="Back">←</a>
-                @if (current.Participants.FirstOrDefault() is { } o) { <Avatar User="o" Size="40" /> }
-                <button class="icon-btn" title="Voice call" @onclick="() => StartCall(false)">📞</button>
-                <button class="icon-btn" title="Video call" @onclick="() => StartCall(true)">🎥</button>
-                <div class="grow" style="order:-1"><b>@current.Title</b>@if (typing) { <div class="subtle">typing…</div> } else if (!current.IsGroup && current.Participants.FirstOrDefault() is { } other2 && Realtime.IsOnline(other2.Id)) { <div class="active-text">Active now</div> }</div>
+                <a href="/messages" class="icon-btn chat-back" title="Back">←</a>
+                @if (current.IsGroup) { <span class="avatar group-avatar" style="--size:42px">👥</span> }
+                else if (current.Participants.FirstOrDefault() is { } o) { <Avatar User="o" Size="42" /> }
+                <div class="grow chat-head-text">
+                    <b>@current.Title</b>
+                    @if (typing) { <div class="typing-text">@T("typing")<span class="dots"><i></i><i></i><i></i></span></div> }
+                    else if (current.IsGroup) { <div class="subtle">@(current.Participants.Count + 1) @T("members")</div> }
+                    else if (current.Participants.FirstOrDefault() is { } other2 && Realtime.IsOnline(other2.Id)) { <div class="active-text">@T("Active now")</div> }
+                </div>
+                <button class="icon-btn" title="@T("Voice call")" @onclick="() => StartCall(false)">📞</button>
+                <button class="icon-btn" title="@T("Video call")" @onclick="() => StartCall(true)">🎥</button>
+                <div style="position:relative">
+                    <button class="icon-btn" title="@T("More")" @onclick="() => menu = !menu">⋯</button>
+                    @if (menu)
+                    {
+                        <div class="menu-pop chat-menu" @onclick="() => menu = false">
+                            <button @onclick="Summarize">✨ @T("Summarize this chat")</button>
+                            <button @onclick="ToggleMute">@(current.Muted ? "🔔 " + T("Unmute notifications") : "🔕 " + T("Mute notifications"))</button>
+                            <button @onclick="() => showOriginalAll = !showOriginalAll">🌍 @(showOriginalAll ? T("Show translations") : T("Show original messages"))</button>
+                            @if (!current.IsGroup && current.Participants.FirstOrDefault() is { } p)
+                            {
+                                <a href="/u/@p.UserName">👤 @T("View profile")</a>
+                                <button class="danger" @onclick="() => Block(p)">⛔ @T("Block") @p.DisplayName.Split(' ')[0]</button>
+                            }
+                        </div>
+                    }
+                </div>
             </div>
+            @if (summary is not null)
+            {
+                <div class="chat-summary">
+                    <div class="row spread"><b>✨ @T("Noor's recap")</b><button class="icon-btn" @onclick="() => summary = null">✕</button></div>
+                    <div style="white-space:pre-wrap">@summary</div>
+                </div>
+            }
             <div class="chat-body" @ref="body">
                 @for (var i = 0; i < messages.Count; i++)
                 {
                     var m = messages[i];
                     var mine = m.Sender.Id == Session.User?.Id;
-                    // Like Messenger: the sender's small round photo sits beside the last bubble of each run of their messages.
                     var lastOfRun = i == messages.Count - 1 || messages[i + 1].Sender.Id != m.Sender.Id;
-                    if (!mine)
-                    {
-                        <div class="msg-row">
+                    var firstOfDay = i == 0 || Clock.Local(messages[i - 1].SentAt).Date != Clock.Local(m.SentAt).Date;
+                    var translated = mine || showOriginalAll || original.Contains(m.Id) ? null : Translation(m);
+                    @if (firstOfDay) { <div class="chat-day"><span>@Day(m.SentAt)</span></div> }
+                    <div class="msg-row @(mine ? "mine" : "")">
+                        @if (!mine)
+                        {
                             @if (lastOfRun) { <Avatar User="m.Sender" Size="28" ShowStatus="false" /> } else { <span class="msg-avatar-space"></span> }
-                            <div class="bubble">@if (current.IsGroup) {<b style="font-size:.78rem;display:block">@m.Sender.DisplayName</b>}@if (m.MediaUrl is { } inUrl) {<img src="@inUrl" alt="" style="border-radius:12px;max-height:260px" />}@if (m.SharedPost is { } inSp) {<a class="chat-post" href="/post/@inSp.PostId">@if (inSp.ImageUrl is { } inIm) {<img src="@inIm" alt="" />}<b>@inSp.AuthorName</b><span>@inSp.Text</span></a>}<span>@m.Content</span><time>@Clock.Local(m.SentAt).ToString("h:mm tt")</time></div>
+                        }
+                        <div class="bubble @(mine ? "mine" : "") @(lastOfRun ? "tail" : "")">
+                            @if (current.IsGroup && !mine) { <b class="bubble-name">@m.Sender.DisplayName</b> }
+                            @if (m.MediaUrl is { } url) { <img src="@url" alt="" class="bubble-img" /> }
+                            @if (m.SharedPost is { } sp)
+                            {
+                                <a class="chat-post" href="/post/@sp.PostId">@if (sp.ImageUrl is { } im) {<img src="@im" alt="" />}<b>@sp.AuthorName</b><span>@sp.Text</span></a>
+                            }
+                            @if (!string.IsNullOrEmpty(m.Content)) { <span dir="auto">@(translated ?? m.Content)</span> }
+                            <div class="bubble-meta">
+                                @if (translated is not null)
+                                {
+                                    <button class="bubble-lang" @onclick="() => original.Add(m.Id)">🌍 @T("Translated") · @T("See original")</button>
+                                }
+                                else if (!mine && original.Contains(m.Id) && Translation(m) is not null)
+                                {
+                                    <button class="bubble-lang" @onclick="() => original.Remove(m.Id)">🌍 @Languages.Get(m.OriginalLanguage).NativeName · @T("Translate")</button>
+                                }
+                                <time>@Clock.Local(m.SentAt).ToString("h:mm tt")</time>
+                            </div>
                         </div>
-                        continue;
-                    }
-                    <div class="bubble mine">@if (current.IsGroup && !mine) {<b style="font-size:.78rem;display:block">@m.Sender.DisplayName</b>}@if (m.MediaUrl is { } url) {<img src="@url" alt="" style="border-radius:12px;max-height:260px" />}@if (m.SharedPost is { } sp) {<a class="chat-post" href="/post/@sp.PostId">@if (sp.ImageUrl is { } im) {<img src="@im" alt="" />}<b>@sp.AuthorName</b><span>@sp.Text</span></a>}<span>@m.Content</span><time>@Clock.Local(m.SentAt).ToString("h:mm tt")</time></div>
+                    </div>
                 }
             </div>
             @if (smart.Count > 0 && string.IsNullOrEmpty(text))
             {
-                <div class="smart-replies" style="padding:.4rem .75rem 0">
+                <div class="smart-replies chat-smart">
                     <span class="ai-tag">✨</span>
                     @foreach (var r in smart) { <button class="chip" @onclick="() => text = r">@r</button> }
                 </div>
             }
             <div class="chat-input">
-                <label class="icon-btn" title="Send a photo">🖼️<InputFile OnChange="SendPhoto" accept="image/*" style="display:none" /></label>
-                <input class="input" placeholder="Write a message…" @bind="text" @bind:event="oninput" @onkeydown="OnKey" style="border-radius:999px" />
-                <button class="btn btn-primary" disabled="@string.IsNullOrWhiteSpace(text)" @onclick="Send">Send</button>
+                <label class="icon-btn" title="@T("Send a photo")">🖼️<InputFile OnChange="SendPhoto" accept="image/*" style="display:none" /></label>
+                <input class="input" placeholder="@T("Write a message…")" @bind="text" @bind:event="oninput" @onkeydown="OnKey" dir="auto" />
+                <button class="send-btn" disabled="@string.IsNullOrWhiteSpace(text)" @onclick="Send" title="@T("Send")">➤</button>
             </div>
         }
     </div>
 </div>
 
+@if (newGroup)
+{
+    <div class="overlay" @onclick="() => newGroup = false">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="row spread"><h3 style="margin:0">👥 @T("New group chat")</h3><button class="icon-btn" @onclick="() => newGroup = false">✕</button></div>
+            <input class="input mt" placeholder="@T("Group name (optional)")" @bind="groupTitle" />
+            <div class="group-pick mt">
+                @if (friends is null) { <p class="subtle">@T("Loading…")</p> }
+                else if (friends.Count == 0) { <p class="muted">@T("Add friends first, then start a group with them.")</p> }
+                else
+                {
+                    @foreach (var f in friends)
+                    {
+                        <label class="group-person @(picked.Contains(f.Id) ? "on" : "")">
+                            <input type="checkbox" checked="@picked.Contains(f.Id)" @onchange="() => TogglePick(f.Id)" />
+                            <Avatar User="f" Size="36" Link="false" /> <span>@f.DisplayName</span>
+                        </label>
+                    }
+                }
+            </div>
+            <button class="btn btn-primary btn-block mt" disabled="@(picked.Count < 2)" @onclick="CreateGroup">
+                @(picked.Count < 2 ? T("Pick at least 2 friends") : $"{T("Start chat with")} {picked.Count}")
+            </button>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public Guid? Id { get; set; }
+    [Inject] private NavigationManager Nav { get; set; } = default!;
     private List<ConversationDto> conversations = [];
     private List<MessageDto> messages = [];
     private ConversationDto? current;
-    private string? text;
+    private string? text, filter, summary, groupTitle;
     private List<string> smart = [];
     private Guid? smartFor;
+    private bool typing, scroll, menu, showOriginalAll, newGroup;
+    private readonly HashSet<Guid> original = [];
+    private List<UserSummaryDto>? friends;
+    private readonly HashSet<Guid> picked = [];
+    private ElementReference body;
+    private DateTime lastTypingSent;
+    private System.Threading.Timer? typingTimer;
+
+    private IEnumerable<ConversationDto> Filtered => string.IsNullOrWhiteSpace(filter) ? conversations
+        : conversations.Where(c => c.Title.Contains(filter, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>This message in the reader's language, when someone wrote it in another one.</summary>
+    private string? Translation(MessageDto m) =>
+        m.Translations is { } t && m.OriginalLanguage != I18n.Language && t.TryGetValue(I18n.Language, out var s) ? s : null;
+
+    private string Preview(ConversationDto c) => c.LastMessage is not { } m ? T("Say salaam 👋")
+        : (m.Sender.Id == Session.User?.Id ? T("You") + ": " : "") + (Translation(m) ?? (m.Content.Length > 0 ? m.Content : m.MediaUrl is not null ? "📷 " + T("Photo") : "📎"));
+
+    private string When(DateTime utc)
+    {
+        var local = Clock.Local(utc);
+        return local.Date == Clock.Now.Date ? local.ToString("h:mm tt") : local > Clock.Now.AddDays(-6) ? local.ToString("ddd") : local.ToString("d MMM");
+    }
+
+    private string Day(DateTime utc)
+    {
+        var d = Clock.Local(utc).Date;
+        return d == Clock.Now.Date ? T("Today") : d == Clock.Now.Date.AddDays(-1) ? T("Yesterday") : d.ToString("dddd, d MMMM");
+    }
 
     private async Task RefreshSmartRepliesAsync()
     {
@@ -90,17 +219,14 @@
         if (last is null || last.Sender.Id == Session.User?.Id || string.IsNullOrWhiteSpace(last.Content)) { smart = []; return; }
         if (smartFor == last.Id) return;
         smartFor = last.Id;
-        try { smart = (await Api.PostAsync<SmartRepliesResponse>("api/ai/replies", new SmartRepliesRequest(last.Content, "message"))).Replies; }
+        try { smart = (await Api.PostAsync<SmartRepliesResponse>("api/ai/replies", new SmartRepliesRequest(Translation(last) ?? last.Content, "message"))).Replies; }
         catch (Exception) { smart = []; }
     }
-    private bool typing, scroll;
-    private ElementReference body;
-    private DateTime lastTypingSent;
-    private System.Threading.Timer? typingTimer;
 
     protected override void OnInitialized()
     {
         Realtime.MessageReceived += OnMessage;
+        Realtime.MessageTranslated += OnTranslated;
         Realtime.Typing += OnTyping;
         Realtime.PresenceChanged += OnPresence;
     }
@@ -109,6 +235,8 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        menu = false; summary = null;
+        await Clock.LoadAsync();
         try
         {
             conversations = await Api.GetAsync<List<ConversationDto>>("api/conversations");
@@ -139,6 +267,20 @@
             if (m.Sender.Id != Session.User?.Id) { await Api.PostAsync($"api/conversations/{m.ConversationId}/read"); await Realtime.RefreshCountsAsync(); }
         }
         conversations = await Api.GetAsync<List<ConversationDto>>("api/conversations");
+        StateHasChanged();
+    });
+
+    private void OnTranslated(MessageTranslatedDto t) => InvokeAsync(async () =>
+    {
+        var i = messages.FindIndex(m => m.Id == t.MessageId);
+        if (i >= 0)
+        {
+            messages[i] = messages[i] with { OriginalLanguage = t.OriginalLanguage, Translations = t.Translations };
+            smartFor = null;
+            if (i == messages.Count - 1) await RefreshSmartRepliesAsync();
+        }
+        var c = conversations.FindIndex(c => c.LastMessage?.Id == t.MessageId);
+        if (c >= 0) conversations[c] = conversations[c] with { LastMessage = conversations[c].LastMessage! with { OriginalLanguage = t.OriginalLanguage, Translations = t.Translations } };
         StateHasChanged();
     });
 
@@ -174,8 +316,6 @@
         catch (Exception ex) { text = content; Toasts.Error(ex); }
     }
 
-    [Inject] private NavigationManager Nav { get; set; } = default!;
-
     private async Task StartCall(bool video)
     {
         try
@@ -190,7 +330,8 @@
     {
         try
         {
-            var up = await Api.UploadAsync(e.File, 8_000_001, "message");
+            var up = (await Guard.UploadAsync([e.File], "message")).FirstOrDefault();
+            if (up is null) return;
             var m = await Api.PostAsync<MessageDto>($"api/conversations/{current!.Id}/messages", new SendMessageRequest("", up.Url));
             if (messages.All(x => x.Id != m.Id)) messages.Add(m);
             scroll = true;
@@ -198,9 +339,73 @@
         catch (Exception ex) { Toasts.Error(ex); }
     }
 
+    private async Task OpenChatWith(Guid userId)
+    {
+        try
+        {
+            var c = await Api.PostAsync<ConversationDto>("api/conversations", new StartConversationRequest([userId], null));
+            Nav.NavigateTo($"/messages/{c.Id}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Summarize()
+    {
+        summary = "…";
+        try { summary = (await Api.GetAsync<ChatSummaryDto>($"api/conversations/{current!.Id}/summary")).Summary; }
+        catch (Exception ex) { summary = null; Toasts.Error(ex); }
+    }
+
+    private async Task ToggleMute()
+    {
+        if (current is null) return;
+        try
+        {
+            await Api.PutAsync($"api/conversations/{current.Id}/mute", new MuteRequest(!current.Muted));
+            current = current with { Muted = !current.Muted };
+            conversations = conversations.Select(c => c.Id == current.Id ? current : c).ToList();
+            Toasts.Show(current.Muted ? T("Muted. You won't get notifications from this chat.") : T("Notifications are back on for this chat."));
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Block(UserSummaryDto p)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"{T("Block")} {p.DisplayName}? {T("They won't be able to message or call you.")}")) return;
+        try
+        {
+            await Api.PostAsync($"api/users/{p.Id}/block");
+            Toasts.Show($"{p.DisplayName} {T("is blocked")}");
+            Nav.NavigateTo("/messages");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task OpenNewGroup()
+    {
+        newGroup = true; picked.Clear(); groupTitle = null;
+        try { friends ??= await Api.GetAsync<List<UserSummaryDto>>("api/friends"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private void TogglePick(Guid id) { if (!picked.Remove(id)) picked.Add(id); }
+
+    private async Task CreateGroup()
+    {
+        try
+        {
+            var c = await Api.PostAsync<ConversationDto>("api/conversations",
+                new StartConversationRequest(picked.ToList(), string.IsNullOrWhiteSpace(groupTitle) ? null : groupTitle.Trim()));
+            newGroup = false;
+            Nav.NavigateTo($"/messages/{c.Id}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
     public void Dispose()
     {
         Realtime.MessageReceived -= OnMessage;
+        Realtime.MessageTranslated -= OnTranslated;
         Realtime.Typing -= OnTyping;
         Realtime.PresenceChanged -= OnPresence;
         typingTimer?.Dispose();

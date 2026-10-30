@@ -20,6 +20,7 @@ public sealed class Realtime(AuthSession session, ApiClient api, ILogger<Realtim
     public event Action? PresenceChanged;
 
     public event Action<MessageDto>? MessageReceived;
+    public event Action<MessageTranslatedDto>? MessageTranslated;
     public event Action<NotificationDto>? NotificationReceived;
     public event Action<Guid, Guid>? Typing;
     public event Action? CountsChanged;
@@ -42,6 +43,7 @@ public sealed class Realtime(AuthSession session, ApiClient api, ILogger<Realtim
             if (m.Sender.Id != session.User?.Id) { UnreadMessages++; CountsChanged?.Invoke(); }
             MessageReceived?.Invoke(m);
         });
+        _hub.On<MessageTranslatedDto>("messageTranslated", t => MessageTranslated?.Invoke(t));
         _hub.On<NotificationDto>("notification", n =>
         {
             UnreadNotifications++;

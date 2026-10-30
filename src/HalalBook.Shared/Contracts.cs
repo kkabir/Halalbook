@@ -129,9 +129,15 @@ public record CreateEventRequest(string Title, string? Description, DateTime Sta
 public record RsvpRequest(RsvpStatus Status);
 
 // ---------- Messaging ----------
-public record ConversationDto(Guid Id, string Title, bool IsGroup, List<UserSummaryDto> Participants, MessageDto? LastMessage, int UnreadCount);
+public record ConversationDto(Guid Id, string Title, bool IsGroup, List<UserSummaryDto> Participants, MessageDto? LastMessage, int UnreadCount,
+    bool Muted = false);
+public record MuteRequest(bool Muted);
+/// <summary>A short AI recap of a chat: the gist, and anything that needs a reply or an action.</summary>
+public record ChatSummaryDto(string Summary, bool UsedAi);
 public record MessageDto(Guid Id, Guid ConversationId, UserSummaryDto Sender, string Content, string? MediaUrl, DateTime SentAt,
-    SharedPostPreview? SharedPost = null);
+    SharedPostPreview? SharedPost = null, string? OriginalLanguage = null, Dictionary<string, string>? Translations = null);
+/// <summary>Sent live when a message's translations are ready.</summary>
+public record MessageTranslatedDto(Guid MessageId, Guid ConversationId, string? OriginalLanguage, Dictionary<string, string> Translations);
 /// <summary>A post shared into a chat, shown as a small card.</summary>
 public record SharedPostPreview(Guid PostId, string AuthorName, string? Text, string? ImageUrl);
 public record StartConversationRequest(List<Guid> ParticipantIds, string? Title);

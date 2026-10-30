@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.SignalR;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -30,6 +31,19 @@ public partial class AiService
             return arr.Count == texts.Count ? arr : null;
         }
         catch (Exception ex) when (ex is JsonException or ArgumentOutOfRangeException or InvalidOperationException) { return null; }
+    }
+
+    /// <summary>A short recap of a chat for someone catching up.</summary>
+    public async Task<ChatSummaryDto> SummarizeChatAsync(List<(string Name, string Text)> lines, string languageName, CancellationToken ct)
+    {
+        if (lines.Count == 0) return new ChatSummaryDto("There's nothing to summarize yet.", false);
+        if (!IsEnabled)
+            return new ChatSummaryDto($"{lines.Count} recent messages, most recently from {lines[^1].Name}. Noor needs the AI assistant to summarize them.", false);
+        var transcript = string.Join('\n', lines.Select(l => $"{l.Name}: {(l.Text.Length > 500 ? l.Text[..500] : l.Text)}"));
+        var ai = await AskOnce("You are Noor, HalalBook's assistant. Summarize this chat for someone catching up, in " + languageName +
+            ". Use 2 to 4 short bullet points (•): the gist, decisions or plans with dates and times, and anything waiting for their reply. " +
+            "Be warm and brief. Don't invent anything.", transcript, 600, ct);
+        return ai is null ? new ChatSummaryDto("Noor couldn't summarize this chat right now.", false) : new ChatSummaryDto(ai.Trim(), true);
     }
 
     /// <summary>Detects a post's language and translates it into several languages at once.</summary>
@@ -86,6 +100,52 @@ public class PostTranslationWorker(PostTranslationQueue queue, IServiceScopeFact
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 log.LogWarning(ex, "Could not translate post {PostId}", id);
+            }
+        }
+    }
+}
+
+/// <summary>Chat messages waiting to be translated into the languages of the people in the chat.</summary>
+public class MessageTranslationQueue
+{
+    private readonly Channel<Guid> _channel = Channel.CreateUnbounded<Guid>();
+    public void Enqueue(Guid messageId) => _channel.Writer.TryWrite(messageId);
+    public ChannelReader<Guid> Reader => _channel.Reader;
+}
+
+public class MessageTranslationWorker(MessageTranslationQueue queue, IServiceScopeFactory scopes,
+    Microsoft.AspNetCore.SignalR.IHubContext<HalalBook.Api.Hubs.RealtimeHub> hub, ILogger<MessageTranslationWorker> log) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await foreach (var id in queue.Reader.ReadAllAsync(stoppingToken))
+        {
+            try
+            {
+                using var scope = scopes.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var ai = scope.ServiceProvider.GetRequiredService<AiService>();
+                var msg = await db.Messages.Include(m => m.Sender).FirstOrDefaultAsync(m => m.Id == id, stoppingToken);
+                if (msg is null || string.IsNullOrWhiteSpace(msg.Content)) continue;
+                var readers = await db.ConversationParticipants.Where(p => p.ConversationId == msg.ConversationId)
+                    .Select(p => new { p.UserId, p.User.Language, p.User.AutoTranslate }).ToListAsync(stoppingToken);
+                var wanted = readers.Where(r => r.AutoTranslate && r.UserId != msg.SenderId).Select(r => r.Language).Distinct().ToList();
+                var guess = Languages.GuessFromScript(msg.Content);
+                // Everyone reads the sender's language, and nothing suggests otherwise: no translation needed.
+                if (wanted.Count == 0 || (wanted.All(l => l == msg.Sender.Language) && (guess is null || guess == msg.Sender.Language))) continue;
+
+                var (lang, translations) = await ai.TranslateToManyAsync(msg.Content, wanted, stoppingToken);
+                msg.Language = lang ?? guess;
+                if (msg.Language is { } source) translations.Remove(source);
+                if (translations.Count == 0) { await db.SaveChangesAsync(stoppingToken); continue; }
+                msg.Translations = JsonSerializer.Serialize(translations);
+                await db.SaveChangesAsync(stoppingToken);
+                await hub.Clients.Users(readers.Select(r => r.UserId.ToString()).ToList()).SendAsync("messageTranslated",
+                    new MessageTranslatedDto(msg.Id, msg.ConversationId, msg.Language, translations), stoppingToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                log.LogWarning(ex, "Could not translate message {MessageId}", id);
             }
         }
     }

@@ -41,6 +41,8 @@ builder.Services.AddScoped<PrivacyService>();
 builder.Services.AddScoped<UiTranslator>();
 builder.Services.AddSingleton<PostTranslationQueue>();
 builder.Services.AddHostedService<PostTranslationWorker>();
+builder.Services.AddSingleton<MessageTranslationQueue>();
+builder.Services.AddHostedService<MessageTranslationWorker>();
 builder.Services.AddSingleton(config.GetSection("Seo").Get<SeoOptions>() ?? new SeoOptions());
 builder.Services.AddSingleton<IndexNowQueue>();
 builder.Services.AddSingleton<DailyAyahService>();

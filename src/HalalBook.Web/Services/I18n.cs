@@ -41,9 +41,11 @@ public sealed class I18n(IHttpClientFactory http, IJSRuntime js, ILogger<I18n> l
     /// <summary>Loads the saved or browser language on first render.</summary>
     public async Task InitializeAsync(string? userLanguage = null)
     {
-        string? saved = null;
-        try { saved = await js.InvokeAsync<string?>("halalbook.getLanguage"); } catch (JSException) { }
-        await SetLanguageAsync(saved ?? userLanguage ?? "en", persist: false);
+        // A member's chosen profile language follows them to every device. English is also the default for older
+        // profiles, so then this browser's choice (or the phone's language) wins instead.
+        string? saved = userLanguage is { } u && u != "en" ? u : null;
+        if (saved is null) try { saved = await js.InvokeAsync<string?>("halalbook.getLanguage"); } catch (JSException) { }
+        await SetLanguageAsync(saved ?? userLanguage ?? "en", persist: saved == userLanguage);
     }
 
     public async Task SetLanguageAsync(string code, bool persist = true)

@@ -170,6 +170,12 @@ else
         Realtime.PresenceChanged += Refresh;
         await Session.LoadAsync();
         await I18n.InitializeAsync(Session.User?.Language);
+        // Keep the profile in step, so chats and posts are translated into the language this person actually reads.
+        if (Session.User is { } me && me.Language != I18n.Language)
+        {
+            try { await Session.UpdateUserAsync(await Api.PutAsync<UserDto>("api/users/me/language", new LanguageSettingsRequest(I18n.Language, me.AutoTranslate))); }
+            catch (Exception) { }
+        }
         I18n.Changed += Refresh;
         if (!Session.IsAuthenticated)
         {
