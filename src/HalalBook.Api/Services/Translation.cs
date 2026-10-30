@@ -18,10 +18,12 @@ public partial class AiService
         "and translate around them. Keep @mentions, #hashtags, emojis, links and line breaks unchanged.";
 
     /// <summary>Translates a batch of short interface strings; returns them in the same order, or null without AI.</summary>
-    public async Task<List<string>?> TranslateBatchAsync(string languageName, IReadOnlyList<string> texts, CancellationToken ct)
+    public async Task<List<string>?> TranslateBatchAsync(string languageName, IReadOnlyList<string> texts, CancellationToken ct, bool conversational = false)
     {
         if (!IsEnabled || texts.Count == 0) return null;
-        var ai = await AskOnce(TranslatorRules + " These are labels and messages from the app's interface: keep them short and natural, like a native app. " +
+        var ai = await AskOnce(TranslatorRules + (conversational
+                ? " These are comments people wrote: keep each person's tone and meaning. If a text is already in the target language, return it unchanged. "
+                : " These are labels and messages from the app's interface: keep them short and natural, like a native app. ") +
             "Reply with only a JSON array of strings in the same order.",
             $"Translate into {languageName}:\n" + JsonSerializer.Serialize(texts), 4000, ct);
         if (ai is null) return null;
@@ -148,6 +150,44 @@ public class MessageTranslationWorker(MessageTranslationQueue queue, IServiceSco
                 log.LogWarning(ex, "Could not translate message {MessageId}", id);
             }
         }
+    }
+}
+
+/// <summary>
+/// Comments shown in the reader's language. Missing translations are made in one AI call when someone opens the comments,
+/// then kept on the comment for every later reader of that language.
+/// </summary>
+public static class CommentTranslations
+{
+    public static string? Get(Comment c, string lang) =>
+        string.IsNullOrEmpty(c.Translations) ? null
+        : JsonSerializer.Deserialize<Dictionary<string, string>>(c.Translations)!.TryGetValue(lang, out var t) && t != c.Content ? t : null;
+
+    public static async Task FillAsync(List<Comment> comments, Guid reader, string lang, AppDbContext db, AiService ai)
+    {
+        if (!ai.IsEnabled) return;
+        var missing = comments.Where(c => c.AuthorId != reader && c.Content.Length is > 0 and <= 1500 && c.Language != lang
+                && !(lang == "en" && c.Language is null) // Latin script without a guess: most likely English already
+                && (c.Translations is null || !c.Translations.Contains($"\"{lang}\"")))
+            .OrderByDescending(c => c.CreatedAt).Take(40).ToList();
+        // Keep one request small enough to answer in full (the newest comments come first).
+        var budget = 5000;
+        missing = missing.TakeWhile(c => (budget -= c.Content.Length) >= 0).ToList();
+        if (missing.Count == 0) return;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12)); // never keep the comments waiting long
+        try
+        {
+            var translated = await ai.TranslateBatchAsync(Languages.Get(lang).EnglishName, missing.Select(c => c.Content).ToList(), cts.Token, conversational: true);
+            if (translated is null) return;
+            for (int i = 0; i < missing.Count; i++)
+            {
+                var all = string.IsNullOrEmpty(missing[i].Translations) ? [] : JsonSerializer.Deserialize<Dictionary<string, string>>(missing[i].Translations!)!;
+                all[lang] = translated[i];
+                missing[i].Translations = JsonSerializer.Serialize(all);
+            }
+            await db.SaveChangesAsync();
+        }
+        catch (OperationCanceledException) { }
     }
 }
 

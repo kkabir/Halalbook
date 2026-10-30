@@ -240,19 +240,23 @@ public static class PostEndpoints
                 .Select(x => new { x.Type, User = x.User.ToSummary() }).Take(200).ToListAsync());
 
         // ---- Comments ----
-        posts.MapGet("/{id:guid}/comments", async (Guid id, ClaimsPrincipal cp, AppDbContext db) =>
+        posts.MapGet("/{id:guid}/comments", async (Guid id, ClaimsPrincipal cp, AppDbContext db, AiService ai) =>
         {
             var me = cp.UserId();
             var comments = await db.Comments.Include(c => c.Author)
                 .Where(c => c.PostId == id && !c.IsDeleted && (c.Moderation == ModerationStatus.Approved || c.AuthorId == me))
                 .OrderBy(c => c.CreatedAt).Take(500).ToListAsync();
+            var reader = await db.Users.Where(u => u.Id == me).Select(u => new { u.Language, u.AutoTranslate }).FirstOrDefaultAsync();
+            var lang = reader is { AutoTranslate: true } ? reader.Language : null;
+            if (lang is not null) await CommentTranslations.FillAsync(comments, me, lang, db, ai);
             var ids = comments.Select(c => c.Id).ToList();
             var likes = await db.Reactions.Where(r => r.CommentId != null && ids.Contains(r.CommentId.Value))
                 .Select(r => new { r.CommentId, r.UserId }).ToListAsync();
 
             CommentDto Map(Comment c) => new(c.Id, c.PostId, c.ParentId, c.Author.ToSummary(), c.Content, c.CreatedAt,
                 likes.Count(l => l.CommentId == c.Id), likes.Any(l => l.CommentId == c.Id && l.UserId == me),
-                comments.Where(r => r.ParentId == c.Id).Select(Map).ToList(), c.MediaUrl);
+                comments.Where(r => r.ParentId == c.Id).Select(Map).ToList(), c.MediaUrl,
+                lang is null || c.AuthorId == me ? null : CommentTranslations.Get(c, lang));
 
             return comments.Where(c => c.ParentId == null).Select(Map).ToList();
         });
@@ -271,7 +275,7 @@ public static class PostEndpoints
 
             var comment = new Comment
             {
-                PostId = id, AuthorId = me, ParentId = req.ParentId, Content = content, MediaUrl = media,
+                PostId = id, AuthorId = me, ParentId = req.ParentId, Content = content, MediaUrl = media, Language = Languages.GuessFromScript(content),
                 Moderation = moderation.NeedsReview || (media is not null && MediaNeedsReview(env, media)) ? ModerationStatus.PendingReview : ModerationStatus.Approved,
             };
             db.Comments.Add(comment);

@@ -178,6 +178,9 @@ public class Comment
     public Guid? ParentId { get; set; }
     public string Content { get; set; } = "";
     public string? MediaUrl { get; set; }
+    /// <summary>Language guessed from the script, and translations by language code (JSON), shared by every reader.</summary>
+    public string? Language { get; set; }
+    public string? Translations { get; set; }
     public ModerationStatus Moderation { get; set; }
     public bool IsDeleted { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -327,6 +330,18 @@ public class Message
     public string? Language { get; set; }
     public string? Translations { get; set; }
     public string? SharedAuthorName { get; set; }
+    /// <summary>The message this one answers, shown as a quote above it.</summary>
+    public Guid? ReplyToId { get; set; }
+    public Message? ReplyTo { get; set; }
+    public List<MessageReaction> Reactions { get; set; } = [];
+}
+
+/// <summary>One person's emoji on a chat message (one each; tapping another replaces it).</summary>
+public class MessageReaction
+{
+    public Guid MessageId { get; set; }
+    public Guid UserId { get; set; }
+    public string Emoji { get; set; } = "❤️";
 }
 
 public class Notification

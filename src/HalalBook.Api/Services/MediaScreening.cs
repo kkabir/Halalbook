@@ -18,6 +18,8 @@ public class MediaScreening(AiService ai, ModerationOptions moderation, ILogger<
         IReadOnlyList<IFormFile> frames, CancellationToken ct)
     {
         ScreeningResult result;
+        // Voice notes have no picture to check; what people say in chats is covered by reports and blocking.
+        if (purpose == UploadPurpose.Voice) return new ScreeningResult(true, false, null, null);
         if (!ai.IsEnabled)
         {
             // No AI: posts, reels and comment photos wait for a moderator (when configured); other places rely on reports.

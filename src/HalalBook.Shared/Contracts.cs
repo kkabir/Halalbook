@@ -94,7 +94,7 @@ public record PostDto(
 
 public record CommentDto(
     Guid Id, Guid PostId, Guid? ParentId, UserSummaryDto Author, string Content, DateTime CreatedAt,
-    int LikeCount, bool LikedByMe, List<CommentDto> Replies, string? MediaUrl = null);
+    int LikeCount, bool LikedByMe, List<CommentDto> Replies, string? MediaUrl = null, string? TranslatedContent = null);
 
 public record CreateCommentRequest(string Content, Guid? ParentId = null, string? MediaUrl = null);
 public record ReactRequest(ReactionType Type);
@@ -130,18 +130,25 @@ public record RsvpRequest(RsvpStatus Status);
 
 // ---------- Messaging ----------
 public record ConversationDto(Guid Id, string Title, bool IsGroup, List<UserSummaryDto> Participants, MessageDto? LastMessage, int UnreadCount,
-    bool Muted = false);
+    bool Muted = false, DateTime? OthersReadAt = null);
 public record MuteRequest(bool Muted);
 /// <summary>A short AI recap of a chat: the gist, and anything that needs a reply or an action.</summary>
 public record ChatSummaryDto(string Summary, bool UsedAi);
 public record MessageDto(Guid Id, Guid ConversationId, UserSummaryDto Sender, string Content, string? MediaUrl, DateTime SentAt,
-    SharedPostPreview? SharedPost = null, string? OriginalLanguage = null, Dictionary<string, string>? Translations = null);
+    SharedPostPreview? SharedPost = null, string? OriginalLanguage = null, Dictionary<string, string>? Translations = null,
+    ReplyPreviewDto? ReplyTo = null, List<MessageReactionDto>? Reactions = null);
+public record ReplyPreviewDto(Guid Id, string SenderName, string Text);
+public record MessageReactionDto(Guid UserId, string Emoji);
+public record ReactToMessageRequest(string? Emoji);
+/// <summary>Sent live when someone reacts to a message, or reads a chat.</summary>
+public record MessageReactionsDto(Guid MessageId, Guid ConversationId, List<MessageReactionDto> Reactions);
+public record ConversationReadDto(Guid ConversationId, Guid UserId, DateTime ReadAt);
 /// <summary>Sent live when a message's translations are ready.</summary>
 public record MessageTranslatedDto(Guid MessageId, Guid ConversationId, string? OriginalLanguage, Dictionary<string, string> Translations);
 /// <summary>A post shared into a chat, shown as a small card.</summary>
 public record SharedPostPreview(Guid PostId, string AuthorName, string? Text, string? ImageUrl);
 public record StartConversationRequest(List<Guid> ParticipantIds, string? Title);
-public record SendMessageRequest(string Content, string? MediaUrl, Guid? SharedPostId = null);
+public record SendMessageRequest(string Content, string? MediaUrl, Guid? SharedPostId = null, Guid? ReplyToId = null);
 /// <summary>Send a post to several people at once (each gets it in their chat with you).</summary>
 public record SendPostRequest(Guid PostId, List<Guid> UserIds, string? Note);
 

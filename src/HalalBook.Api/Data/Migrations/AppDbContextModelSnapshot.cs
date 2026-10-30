@@ -109,6 +109,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Language")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("MediaUrl")
                         .HasColumnType("nvarchar(max)");
 
@@ -120,6 +123,9 @@ namespace HalalBook.Api.Data.Migrations
 
                     b.Property<Guid>("PostId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Translations")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -662,6 +668,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<string>("MediaUrl")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid?>("ReplyToId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("SenderId")
                         .HasColumnType("uniqueidentifier");
 
@@ -685,11 +694,31 @@ namespace HalalBook.Api.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ReplyToId");
+
                     b.HasIndex("SenderId");
 
                     b.HasIndex("ConversationId", "SentAt");
 
                     b.ToTable("Messages");
+                });
+
+            modelBuilder.Entity("HalalBook.Api.Data.MessageReaction", b =>
+                {
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Emoji")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.HasKey("MessageId", "UserId");
+
+                    b.ToTable("MessageReactions");
                 });
 
             modelBuilder.Entity("HalalBook.Api.Data.Notification", b =>
@@ -1489,13 +1518,29 @@ namespace HalalBook.Api.Data.Migrations
 
             modelBuilder.Entity("HalalBook.Api.Data.Message", b =>
                 {
+                    b.HasOne("HalalBook.Api.Data.Message", "ReplyTo")
+                        .WithMany()
+                        .HasForeignKey("ReplyToId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("HalalBook.Api.Data.User", "Sender")
                         .WithMany()
                         .HasForeignKey("SenderId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.Navigation("ReplyTo");
+
                     b.Navigation("Sender");
+                });
+
+            modelBuilder.Entity("HalalBook.Api.Data.MessageReaction", b =>
+                {
+                    b.HasOne("HalalBook.Api.Data.Message", null)
+                        .WithMany("Reactions")
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("HalalBook.Api.Data.Notification", b =>
@@ -1614,6 +1659,11 @@ namespace HalalBook.Api.Data.Migrations
             modelBuilder.Entity("HalalBook.Api.Data.FriendList", b =>
                 {
                     b.Navigation("Members");
+                });
+
+            modelBuilder.Entity("HalalBook.Api.Data.Message", b =>
+                {
+                    b.Navigation("Reactions");
                 });
 
             modelBuilder.Entity("HalalBook.Api.Data.Post", b =>

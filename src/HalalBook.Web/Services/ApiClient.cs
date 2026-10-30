@@ -80,6 +80,19 @@ public class ApiClient(HttpClient http, AuthSession session)
     }
 
     /// <param name="frames">For videos: JPEG stills from across the video, used by the server's content check.</param>
+    /// <summary>Uploads bytes made in the browser, such as a recorded voice note.</summary>
+    public async Task<UploadResult> UploadBytesAsync(byte[] data, string fileName, string contentType, string purpose)
+    {
+        using var content = new MultipartFormDataContent();
+        var file = new ByteArrayContent(data);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        content.Add(file, "file", fileName);
+        var req = Build(HttpMethod.Post, $"api/media?purpose={Uri.EscapeDataString(purpose)}");
+        req.Content = content;
+        using var res = await SendAsync(req);
+        return (await res.Content.ReadFromJsonAsync<UploadResult>(Json))!;
+    }
+
     /// <summary>The file name with an extension matching its type, since photos resized in the browser may change format.</summary>
     private static string UploadName(IBrowserFile file)
     {

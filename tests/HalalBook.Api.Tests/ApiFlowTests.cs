@@ -681,4 +681,34 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         (await b.PostAsync($"/api/users/{aId}/block", null)).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Forbidden, (await a.PostAsJsonAsync($"/api/conversations/{conv.Id}/messages", new SendMessageRequest("hello?", null), Json)).StatusCode);
     }
+
+    [Fact]
+    public async Task Chat_RepliesReactionsSeenAndVoice()
+    {
+        var (a, aId) = await SignUpWithId("rxA");
+        var (b, bId) = await SignUpWithId("rxB");
+        await a.PostAsync($"/api/friends/{bId}/request", null);
+        await b.PostAsync($"/api/friends/{aId}/accept", null);
+        var conv = (await (await a.PostAsJsonAsync("/api/conversations", new StartConversationRequest([bId], null), Json)).Content.ReadFromJsonAsync<ConversationDto>(Json))!;
+        var first = (await (await a.PostAsJsonAsync($"/api/conversations/{conv.Id}/messages", new SendMessageRequest("Dinner at 7?", null), Json)).Content.ReadFromJsonAsync<MessageDto>(Json))!;
+        var reply = (await (await b.PostAsJsonAsync($"/api/conversations/{conv.Id}/messages", new SendMessageRequest("Yes!", null, null, first.Id), Json)).Content.ReadFromJsonAsync<MessageDto>(Json))!;
+        Assert.Equal("Dinner at 7?", reply.ReplyTo!.Text);
+
+        var r = (await (await b.PostAsJsonAsync($"/api/conversations/{conv.Id}/messages/{first.Id}/react", new ReactToMessageRequest("❤️"), Json)).Content.ReadFromJsonAsync<MessageReactionsDto>(Json))!;
+        Assert.Single(r.Reactions);
+        r = (await (await b.PostAsJsonAsync($"/api/conversations/{conv.Id}/messages/{first.Id}/react", new ReactToMessageRequest("❤️"), Json)).Content.ReadFromJsonAsync<MessageReactionsDto>(Json))!;
+        Assert.Empty(r.Reactions); // the same emoji again takes it back
+
+        await b.GetAsync($"/api/conversations/{conv.Id}/messages"); // b reads the chat
+        var seen = (await a.GetFromJsonAsync<List<ConversationDto>>("/api/conversations", Json))!.First(c => c.Id == conv.Id);
+        Assert.True(seen.OthersReadAt >= reply.SentAt);
+
+        // A tiny WebM voice note uploads only as "voice"; Ogg is rejected elsewhere.
+        byte[] webm = [0x1A, 0x45, 0xDF, 0xA3, 0x9F, 0x42, 0x86, 0x81, 0x01, 0x42, 0xF7, 0x81, 0x01, 0x42, 0xF2, 0x81];
+        using var form = new MultipartFormDataContent { { new ByteArrayContent(webm) { Headers = { ContentType = new("audio/webm") } }, "file", "voice.webm" } };
+        Assert.Equal(HttpStatusCode.OK, (await a.PostAsync("/api/media?purpose=voice", form)).StatusCode);
+        byte[] ogg = [(byte)'O', (byte)'g', (byte)'g', (byte)'S', 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        using var form2 = new MultipartFormDataContent { { new ByteArrayContent(ogg) { Headers = { ContentType = new("audio/ogg") } }, "file", "voice.ogg" } };
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await a.PostAsync("/api/media?purpose=post", form2)).StatusCode);
+    }
 }

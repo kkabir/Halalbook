@@ -36,6 +36,33 @@ window.halalbook = {
 
     copy: (text) => navigator.clipboard?.writeText(text),
 
+    // ---------- Voice notes ----------
+    voiceStart: async () => {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+        const types = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm'];
+        const mimeType = types.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
+        const rec = new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 32000 });
+        const chunks = [];
+        rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+        rec.start();
+        window.__hbVoice = { rec, stream, chunks, started: Date.now() };
+        return true;
+    },
+    voiceStop: async (keep) => {
+        const v = window.__hbVoice;
+        if (!v) return null;
+        window.__hbVoice = null;
+        const done = new Promise(r => v.rec.onstop = r);
+        v.rec.stop();
+        await done;
+        v.stream.getTracks().forEach(t => t.stop());
+        if (!keep) return null;
+        const blob = new Blob(v.chunks, { type: v.rec.mimeType || 'audio/webm' });
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        return { base64: btoa(bin), mime: (v.rec.mimeType || 'audio/webm').split(';')[0], seconds: (Date.now() - v.started) / 1000 };
+    },
     // ---------- Phone app and notifications ----------
     // Push works in installed apps on iPhone (iOS 16.4+) and in normal browsers elsewhere.
     pushStatus: async () => {

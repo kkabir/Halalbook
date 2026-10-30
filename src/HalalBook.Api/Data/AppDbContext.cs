@@ -8,6 +8,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
     public DbSet<SiteVisit> SiteVisits => Set<SiteVisit>();
+    public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
     public DbSet<PageStat> PageStats => Set<PageStat>();
     public DbSet<Follow> Follows => Set<Follow>();
     public DbSet<Block> Blocks => Set<Block>();
@@ -43,6 +44,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<MessageReaction>(e =>
+        {
+            e.HasKey(x => new { x.MessageId, x.UserId });
+            e.Property(x => x.Emoji).HasMaxLength(16);
+            e.HasOne<Message>().WithMany(m => m.Reactions).HasForeignKey(x => x.MessageId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<Message>().HasOne(m => m.ReplyTo).WithMany().HasForeignKey(m => m.ReplyToId).OnDelete(DeleteBehavior.NoAction);
         b.Entity<SiteVisit>(e =>
         {
             e.HasIndex(x => new { x.Day, x.VisitorId }).IsUnique();

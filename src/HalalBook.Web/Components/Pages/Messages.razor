@@ -108,9 +108,21 @@
                         {
                             @if (lastOfRun) { <Avatar User="m.Sender" Size="28" ShowStatus="false" /> } else { <span class="msg-avatar-space"></span> }
                         }
-                        <div class="bubble @(mine ? "mine" : "") @(lastOfRun ? "tail" : "")">
+                        <div class="bubble @(mine ? "mine" : "") @(lastOfRun ? "tail" : "") @(selected == m.Id ? "selected" : "")" @onclick="() => Select(m.Id)">
+                            @if (selected == m.Id)
+                            {
+                                <div class="bubble-actions @(mine ? "mine" : "")" @onclick:stopPropagation>
+                                    @foreach (var e in QuickReactions)
+                                    {
+                                        <button class="@(MyReaction(m) == e ? "on" : "")" @onclick="() => React(m, e)">@e</button>
+                                    }
+                                    <button class="reply-btn" @onclick="() => StartReply(m)" title="@T("Reply")">↩</button>
+                                </div>
+                            }
                             @if (current.IsGroup && !mine) { <b class="bubble-name">@m.Sender.DisplayName</b> }
-                            @if (m.MediaUrl is { } url) { <img src="@url" alt="" class="bubble-img" /> }
+                            @if (m.ReplyTo is { } rq) { <div class="bubble-quote"><b>@rq.SenderName</b><span>@rq.Text</span></div> }
+                            @if (m.MediaUrl is { } au && IsAudio(au)) { <audio class="bubble-audio" src="@au" controls preload="metadata" @onclick:stopPropagation></audio> }
+                            else if (m.MediaUrl is { } url) { <img src="@url" alt="" class="bubble-img" /> }
                             @if (m.SharedPost is { } sp)
                             {
                                 <a class="chat-post" href="/post/@sp.PostId">@if (sp.ImageUrl is { } im) {<img src="@im" alt="" />}<b>@sp.AuthorName</b><span>@sp.Text</span></a>
@@ -127,8 +139,18 @@
                                 }
                                 <time>@Clock.Local(m.SentAt).ToString("h:mm tt")</time>
                             </div>
+                            @if (m.Reactions is { Count: > 0 } rs)
+                            {
+                                <div class="bubble-reactions" @onclick:stopPropagation @onclick="() => React(m, MyReaction(m) ?? rs[0].Emoji)">
+                                    @foreach (var g in rs.GroupBy(r => r.Emoji)) { <span>@g.Key@(g.Count() > 1 ? g.Count().ToString() : "")</span> }
+                                </div>
+                            }
                         </div>
                     </div>
+                    @if (mine && m.Id == lastMineId)
+                    {
+                        <div class="seen-row">@(current.OthersReadAt >= m.SentAt ? "✓✓ " + T(current.IsGroup ? "Seen by everyone" : "Seen") : "✓ " + T("Sent"))</div>
+                    }
                 }
             </div>
             @if (smart.Count > 0 && string.IsNullOrEmpty(text))
@@ -138,11 +160,36 @@
                     @foreach (var r in smart) { <button class="chip" @onclick="() => text = r">@r</button> }
                 </div>
             }
-            <div class="chat-input">
-                <label class="icon-btn" title="@T("Send a photo")">🖼️<InputFile OnChange="SendPhoto" accept="image/*" style="display:none" /></label>
-                <input class="input" placeholder="@T("Write a message…")" @bind="text" @bind:event="oninput" @onkeydown="OnKey" dir="auto" />
-                <button class="send-btn" disabled="@string.IsNullOrWhiteSpace(text)" @onclick="Send" title="@T("Send")">➤</button>
-            </div>
+            @if (replyTo is { } rt)
+            {
+                <div class="reply-bar">
+                    <div class="grow"><b>↩ @T("Replying to") @(rt.Sender.Id == Session.User?.Id ? T("yourself") : rt.Sender.DisplayName)</b><span>@(rt.Content.Length > 0 ? rt.Content : "📎")</span></div>
+                    <button class="icon-btn" @onclick="() => replyTo = null">✕</button>
+                </div>
+            }
+            @if (recording)
+            {
+                <div class="chat-input recording">
+                    <button class="icon-btn" title="@T("Cancel")" @onclick="() => StopVoice(false)">🗑️</button>
+                    <div class="grow rec-indicator"><span class="rec-dot"></span> @T("Recording") @($"{recSeconds / 60}:{recSeconds % 60:00}") <small>/ 2:00</small></div>
+                    <button class="send-btn" title="@T("Send")" disabled="@sendingVoice" @onclick="() => StopVoice(true)">➤</button>
+                </div>
+            }
+            else
+            {
+                <div class="chat-input">
+                    <label class="icon-btn" title="@T("Send a photo")">🖼️<InputFile OnChange="SendPhoto" accept="image/*" style="display:none" /></label>
+                    <input class="input" placeholder="@T("Write a message…")" @bind="text" @bind:event="oninput" @onkeydown="OnKey" dir="auto" />
+                    @if (string.IsNullOrWhiteSpace(text))
+                    {
+                        <button class="send-btn mic" @onclick="StartVoice" title="@T("Record a voice note")">🎤</button>
+                    }
+                    else
+                    {
+                        <button class="send-btn" @onclick="Send" title="@T("Send")">➤</button>
+                    }
+                </div>
+            }
         }
     </div>
 </div>
@@ -185,6 +232,87 @@
     private Guid? smartFor;
     private bool typing, scroll, menu, showOriginalAll, newGroup;
     private readonly HashSet<Guid> original = [];
+    private static readonly string[] QuickReactions = ["❤️", "👍", "😂", "😮", "🤲", "😢"];
+    private Guid? selected;
+    private MessageDto? replyTo;
+    private bool recording, sendingVoice;
+    private int recSeconds;
+    private System.Threading.Timer? recTimer;
+
+    private Guid? lastMineId => messages.LastOrDefault(x => x.Sender.Id == Session.User?.Id)?.Id;
+    private string? MyReaction(MessageDto m) => m.Reactions?.FirstOrDefault(r => r.UserId == Session.User?.Id)?.Emoji;
+    private static bool IsAudio(string url) =>
+        new[] { ".webm", ".m4a", ".ogg", ".mp4" }.Any(e => url.Split('?')[0].EndsWith(e, StringComparison.OrdinalIgnoreCase));
+
+    private void Select(Guid id) => selected = selected == id ? null : id;
+
+    private void StartReply(MessageDto m) { replyTo = m; selected = null; }
+
+    private async Task React(MessageDto m, string emoji)
+    {
+        selected = null;
+        try
+        {
+            var r = await Api.PostAsync<MessageReactionsDto>($"api/conversations/{m.ConversationId}/messages/{m.Id}/react", new ReactToMessageRequest(emoji));
+            ApplyReactions(r);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private void ApplyReactions(MessageReactionsDto r)
+    {
+        var i = messages.FindIndex(x => x.Id == r.MessageId);
+        if (i >= 0) messages[i] = messages[i] with { Reactions = r.Reactions };
+    }
+
+    private void OnReactions(MessageReactionsDto r) => InvokeAsync(() => { ApplyReactions(r); StateHasChanged(); });
+
+    private void OnRead(ConversationReadDto r) => InvokeAsync(() =>
+    {
+        if (current?.Id != r.ConversationId) return;
+        // One-to-one: the other person's read time; groups wait until everyone has read (refreshed with the list).
+        if (!current.IsGroup) current = current with { OthersReadAt = r.ReadAt };
+        StateHasChanged();
+    });
+
+    private async Task StartVoice()
+    {
+        try
+        {
+            await JS.InvokeAsync<bool>("halalbook.voiceStart");
+            recording = true; recSeconds = 0;
+            recTimer = new System.Threading.Timer(_ => InvokeAsync(async () =>
+            {
+                recSeconds++;
+                if (recSeconds >= 120) await StopVoice(true); // voice notes are up to 2 minutes
+                StateHasChanged();
+            }), null, 1000, 1000);
+        }
+        catch (JSException) { Toasts.Show(T("Allow microphone access to record a voice note."), true); }
+    }
+
+    private record VoiceClip(string Base64, string Mime, double Seconds);
+
+    private async Task StopVoice(bool send)
+    {
+        if (!recording) return;
+        recTimer?.Dispose();
+        recording = false;
+        sendingVoice = send;
+        try
+        {
+            var clip = await JS.InvokeAsync<VoiceClip?>("halalbook.voiceStop", send);
+            if (!send || clip is null || clip.Seconds < 0.7 || current is null) return;
+            var ext = clip.Mime.Contains("mp4") ? ".m4a" : clip.Mime.Contains("ogg") ? ".ogg" : ".webm";
+            var up = await Api.UploadBytesAsync(Convert.FromBase64String(clip.Base64), "voice" + ext, clip.Mime, "voice");
+            var m = await Api.PostAsync<MessageDto>($"api/conversations/{current.Id}/messages", new SendMessageRequest("", up.Url, null, replyTo?.Id));
+            replyTo = null;
+            if (messages.All(x => x.Id != m.Id)) messages.Add(m);
+            scroll = true;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { sendingVoice = false; }
+    }
     private List<UserSummaryDto>? friends;
     private readonly HashSet<Guid> picked = [];
     private ElementReference body;
@@ -227,6 +355,8 @@
     {
         Realtime.MessageReceived += OnMessage;
         Realtime.MessageTranslated += OnTranslated;
+        Realtime.MessageReactions += OnReactions;
+        Realtime.ConversationRead += OnRead;
         Realtime.Typing += OnTyping;
         Realtime.PresenceChanged += OnPresence;
     }
@@ -235,7 +365,7 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        menu = false; summary = null;
+        menu = false; summary = null; selected = null; replyTo = null;
         await Clock.LoadAsync();
         try
         {
@@ -309,7 +439,8 @@
         var content = text; text = null;
         try
         {
-            var m = await Api.PostAsync<MessageDto>($"api/conversations/{current.Id}/messages", new SendMessageRequest(content, null));
+            var m = await Api.PostAsync<MessageDto>($"api/conversations/{current.Id}/messages", new SendMessageRequest(content, null, null, replyTo?.Id));
+            replyTo = null;
             if (messages.All(x => x.Id != m.Id)) messages.Add(m);
             scroll = true;
         }
@@ -406,7 +537,11 @@
     {
         Realtime.MessageReceived -= OnMessage;
         Realtime.MessageTranslated -= OnTranslated;
+        Realtime.MessageReactions -= OnReactions;
+        Realtime.ConversationRead -= OnRead;
         Realtime.Typing -= OnTyping;
+        recTimer?.Dispose();
+        if (recording) _ = JS.InvokeAsync<object?>("halalbook.voiceStop", false).AsTask();
         Realtime.PresenceChanged -= OnPresence;
         typingTimer?.Dispose();
     }

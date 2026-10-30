@@ -13,6 +13,7 @@ public static class PlatformEndpoints
     {
         [".jpg"] = MediaType.Image, [".jpeg"] = MediaType.Image, [".png"] = MediaType.Image, [".gif"] = MediaType.Image, [".webp"] = MediaType.Image,
         [".mp4"] = MediaType.Video, [".webm"] = MediaType.Video, [".mov"] = MediaType.Video,
+        [".m4a"] = MediaType.Video, [".ogg"] = MediaType.Video, // voice notes (audio-only containers)
     };
 
     /// <summary>Checks the file's leading bytes so renamed scripts or documents can't be uploaded as media.</summary>
@@ -29,7 +30,8 @@ public static class PlatformEndpoints
               || Starts((byte)'G', (byte)'I', (byte)'F', (byte)'8')                 // GIF
               || (Starts((byte)'R', (byte)'I', (byte)'F', (byte)'F') && head.AsSpan(8, 4).SequenceEqual("WEBP"u8))
             : head.AsSpan(4, 4).SequenceEqual("ftyp"u8)                              // MP4 / MOV / M4V
-              || Starts(0x1A, 0x45, 0xDF, 0xA3);                                    // WebM / Matroska
+              || Starts(0x1A, 0x45, 0xDF, 0xA3)                                     // WebM / Matroska
+              || Starts((byte)'O', (byte)'g', (byte)'g', (byte)'S');                // Ogg (voice notes)
     }
 
     private const int AutoHideReports = 3;
@@ -95,6 +97,8 @@ public static class PlatformEndpoints
             var ext = Path.GetExtension(file.FileName);
             if (!AllowedMedia.TryGetValue(ext, out var type)) return Results.Problem("Only images (jpg, png, gif, webp) and videos (mp4, webm, mov) are supported.", statusCode: 415);
             var use = Enum.TryParse<UploadPurpose>(purpose, true, out var p) ? p : UploadPurpose.Post;
+            if ((ext.Equals(".m4a", StringComparison.OrdinalIgnoreCase) || ext.Equals(".ogg", StringComparison.OrdinalIgnoreCase)) && use != UploadPurpose.Voice)
+                return Results.Problem("Audio files can only be sent as voice notes.", statusCode: 415);
             if (await policy.CheckAsync(file, type, use) is { } problem) return Results.Problem(problem, statusCode: 413, title: "Upload too large");
             if (!await HasValidSignatureAsync(file, type)) return Results.Problem("That file doesn't look like a real image or video.", statusCode: 415);
 

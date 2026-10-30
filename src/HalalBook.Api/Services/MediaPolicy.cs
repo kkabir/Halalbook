@@ -18,7 +18,7 @@ public class MediaOptions
     public int UploadsPerMinute { get; set; } = 20;
 }
 
-public enum UploadPurpose { Post, Reel, Story, Comment, Message, Profile, Cover }
+public enum UploadPurpose { Post, Reel, Story, Comment, Message, Profile, Cover, Voice }
 
 public record MediaLimits(bool AllowsVideo, long MaxImageBytes, long MaxVideoBytes, int MaxVideoSeconds);
 
@@ -30,6 +30,7 @@ public class MediaPolicy(MediaOptions o)
     {
         UploadPurpose.Comment => new(false, Mb(o.MaxCommentImageMB), 0, 0),
         UploadPurpose.Message => new(false, Mb(o.MaxImageMB), 0, 0),
+        UploadPurpose.Voice => new(true, 0, Mb(5), 125), // voice notes: audio in a WebM, MP4 or Ogg container, up to 2 minutes
         UploadPurpose.Profile or UploadPurpose.Cover => new(false, Mb(o.MaxImageMB), 0, 0),
         UploadPurpose.Reel => new(true, Mb(o.MaxImageMB), Mb(o.MaxVideoMB), o.MaxReelSeconds),
         UploadPurpose.Story => new(true, Mb(o.MaxImageMB), Mb(o.MaxVideoMB), o.MaxStoryVideoSeconds),

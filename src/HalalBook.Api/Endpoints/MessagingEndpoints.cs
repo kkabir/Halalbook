@@ -63,16 +63,18 @@ public static class MessagingEndpoints
             return Results.Ok(ToDto(full, me, null, 0));
         });
 
-        chats.MapGet("/{id:guid}/messages", async (Guid id, DateTime? before, ClaimsPrincipal cp, AppDbContext db) =>
+        chats.MapGet("/{id:guid}/messages", async (Guid id, DateTime? before, ClaimsPrincipal cp, AppDbContext db, IHubContext<RealtimeHub> hub) =>
         {
             var me = cp.UserId();
             var participant = await db.ConversationParticipants.FirstOrDefaultAsync(p => p.ConversationId == id && p.UserId == me);
             if (participant is null) return Results.NotFound();
-            var q = db.Messages.Include(m => m.Sender).Where(m => m.ConversationId == id);
+            var q = db.Messages.Include(m => m.Sender).Include(m => m.ReplyTo).ThenInclude(r => r!.Sender).Include(m => m.Reactions)
+                .Where(m => m.ConversationId == id);
             if (before is DateTime b) q = q.Where(m => m.SentAt < b);
             var msgs = await q.OrderByDescending(m => m.SentAt).Take(50).ToListAsync();
             participant.LastReadAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
+            await AnnounceReadAsync(db, hub, id, me, participant.LastReadAt);
             return Results.Ok(msgs.OrderBy(m => m.SentAt).Select(ToDto).ToList());
         });
 
@@ -92,6 +94,11 @@ public static class MessagingEndpoints
             if (!mod.Allowed) return Results.Problem(string.Join(" ", mod.Reasons), statusCode: 422);
 
             var msg = new Message { ConversationId = id, SenderId = me, Content = content, MediaUrl = req.MediaUrl };
+            if (req.ReplyToId is Guid rid)
+            {
+                msg.ReplyTo = await db.Messages.Include(m => m.Sender).FirstOrDefaultAsync(m => m.Id == rid && m.ConversationId == id);
+                msg.ReplyToId = msg.ReplyTo?.Id;
+            }
             if (req.SharedPostId is Guid shared && !await AttachPostAsync(msg, shared, me, svc)) return Results.NotFound();
             db.Messages.Add(msg);
             conv.LastActivityAt = msg.SentAt;
@@ -162,13 +169,35 @@ public static class MessagingEndpoints
             return Results.Ok(await ai.SummarizeChatAsync(lines, Languages.Get(user?.Language).EnglishName, ct));
         }).RequireRateLimiting("ai");
 
-        chats.MapPost("/{id:guid}/read", async (Guid id, ClaimsPrincipal cp, AppDbContext db) =>
+        chats.MapPost("/{id:guid}/read", async (Guid id, ClaimsPrincipal cp, AppDbContext db, IHubContext<RealtimeHub> hub) =>
         {
             var p = await db.ConversationParticipants.FirstOrDefaultAsync(x => x.ConversationId == id && x.UserId == cp.UserId());
             if (p is null) return Results.NotFound();
             p.LastReadAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
+            await AnnounceReadAsync(db, hub, id, p.UserId, p.LastReadAt);
             return Results.Ok();
+        });
+
+        // One emoji per person per message; the same emoji again (or none) takes it back.
+        chats.MapPost("/{id:guid}/messages/{messageId:guid}/react", async (Guid id, Guid messageId, ReactToMessageRequest req, ClaimsPrincipal cp,
+            AppDbContext db, IHubContext<RealtimeHub> hub) =>
+        {
+            var me = cp.UserId();
+            var conv = await db.Conversations.Include(c => c.Participants).FirstOrDefaultAsync(c => c.Id == id);
+            if (conv is null || conv.Participants.All(p => p.UserId != me)) return Results.NotFound();
+            if (!await db.Messages.AnyAsync(m => m.Id == messageId && m.ConversationId == id)) return Results.NotFound();
+            var emoji = req.Emoji?.Trim();
+            if (emoji is { Length: > 16 }) return Results.BadRequest();
+            var existing = await db.MessageReactions.FindAsync(messageId, me);
+            if (existing is not null && (string.IsNullOrEmpty(emoji) || existing.Emoji == emoji)) db.MessageReactions.Remove(existing);
+            else if (existing is not null) existing.Emoji = emoji!;
+            else if (!string.IsNullOrEmpty(emoji)) db.MessageReactions.Add(new MessageReaction { MessageId = messageId, UserId = me, Emoji = emoji });
+            await db.SaveChangesAsync();
+            var all = await db.MessageReactions.Where(r => r.MessageId == messageId).Select(r => new MessageReactionDto(r.UserId, r.Emoji)).ToListAsync();
+            var dto = new MessageReactionsDto(messageId, id, all);
+            await hub.Clients.Users(conv.Participants.Select(p => p.UserId.ToString()).ToList()).SendAsync("messageReactions", dto);
+            return Results.Ok(dto);
         });
 
         app.MapGet("/api/conversations/unread-count", async (ClaimsPrincipal cp, AppDbContext db) =>
@@ -207,13 +236,25 @@ public static class MessagingEndpoints
     {
         var others = c.Participants.Where(p => p.UserId != me).Select(p => p.User.ToSummary()).ToList();
         var title = c.Title ?? (others.Count == 0 ? "Notes to self" : string.Join(", ", others.Select(o => o.DisplayName)));
+        var othersRead = c.Participants.Where(p => p.UserId != me).Select(p => (DateTime?)p.LastReadAt).DefaultIfEmpty().Min();
         return new ConversationDto(c.Id, title, c.IsGroup, others, last is null ? null : ToDto(last), unread,
-            c.Participants.FirstOrDefault(p => p.UserId == me)?.Muted ?? false);
+            c.Participants.FirstOrDefault(p => p.UserId == me)?.Muted ?? false, othersRead);
     }
 
     private static MessageDto ToDto(Message m) => new(m.Id, m.ConversationId, m.Sender.ToSummary(), m.Content, m.MediaUrl, m.SentAt,
         m.SharedPostId is Guid pid ? new SharedPostPreview(pid, m.SharedAuthorName ?? "", m.SharedPreview, m.SharedImageUrl) : null,
-        m.Language, string.IsNullOrEmpty(m.Translations) ? null : JsonSerializer.Deserialize<Dictionary<string, string>>(m.Translations));
+        m.Language, string.IsNullOrEmpty(m.Translations) ? null : JsonSerializer.Deserialize<Dictionary<string, string>>(m.Translations),
+        m.ReplyTo is { } r ? new ReplyPreviewDto(r.Id, r.Sender?.DisplayName ?? "",
+            r.Content.Length > 0 ? (r.Content.Length > 120 ? r.Content[..120] + "…" : r.Content) : r.MediaUrl is not null ? "📎" : "") : null,
+        m.Reactions.Count == 0 ? null : m.Reactions.Select(x => new MessageReactionDto(x.UserId, x.Emoji)).ToList());
+
+    /// <summary>Tells the others in the chat how far this person has read, for "Seen".</summary>
+    private static async Task AnnounceReadAsync(AppDbContext db, IHubContext<RealtimeHub> hub, Guid conversationId, Guid userId, DateTime at)
+    {
+        var others = await db.ConversationParticipants.Where(p => p.ConversationId == conversationId && p.UserId != userId)
+            .Select(p => p.UserId.ToString()).ToListAsync();
+        await hub.Clients.Users(others).SendAsync("conversationRead", new ConversationReadDto(conversationId, userId, at));
+    }
 
     /// <summary>Attaches a preview of a post the sender is allowed to see.</summary>
     private static async Task<bool> AttachPostAsync(Message msg, Guid postId, Guid me, PostService svc)

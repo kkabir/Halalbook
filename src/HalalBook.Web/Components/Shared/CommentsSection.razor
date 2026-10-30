@@ -72,6 +72,7 @@
     private ToneResponse? tone;
 
     private List<CommentDto>? comments;
+    private readonly HashSet<Guid> originals = [];
     private string? text, summary;
     private CommentDto? replyTo;
     private bool sending, summarizing, attaching;
@@ -95,11 +96,15 @@
             <div class="comment">
                 <Avatar User="c.Author" Size="32" />
                 <div>
-                    <div class="comment-bubble"><a class="name" href="/u/@c.Author.UserName">@c.Author.DisplayName</a>@if (c.Content.Length > 0) {<div>@c.Content</div>}@if (c.MediaUrl is { } img) {<a href="@img" target="_blank" rel="noopener"><img class="comment-photo" src="@img" alt="" loading="lazy" /></a>}</div>
+                    <div class="comment-bubble"><a class="name" href="/u/@c.Author.UserName">@c.Author.DisplayName</a>@if (c.Content.Length > 0) {<div dir="auto">@(c.TranslatedContent is { } tc && !originals.Contains(c.Id) ? tc : c.Content)</div>}@if (c.MediaUrl is { } img) {<a href="@img" target="_blank" rel="noopener"><img class="comment-photo" src="@img" alt="" loading="lazy" /></a>}</div>
                     <div class="comment-actions">
                         <button class="@(c.LikedByMe ? "on" : "")" @onclick="() => Like(c)">@(c.LikedByMe ? "Liked" : "Like")@(c.LikeCount > 0 ? $" · {c.LikeCount}" : "")</button>
                         @if (topLevel) { <button @onclick="() => replyTo = c">Reply</button> }
                         <span>@Ui.TimeAgo(c.CreatedAt)</span>
+                        @if (c.TranslatedContent is not null)
+                        {
+                            <button @onclick="() => { if (!originals.Remove(c.Id)) originals.Add(c.Id); }">🌍 @(originals.Contains(c.Id) ? T("See translation") : T("See original"))</button>
+                        }
                         @if (c.Author.Id == Session.User?.Id) { <button @onclick="() => Delete(c)">Delete</button> }
                     </div>
                 </div>
