@@ -839,3 +839,17 @@ select.lang-picker { width: auto; }
 .welcome-join { margin-top: 1rem; }
 .welcome-links { margin-top: 1rem; }
 .public-main:has(.welcome-hero) { max-width: 960px; }
+
+/* ---------- Sender photos in chats, profile setup ---------- */
+.msg-row { display: flex; align-items: flex-end; gap: .4rem; align-self: flex-start; max-width: 80%; }
+.msg-row .bubble { max-width: 100%; }
+.msg-avatar-space { width: 28px; flex: none; }
+.setup-card { padding: 0; overflow: hidden; }
+.setup-preview { position: relative; }
+.setup-cover { height: 120px; background: linear-gradient(135deg, var(--emerald-500), var(--emerald-800)) center / cover; position: relative; }
+.setup-cover .cover-btn { position: absolute; right: .75rem; bottom: .6rem; top: auto; padding: .35rem .7rem; font-size: .8rem; background: rgba(255,255,255,.9); }
+.setup-avatar { position: absolute; left: 1rem; bottom: -46px; cursor: pointer; border-radius: 50%; border: 4px solid var(--surface); }
+.setup-avatar .cam-btn { position: absolute; right: 2px; bottom: 2px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2, #eee); font-size: .9rem; }
+.setup-text { padding: 3.4rem 1.1rem 1rem; }
+[dir="rtl"] .setup-avatar { left: auto; right: 1rem; }
+[dir="rtl"] .setup-cover .cover-btn { right: auto; left: .75rem; }

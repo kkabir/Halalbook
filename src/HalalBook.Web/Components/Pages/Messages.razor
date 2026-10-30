@@ -42,10 +42,21 @@
                 <div class="grow" style="order:-1"><b>@current.Title</b>@if (typing) { <div class="subtle">typing…</div> } else if (!current.IsGroup && current.Participants.FirstOrDefault() is { } other2 && Realtime.IsOnline(other2.Id)) { <div class="active-text">Active now</div> }</div>
             </div>
             <div class="chat-body" @ref="body">
-                @foreach (var m in messages)
+                @for (var i = 0; i < messages.Count; i++)
                 {
+                    var m = messages[i];
                     var mine = m.Sender.Id == Session.User?.Id;
-                    <div class="bubble @(mine ? "mine" : "")">@if (current.IsGroup && !mine) {<b style="font-size:.78rem;display:block">@m.Sender.DisplayName</b>}@if (m.MediaUrl is { } url) {<img src="@url" alt="" style="border-radius:12px;max-height:260px" />}@if (m.SharedPost is { } sp) {<a class="chat-post" href="/post/@sp.PostId">@if (sp.ImageUrl is { } im) {<img src="@im" alt="" />}<b>@sp.AuthorName</b><span>@sp.Text</span></a>}<span>@m.Content</span><time>@Clock.Local(m.SentAt).ToString("h:mm tt")</time></div>
+                    // Like Messenger: the sender's small round photo sits beside the last bubble of each run of their messages.
+                    var lastOfRun = i == messages.Count - 1 || messages[i + 1].Sender.Id != m.Sender.Id;
+                    if (!mine)
+                    {
+                        <div class="msg-row">
+                            @if (lastOfRun) { <Avatar User="m.Sender" Size="28" ShowStatus="false" /> } else { <span class="msg-avatar-space"></span> }
+                            <div class="bubble">@if (current.IsGroup) {<b style="font-size:.78rem;display:block">@m.Sender.DisplayName</b>}@if (m.MediaUrl is { } inUrl) {<img src="@inUrl" alt="" style="border-radius:12px;max-height:260px" />}@if (m.SharedPost is { } inSp) {<a class="chat-post" href="/post/@inSp.PostId">@if (inSp.ImageUrl is { } inIm) {<img src="@inIm" alt="" />}<b>@inSp.AuthorName</b><span>@inSp.Text</span></a>}<span>@m.Content</span><time>@Clock.Local(m.SentAt).ToString("h:mm tt")</time></div>
+                        </div>
+                        continue;
+                    }
+                    <div class="bubble mine">@if (current.IsGroup && !mine) {<b style="font-size:.78rem;display:block">@m.Sender.DisplayName</b>}@if (m.MediaUrl is { } url) {<img src="@url" alt="" style="border-radius:12px;max-height:260px" />}@if (m.SharedPost is { } sp) {<a class="chat-post" href="/post/@sp.PostId">@if (sp.ImageUrl is { } im) {<img src="@im" alt="" />}<b>@sp.AuthorName</b><span>@sp.Text</span></a>}<span>@m.Content</span><time>@Clock.Local(m.SentAt).ToString("h:mm tt")</time></div>
                 }
             </div>
             @if (smart.Count > 0 && string.IsNullOrEmpty(text))
