@@ -763,6 +763,25 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.DoesNotContain((await b.GetFromJsonAsync<PagedResult<PostDto>>("/api/reels?following=true", Json))!.Items, p => p.Id == post.Id);
         await b.PostAsync($"/api/users/{aId}/follow", null);
         Assert.Contains((await b.GetFromJsonAsync<PagedResult<PostDto>>("/api/reels?following=true", Json))!.Items, p => p.Id == post.Id);
-        Assert.Contains((await b.GetFromJsonAsync<List<PostDto>>("/api/short-videos", Json))!, p => p.Id == post.Id);
+        Assert.Contains((await b.GetFromJsonAsync<List<ShortVideoGroupDto>>("/api/short-videos", Json))!.SelectMany(g => g.Videos), p => p.Id == post.Id);
+    }
+
+    [Fact]
+    public async Task ShortVideos_GroupedBySubjectAndPlayableAsARow()
+    {
+        var (a, _) = await SignUpWithId("topicA");
+        var tag = "hajjtips" + Random.Shared.Next(9999);
+        var ids = new List<Guid>();
+        foreach (var n in new[] { 1, 2, 3 })
+            ids.Add((await (await a.PostAsJsonAsync("/api/posts", new CreatePostRequest($"Tip {n} #{tag}", Visibility.Public,
+                [new MediaDto($"https://example.test/uploads/{n}.mp4", MediaType.Video)], Kind: PostKind.Reel), Json)).Content.ReadFromJsonAsync<PostDto>(Json))!.Id);
+
+        var groups = (await a.GetFromJsonAsync<List<ShortVideoGroupDto>>("/api/short-videos", Json))!;
+        var g = groups.First(x => x.Tag == tag);
+        Assert.Equal(3, g.Videos.Count);
+
+        var row = (await a.GetFromJsonAsync<PagedResult<PostDto>>($"/api/reels?tag={tag}&start={ids[0]}", Json))!;
+        Assert.Equal(ids[0], row.Items[0].Id);
+        Assert.All(row.Items, p => Assert.Contains(tag, p.Hashtags));
     }
 }

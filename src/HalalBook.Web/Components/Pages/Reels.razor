@@ -9,11 +9,19 @@
 
 <div class="feed-column reels-page">
     <div class="reel-tabs">
-        <button class="@(!following ? "on" : "")" @onclick="() => SwitchTab(false)">@T("For you")</button>
-        <button class="@(following ? "on" : "")" @onclick="() => SwitchTab(true)">@T("Following")</button>
+        @if (Tag is not null)
+        {
+            <a class="on" href="/reels">#@Tag.TrimStart('#') ✕</a>
+        }
+        else
+        {
+            <button class="@(!following ? "on" : "")" @onclick="() => SwitchTab(false)">@T("For you")</button>
+            <button class="@(following ? "on" : "")" @onclick="() => SwitchTab(true)">@T("Following")</button>
+        }
     </div>
     <div class="reel-create row">
         <button class="btn btn-ghost btn-sm" @onclick="ToggleMute">@(muted ? "🔇" : "🔊")</button>
+        <button class="btn btn-ghost btn-sm" @onclick="ToggleLoop" title="@(loop ? T("Repeat each video") : T("Play the next video automatically"))">@(loop ? "🔁" : "⏭️")</button>
         <button class="btn btn-gold btn-sm" @onclick="() => creating = true">🎬 @T("Create")</button>
     </div>
 
@@ -28,7 +36,7 @@
             @foreach (var r in reels)
             {
                 <div class="reel" @key="r.Id" data-id="@r.Id">
-                    <video src="@r.Media[0].Url" loop playsinline muted preload="metadata" @ref="videoRefs[r.Id]"></video>
+                    <video src="@r.Media.First(m => m.Type == MediaType.Video).Url" playsinline muted preload="metadata" @ref="videoRefs[r.Id]"></video>
                     <div class="reel-tap" @ondblclick="() => DoubleTapLike(r)" @onclick="() => TogglePlay(r.Id)"></div>
                     @if (heartFor == r.Id) { <div class="reel-heart">❤️</div> }
                     <div class="reel-progress"><i></i></div>
@@ -71,11 +79,14 @@
     private DotNetObjectReference<Reels>? self;
 
     [SupplyParameterFromQuery] public Guid? Start { get; set; }
+    [SupplyParameterFromQuery] public string? Tag { get; set; }
+    private bool loop;
     [SupplyParameterFromQuery(Name = "create")] public int? Create { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
         creating = Create == 1;
+        try { loop = await JS.InvokeAsync<bool>("halalbook.reelLoop", (bool?)null); } catch (JSException) { }
         await Load();
     }
 
@@ -95,6 +106,16 @@
     {
         if (Guid.TryParse(id, out var g)) { try { await Api.PostAsync($"api/posts/{g}/view"); } catch (Exception) { } }
     }
+
+    private async Task ToggleLoop()
+    {
+        loop = await JS.InvokeAsync<bool>("halalbook.reelLoop", !loop);
+        Toasts.Show(loop ? T("Each video repeats") : T("Videos play one after another"));
+    }
+
+    /// <summary>The last video ended in auto-next mode: fetch more so the row keeps going.</summary>
+    [JSInvokable]
+    public async Task NearEnd() { if (hasMore) { await More(); StateHasChanged(); } }
 
     private async Task SwitchTab(bool f)
     {
@@ -116,8 +137,8 @@
     {
         try
         {
-            var res = await Api.GetAsync<PagedResult<PostDto>>($"api/reels?page={page}&following={following.ToString().ToLowerInvariant()}{(Start is Guid s && page == 1 ? $"&start={s}" : "")}");
-            reels.AddRange(res.Items.Where(r => r.Media.Count > 0 && reels.All(x => x.Id != r.Id)));
+            var res = await Api.GetAsync<PagedResult<PostDto>>($"api/reels?page={page}&following={following.ToString().ToLowerInvariant()}{(Start is Guid s && page == 1 ? $"&start={s}" : "")}{(Tag is null ? "" : $"&tag={Uri.EscapeDataString(Tag)}")}");
+            reels.AddRange(res.Items.Where(r => r.Media.Any(m => m.Type == MediaType.Video) && reels.All(x => x.Id != r.Id)));
             hasMore = res.HasMore;
             observe = true;
         }

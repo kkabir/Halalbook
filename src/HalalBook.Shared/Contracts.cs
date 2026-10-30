@@ -138,6 +138,8 @@ public record ChatSummaryDto(string Summary, bool UsedAi);
 public record MessageDto(Guid Id, Guid ConversationId, UserSummaryDto Sender, string Content, string? MediaUrl, DateTime SentAt,
     SharedPostPreview? SharedPost = null, string? OriginalLanguage = null, Dictionary<string, string>? Translations = null,
     ReplyPreviewDto? ReplyTo = null, List<MessageReactionDto>? Reactions = null);
+/// <summary>Short videos on the same subject (one hashtag), played one after another.</summary>
+public record ShortVideoGroupDto(string Topic, string? Tag, List<PostDto> Videos);
 public record ReplyPreviewDto(Guid Id, string SenderName, string Text);
 public record MessageReactionDto(Guid UserId, string Emoji);
 public record ReactToMessageRequest(string? Emoji);

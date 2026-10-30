@@ -38,10 +38,14 @@ public static class PostEndpoints
 
         // Short vertical videos.
         // following=true: only from friends and people I follow. start: open the player at this reel first.
-        app.MapGet("/api/reels", async (int? page, bool? following, Guid? start, ClaimsPrincipal cp, AppDbContext db, PostService svc) =>
+        // tag: one subject's videos (reels and video posts with that hashtag), played in a row.
+        app.MapGet("/api/reels", async (int? page, bool? following, Guid? start, string? tag, ClaimsPrincipal cp, AppDbContext db, PostService svc) =>
         {
             var me = cp.UserId();
-            var visible = (await svc.VisibleToAsync(me)).Where(p => p.Kind == PostKind.Reel);
+            var visible = string.IsNullOrWhiteSpace(tag)
+                ? (await svc.VisibleToAsync(me)).Where(p => p.Kind == PostKind.Reel)
+                : (await svc.VisibleToAsync(me)).Where(p => (p.Kind == PostKind.Reel || p.Media.Any(m => m.Type == MediaType.Video))
+                    && p.Hashtags.Any(h => h.Hashtag.Tag == tag.TrimStart('#').ToLower()));
             if (following == true)
             {
                 var friends = db.Friendships.Where(f => f.Accepted && (f.RequesterId == me || f.AddresseeId == me))
@@ -61,13 +65,26 @@ public static class PostEndpoints
         }).WithTags("Posts").RequireAuthorization();
 
         // Short videos for the home feed's carousel: the newest reels and video posts from the last 30 days.
+        // Grouped by subject, like Facebook: videos sharing a hashtag form a row that plays one after another.
         app.MapGet("/api/short-videos", async (ClaimsPrincipal cp, PostService svc) =>
         {
             var me = cp.UserId();
             var since = DateTime.UtcNow.AddDays(-30);
             var visible = (await svc.VisibleToAsync(me))
                 .Where(p => p.CreatedAt > since && (p.Kind == PostKind.Reel || p.Media.Any(m => m.Type == MediaType.Video)));
-            return (await svc.PageAsync(visible, me, 1, 12)).Items;
+            var videos = (await svc.PageAsync(visible, me, 1, 60)).Items;
+            var groups = new List<ShortVideoGroupDto>();
+            var used = new HashSet<Guid>();
+            foreach (var tag in videos.SelectMany(v => v.Hashtags).GroupBy(t => t).Where(g => g.Count() >= 2).OrderByDescending(g => g.Count()).Select(g => g.Key).Take(3))
+            {
+                var row = videos.Where(v => v.Hashtags.Contains(tag) && !used.Contains(v.Id)).Take(12).ToList();
+                if (row.Count < 2) continue;
+                row.ForEach(v => used.Add(v.Id));
+                groups.Add(new ShortVideoGroupDto($"#{tag}", tag, row));
+            }
+            var rest = videos.Where(v => !used.Contains(v.Id)).Take(12).ToList();
+            if (rest.Count > 0) groups.Add(new ShortVideoGroupDto(groups.Count == 0 ? "Reels and short videos" : "More short videos", null, rest));
+            return groups;
         }).WithTags("Posts").RequireAuthorization();
 
         // Counts a watch once per person per video per day.

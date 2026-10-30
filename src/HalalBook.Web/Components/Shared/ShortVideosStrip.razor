@@ -1,24 +1,26 @@
-@inject ApiClient Api
 @inject IJSRuntime JS
 
 @* Facebook-style "Reels and short videos" carousel: small vertical cards that preview silently, tap to watch full screen. *@
 
-@if (videos is { Count: > 0 })
+@if (Group is { } g)
 {
     <div class="card shorts-card">
         <div class="row spread shorts-head">
-            <b>🎬 @T("Reels and short videos")</b>
-            <a href="/reels">@T("See all")</a>
+            <b>🎬 @(g.Tag is null ? T(g.Topic) : g.Topic) <small class="subtle">· @g.Videos.Count @T("videos")</small></b>
+            <a href="@(g.Tag is null ? "/reels" : $"/reels?tag={Uri.EscapeDataString(g.Tag)}")">▶ @T("Play all")</a>
         </div>
-        <div class="shorts-row" @ref="row">
-            <a class="short-tile create" href="/reels?create=1">
-                <span class="short-plus">＋</span>
-                <b>@T("Create reel")</b>
-            </a>
-            @foreach (var v in videos)
+        <div class="shorts-row" data-shorts>
+            @if (First)
+            {
+                <a class="short-tile create" href="/reels?create=1">
+                    <span class="short-plus">＋</span>
+                    <b>@T("Create reel")</b>
+                </a>
+            }
+            @foreach (var v in g.Videos)
             {
                 var media = v.Media.First(m => m.Type == MediaType.Video);
-                <a class="short-tile" href="@(v.Kind == PostKind.Reel ? $"/reels?start={v.Id}" : $"/post/{v.Id}")">
+                <a class="short-tile" href="@($"/reels?start={v.Id}{(g.Tag is null ? "" : $"&tag={Uri.EscapeDataString(g.Tag)}")}")">
                     <video src="@($"{media.Url}#t=0.5")" muted playsinline loop preload="metadata"></video>
                     <span class="short-views">▶ @Ui.Compact(v.ViewCount)</span>
                     <span class="short-author"><Avatar User="v.Author" Size="28" Link="false" ShowStatus="false" /></span>
@@ -30,20 +32,28 @@
 }
 
 @code {
-    private List<PostDto>? videos;
-    private ElementReference row;
+    /// <summary>One subject's videos; the home page spreads the rows through the feed.</summary>
+    [Parameter] public ShortVideoGroupDto? Group { get; set; }
+    /// <summary>The first row also offers "Create reel".</summary>
+    [Parameter] public bool First { get; set; }
     private bool wired;
 
-    protected override async Task OnInitializedAsync()
+    /// <summary>Loads the rows for the home feed: videos grouped by subject (hashtag).</summary>
+    public static async Task<List<ShortVideoGroupDto>> LoadAsync(ApiClient api)
     {
-        try { videos = (await Api.GetAsync<List<PostDto>>("api/short-videos")).Where(v => v.Media.Any(m => m.Type == MediaType.Video)).ToList(); }
-        catch (Exception) { videos = []; }
+        try
+        {
+            return (await api.GetAsync<List<ShortVideoGroupDto>>("api/short-videos"))
+                .Select(g => g with { Videos = g.Videos.Where(v => v.Media.Any(m => m.Type == MediaType.Video)).ToList() })
+                .Where(g => g.Videos.Count > 0).ToList();
+        }
+        catch (Exception) { return []; }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (wired || videos is not { Count: > 0 }) return;
+        if (wired || Group is null) return;
         wired = true;
-        try { await JS.InvokeVoidAsync("halalbook.previewShorts", row); } catch (JSException) { }
+        try { await JS.InvokeVoidAsync("halalbook.previewShorts"); } catch (JSException) { }
     }
 }

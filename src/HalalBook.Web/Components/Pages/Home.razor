@@ -36,8 +36,8 @@
         {
             var p = posts[i];
             <PostCard @key="p.Id" Post="p" OnShared="s => posts.Insert(0, s)" />
-            @* Like Facebook: a row of short videos after the first couple of posts. *@
-            @if (i == Math.Min(1, posts.Count - 1)) { <ShortVideosStrip /> }
+            @* Like Facebook: rows of short videos on one subject, spread through the feed (after posts 2, 6, 10...). *@
+            @if (ShortsAfter(i) is { } row) { <ShortVideosStrip Group="row" First="row == shorts[0]" /> }
         }
     </div>
 
@@ -61,6 +61,13 @@
 </div>
 
 @code {
+    private List<ShortVideoGroupDto> shorts = [];
+    private ShortVideoGroupDto? ShortsAfter(int i)
+    {
+        var at = i == Math.Min(1, posts.Count - 1) ? 0 : i > 1 && (i - 1) % 4 == 0 ? (i - 1) / 4 : -1;
+        return at >= 0 && at < shorts.Count ? shorts[at] : null;
+    }
+
     private readonly List<PostDto> posts = [];
     private int page = 1;
     private bool loading = true, hasMore;
@@ -83,6 +90,7 @@
     protected override async Task OnInitializedAsync()
     {
         await Load();
+        shorts = await ShortVideosStrip.LoadAsync(Api);
         try { memories = await Api.GetAsync<List<PostDto>>($"api/memories?offset={Clock.OffsetMinutes}"); } catch (Exception) { }
     }
 

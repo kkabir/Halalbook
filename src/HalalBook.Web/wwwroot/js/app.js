@@ -37,8 +37,16 @@ window.halalbook = {
     copy: (text) => navigator.clipboard?.writeText(text),
 
     // Short-video cards on the home page: preview silently while on screen (or while hovered on a computer).
-    previewShorts: (row) => {
-        if (!row) return;
+    reelLoop: (value) => {
+        try {
+            if (value === null || value === undefined) window.__hbLoop = localStorage.getItem('hb.reelLoop') === '1';
+            else { window.__hbLoop = !!value; localStorage.setItem('hb.reelLoop', value ? '1' : '0'); }
+        } catch { window.__hbLoop = !!value; }
+        return window.__hbLoop;
+    },
+    previewShorts: () => document.querySelectorAll('[data-shorts]').forEach((row) => {
+        if (row.__hbWired) return;
+        row.__hbWired = true;
         const vids = [...row.querySelectorAll('video')];
         const io = new IntersectionObserver((entries) => {
             for (const e of entries) {
@@ -52,7 +60,7 @@ window.halalbook = {
             v.closest('a')?.addEventListener('mouseenter', () => v.play().catch(() => { }));
             v.closest('a')?.addEventListener('mouseleave', () => v.pause());
         });
-    },
+    }),
     // ---------- Tasbeeh ----------
     // Adds n counts and returns [today, all time, days in a row]; kept on this device only.
     tasbeehStats: (n) => {
@@ -204,6 +212,13 @@ window.halalbook = {
             const reel = v.closest('.reel');
             const bar = reel?.querySelector('.reel-progress i');
             // A view counts after 2 seconds of watching; the thin bar shows how far through the video you are.
+            // Facebook-style: when a video ends, the next one in the row starts (unless "repeat" is on).
+            v.addEventListener('ended', () => {
+                if (window.__hbLoop) { v.currentTime = 0; v.play().catch(() => { }); return; }
+                const next = reel?.nextElementSibling;
+                if (next?.classList.contains('reel')) next.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                else { dotnet?.invokeMethodAsync('NearEnd').catch(() => { }); v.currentTime = 0; v.play().catch(() => { }); }
+            });
             v.addEventListener('timeupdate', () => {
                 if (bar && v.duration) bar.style.width = `${(v.currentTime / v.duration) * 100}%`;
                 if (!v.__hbCounted && v.currentTime > 2 && dotnet && reel?.dataset.id) { v.__hbCounted = true; dotnet.invokeMethodAsync('Watched', reel.dataset.id).catch(() => { }); }
