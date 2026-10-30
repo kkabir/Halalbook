@@ -711,4 +711,38 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         using var form2 = new MultipartFormDataContent { { new ByteArrayContent(ogg) { Headers = { ContentType = new("audio/ogg") } }, "file", "voice.ogg" } };
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await a.PostAsync("/api/media?purpose=post", form2)).StatusCode);
     }
+
+    [Fact]
+    public async Task Khatm_ClaimFinishAndComplete()
+    {
+        var (a, _) = await SignUpWithId("khatmA");
+        var (b, _) = await SignUpWithId("khatmB");
+        var k = (await (await a.PostAsJsonAsync("/api/khatms", new CreateKhatmRequest("Family khatm", "For our grandmother", null), Json)).Content.ReadFromJsonAsync<KhatmDto>(Json))!;
+        Assert.Equal(30, k.Parts.Count);
+
+        k = (await (await b.PostAsync($"/api/khatms/{k.Id}/juz/1/claim", null)).Content.ReadFromJsonAsync<KhatmDto>(Json))!;
+        Assert.True(k.Parts[0].Mine);
+        Assert.Equal(HttpStatusCode.Conflict, (await a.PostAsync($"/api/khatms/{k.Id}/juz/1/claim", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await a.PostAsync($"/api/khatms/{k.Id}/juz/1/done", null)).StatusCode);
+
+        await b.PostAsync($"/api/khatms/{k.Id}/juz/1/done", null);
+        for (var j = 2; j <= 30; j++) await a.PostAsync($"/api/khatms/{k.Id}/juz/{j}/done", null);
+        k = (await a.GetFromJsonAsync<KhatmDto>($"/api/khatms/{k.Id}", Json))!;
+        Assert.NotNull(k.CompletedAt);
+        Assert.All(k.Parts, p => Assert.True(p.Done));
+    }
+
+    [Fact]
+    public async Task DuaRequest_ShowsOnWallAndNotifiesWhenSomeonePrays()
+    {
+        var (a, _) = await SignUpWithId("duaA");
+        var (b, _) = await SignUpWithId("duaB");
+        var post = (await (await a.PostAsJsonAsync("/api/posts", new CreatePostRequest("Please make dua for my exams", Kind: PostKind.Dua), Json)).Content.ReadFromJsonAsync<PostDto>(Json))!;
+        Assert.Equal(PostKind.Dua, post.Kind);
+        var wall = (await b.GetFromJsonAsync<PagedResult<PostDto>>("/api/posts/duas", Json))!;
+        Assert.Contains(wall.Items, p => p.Id == post.Id);
+        (await b.PutAsJsonAsync($"/api/posts/{post.Id}/reaction", new ReactRequest(ReactionType.Ameen), Json)).EnsureSuccessStatusCode();
+        var notes = await a.GetStringAsync("/api/notifications");
+        Assert.Contains("made dua for you", notes);
+    }
 }

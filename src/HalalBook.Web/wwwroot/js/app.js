@@ -36,6 +36,39 @@ window.halalbook = {
 
     copy: (text) => navigator.clipboard?.writeText(text),
 
+    // ---------- Nearby map (Leaflet + OpenStreetMap, loaded on first use) ----------
+    placesMap: async (el, lat, lng, places) => {
+        if (!window.L) {
+            const css = document.createElement('link');
+            css.rel = 'stylesheet'; css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+            document.head.appendChild(css);
+            await new Promise((ok, fail) => {
+                const s = document.createElement('script');
+                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+                s.onload = ok; s.onerror = fail; document.head.appendChild(s);
+            });
+        }
+        if (!window.__hbMap || window.__hbMap.getContainer() !== el) {
+            window.__hbMap = L.map(el).setView([lat, lng], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(window.__hbMap);
+        }
+        const map = window.__hbMap;
+        if (window.__hbLayer) window.__hbLayer.remove();
+        const icon = e => L.divIcon({ className: 'hb-pin', html: `<span>${e}</span>`, iconSize: [34, 34], iconAnchor: [17, 34] });
+        const layer = L.layerGroup().addTo(map);
+        L.circleMarker([lat, lng], { radius: 8, color: '#fff', weight: 3, fillColor: '#1a73e8', fillOpacity: 1 }).addTo(layer).bindPopup('You are here');
+        const bounds = [[lat, lng]];
+        for (const p of places) {
+            const name = document.createElement('b'); name.textContent = p.name;
+            L.marker([p.lat, p.lng], { icon: icon(p.icon) }).addTo(layer).bindPopup(name);
+            bounds.push([p.lat, p.lng]);
+        }
+        window.__hbLayer = layer;
+        if (bounds.length > 1) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 }); else map.setView([lat, lng], 14);
+        setTimeout(() => map.invalidateSize(), 50);
+    },
+    placesFocus: (lat, lng) => { window.__hbMap?.setView([lat, lng], 17); },
+    scrollPageTop: () => window.scrollTo({ top: 0, behavior: 'smooth' }),
     // ---------- Voice notes ----------
     voiceStart: async () => {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });

@@ -10,7 +10,8 @@ public enum ProfilePostPermission { Friends, Everyone, OnlyMe }
 public enum PrivacyAudience { Everyone, FriendsOfFriends, Friends, OnlyMe }
 public record PrivacySettingsDto(PrivacyAudience WhoCanMessage, PrivacyAudience WhoCanSendFriendRequests,
     PrivacyAudience WhoCanSeeFriendsList, PrivacyAudience WhoCanFindMe, PrivacyAudience WhoCanFollow);
-public enum PostKind { Standard, Reel }
+/// <summary>Dua: a request for the community's prayers; people answer with "I made dua" (the Ameen reaction).</summary>
+public enum PostKind { Standard, Reel, Dua }
 public enum MediaType { Image, Video }
 public enum ReactionType { Like, Love, MashaAllah, SubhanAllah, Ameen, Sad }
 public enum ModerationStatus { Approved, PendingReview, Removed }
@@ -225,6 +226,20 @@ public record DailyVisitsDto(DateOnly Day, int Visitors, int PageViews);
 public record CountDto(string Name, int Count);
 public record VisitorStatsDto(int OnlineNow, int MembersOnline, int Today, int Yesterday, int Last7Days, int Last30Days, int AllTime,
     int PageViewsToday, int PageViews7Days, List<DailyVisitsDto> Daily, List<CountDto> TopPages, List<CountDto> Sources, List<CountDto> Devices);
+/// <summary>Gold and silver prices per gram in a currency, and the two nisab thresholds.</summary>
+public record NisabDto(string Currency, double GoldPerGram, double SilverPerGram, double GoldNisabGrams, double SilverNisabGrams,
+    double GoldNisab, double SilverNisab, DateTime PricesAt, List<string> Currencies);
+
+/// <summary>A masjid or halal place from OpenStreetMap.</summary>
+public record PlaceDto(string Name, string Type, double Latitude, double Longitude, string? Address, string? OpeningHours,
+    string? Phone, string? Website, string? Cuisine, double DistanceKm);
+
+// ---------- Quran khatm together ----------
+public record CreateKhatmRequest(string Title, string? Intention, DateOnly? DueDate);
+public record KhatmPartDto(int Juz, UserSummaryDto? Reader, bool Done, bool Mine);
+public record KhatmDto(Guid Id, string Title, string? Intention, DateOnly? DueDate, UserSummaryDto Creator, DateTime CreatedAt, DateTime? CompletedAt,
+    List<KhatmPartDto> Parts);
+
 public record AdminStatsDto(int NewFeedback, int OpenFeedback, int OpenErrors, int ErrorsLast24h, int Users, int UsersLast7d,
     int Posts, int PostsLast24h, int PendingReview, int OpenReports);
 

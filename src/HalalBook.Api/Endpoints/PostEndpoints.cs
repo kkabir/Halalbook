@@ -42,6 +42,13 @@ public static class PostEndpoints
             return await svc.PageAsync(visible.Where(p => p.Kind == PostKind.Reel), cp.UserId(), Math.Max(1, page ?? 1), 5);
         }).WithTags("Posts").RequireAuthorization();
 
+        // The dua wall: requests for prayers from friends and the wider community, newest first.
+        app.MapGet("/api/posts/duas", async (int? page, ClaimsPrincipal cp, PostService svc) =>
+        {
+            var visible = await svc.VisibleToAsync(cp.UserId());
+            return await svc.PageAsync(visible.Where(p => p.Kind == PostKind.Dua), cp.UserId(), Math.Max(1, page ?? 1), 10);
+        }).WithTags("Posts").RequireAuthorization();
+
         // Public view of a public post, used by share links and link previews (WhatsApp, Facebook...).
         app.MapGet("/api/public/posts/{id:guid}", async (Guid id, AppDbContext db, PostService svc) =>
         {
@@ -218,7 +225,9 @@ public static class PostEndpoints
                 db.Reactions.Add(new Reaction { PostId = id, UserId = me, Type = req.Type });
                 await db.SaveChangesAsync();
                 var meUser = (await db.Users.FindAsync(me))!;
-                await notifier.SendAsync(post.AuthorId, me, NotificationType.Reaction, $"{meUser.DisplayName} reacted {ReactionLabel(req.Type)} to your post.", $"/post/{id}");
+                await notifier.SendAsync(post.AuthorId, me, NotificationType.Reaction, post.Kind == PostKind.Dua
+                    ? $"{meUser.DisplayName} made dua for you 🤲"
+                    : $"{meUser.DisplayName} reacted {ReactionLabel(req.Type)} to your post.", $"/post/{id}");
             }
             else
             {

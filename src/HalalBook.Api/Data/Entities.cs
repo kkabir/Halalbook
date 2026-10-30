@@ -72,6 +72,30 @@ public class Block
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+/// <summary>One complete recitation of the Quran shared by a group: 30 juz, each claimed and read by someone.</summary>
+public class Khatm
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Title { get; set; } = "";
+    /// <summary>Who it's dedicated to or why, such as "For my late father, Abdul Karim".</summary>
+    public string? Intention { get; set; }
+    public DateOnly? DueDate { get; set; }
+    public Guid CreatorId { get; set; }
+    public User Creator { get; set; } = null!;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? CompletedAt { get; set; }
+    public List<KhatmPart> Parts { get; set; } = [];
+}
+
+public class KhatmPart
+{
+    public Guid KhatmId { get; set; }
+    public int Juz { get; set; }
+    public Guid? UserId { get; set; }
+    public DateTime? ClaimedAt { get; set; }
+    public DateTime? DoneAt { get; set; }
+}
+
 /// <summary>One browser's visit on one day (anonymous random ID; no IP address is kept).</summary>
 public class SiteVisit
 {

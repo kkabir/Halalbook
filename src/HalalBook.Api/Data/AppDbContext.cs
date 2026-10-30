@@ -9,6 +9,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
     public DbSet<SiteVisit> SiteVisits => Set<SiteVisit>();
     public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
+    public DbSet<Khatm> Khatms => Set<Khatm>();
     public DbSet<PageStat> PageStats => Set<PageStat>();
     public DbSet<Follow> Follows => Set<Follow>();
     public DbSet<Block> Blocks => Set<Block>();
@@ -44,6 +45,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<Khatm>(e =>
+        {
+            e.Property(x => x.Title).HasMaxLength(120);
+            e.Property(x => x.Intention).HasMaxLength(300);
+            e.HasMany(x => x.Parts).WithOne().HasForeignKey(p => p.KhatmId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Creator).WithMany().HasForeignKey(x => x.CreatorId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<KhatmPart>(e =>
+        {
+            e.HasKey(x => new { x.KhatmId, x.Juz });
+            e.HasIndex(x => x.UserId);
+        });
         b.Entity<MessageReaction>(e =>
         {
             e.HasKey(x => new { x.MessageId, x.UserId });

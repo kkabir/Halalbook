@@ -178,6 +178,14 @@ public static class PlatformEndpoints
         islamic.MapGet("/hijri", (DateOnly? date, int? adjust) => HijriService.ToHijri(date ?? DateOnly.FromDateTime(DateTime.UtcNow), adjust ?? 0));
         islamic.MapGet("/calendar", (int year, int month) => HijriService.Month(year, month));
         islamic.MapGet("/occasions", () => HijriService.Upcoming(DateOnly.FromDateTime(DateTime.UtcNow)));
+        islamic.MapGet("/nearby", async (double lat, double lng, string? kind, int? radius, NearbyPlacesService places, CancellationToken ct) =>
+        {
+            if (lat is < -90 or > 90 || lng is < -180 or > 180) return Results.BadRequest("Invalid coordinates.");
+            return await places.FindAsync(lat, lng, kind ?? "masjid", radius ?? 5000, ct) is { } list
+                ? Results.Ok(list) : Results.Problem("The map service is busy. Please try again in a minute.", statusCode: 503);
+        }).RequireRateLimiting("ai");
+        islamic.MapGet("/nisab", async (string? currency, NisabService nisab, CancellationToken ct) =>
+            await nisab.GetAsync(currency, ct) is { } n ? Results.Ok(n) : Results.Problem("Gold and silver prices are unavailable right now.", statusCode: 503));
         islamic.MapGet("/ayah-of-the-day", async (string? lang, DailyAyahService ayahs, CancellationToken ct) =>
             await ayahs.TodayAsync(lang, ct) is { } a ? Results.Ok(a) : Results.Problem("The verse of the day is unavailable right now.", statusCode: 503));
 

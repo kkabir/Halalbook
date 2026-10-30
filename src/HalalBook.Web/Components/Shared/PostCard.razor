@@ -5,7 +5,8 @@
 
 @if (!deleted)
 {
-    <article class="card post">
+    <article class="card post @(Post.Kind == PostKind.Dua ? "dua-post" : "")">
+        @if (Post.Kind == PostKind.Dua) { <div class="dua-banner">🤲 @T("Dua request") · <span>@T("Please remember them in your prayers")</span></div> }
         <header class="post-head">
             @if (Post.Page is { } pageInfo)
             {
@@ -137,6 +138,16 @@
             </span>
         </div>
 
+        @if (Post.Kind == PostKind.Dua)
+        {
+            var prayed = Post.Reactions.GetValueOrDefault(ReactionType.Ameen);
+            <div class="dua-action">
+                <button class="btn @(Post.MyReaction == ReactionType.Ameen ? "btn-primary" : "btn-gold")" @onclick="MadeDua">
+                    🤲 @(Post.MyReaction == ReactionType.Ameen ? T("You made dua") : T("I made dua"))
+                </button>
+                <span class="subtle">@(prayed == 0 ? T("Be the first to make dua") : $"{prayed} {T(prayed == 1 ? "person made dua" : "people made dua")}")</span>
+            </div>
+        }
         <div class="post-actions">
             <div class="react-wrap" @onmouseleave="() => pickerOpen = false">
                 @if (pickerOpen)
@@ -242,6 +253,13 @@
         Post = Post with { MyReaction = type, Reactions = counts };
         try { await Api.PutAsync($"api/posts/{Post.Id}/reaction", new ReactRequest(type)); }
         catch (Exception ex) { Post = previous; Toasts.Error(ex); }
+    }
+
+    private async Task MadeDua()
+    {
+        if (Post.MyReaction == ReactionType.Ameen) { await QuickReact(); return; }
+        await React(ReactionType.Ameen);
+        Toasts.Show(T("JazakAllahu khayran. They'll know you prayed for them 🤲"));
     }
 
     private async Task QuickReact()

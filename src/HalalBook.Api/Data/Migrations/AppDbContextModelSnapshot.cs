@@ -591,6 +591,64 @@ namespace HalalBook.Api.Data.Migrations
                     b.ToTable("Hashtags");
                 });
 
+            modelBuilder.Entity("HalalBook.Api.Data.Khatm", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Intention")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatorId");
+
+                    b.ToTable("Khatms");
+                });
+
+            modelBuilder.Entity("HalalBook.Api.Data.KhatmPart", b =>
+                {
+                    b.Property<Guid>("KhatmId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Juz")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DoneAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("KhatmId", "Juz");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("KhatmPart");
+                });
+
             modelBuilder.Entity("HalalBook.Api.Data.LiveSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1498,6 +1556,26 @@ namespace HalalBook.Api.Data.Migrations
                     b.Navigation("Requester");
                 });
 
+            modelBuilder.Entity("HalalBook.Api.Data.Khatm", b =>
+                {
+                    b.HasOne("HalalBook.Api.Data.User", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Creator");
+                });
+
+            modelBuilder.Entity("HalalBook.Api.Data.KhatmPart", b =>
+                {
+                    b.HasOne("HalalBook.Api.Data.Khatm", null)
+                        .WithMany("Parts")
+                        .HasForeignKey("KhatmId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("HalalBook.Api.Data.LiveSession", b =>
                 {
                     b.HasOne("HalalBook.Api.Data.Group", "Group")
@@ -1659,6 +1737,11 @@ namespace HalalBook.Api.Data.Migrations
             modelBuilder.Entity("HalalBook.Api.Data.FriendList", b =>
                 {
                     b.Navigation("Members");
+                });
+
+            modelBuilder.Entity("HalalBook.Api.Data.Khatm", b =>
+                {
+                    b.Navigation("Parts");
                 });
 
             modelBuilder.Entity("HalalBook.Api.Data.Message", b =>
