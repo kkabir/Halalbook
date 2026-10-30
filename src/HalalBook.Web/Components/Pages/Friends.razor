@@ -1,0 +1,83 @@
+@page "/friends"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+
+<PageTitle>Friends · HalalBook</PageTitle>
+
+<div class="page-hero"><h1>Friends</h1><p>“The believers are but brothers.” (Al-Hujurat 49:10)</p></div>
+
+@if (requests.Any(r => r.To.Id == Session.User?.Id))
+{
+    <h2>Friend requests</h2>
+    <div class="grid-cards">
+        @foreach (var r in requests.Where(r => r.To.Id == Session.User?.Id))
+        {
+            <div class="tile tile-arch" style="align-items:center;text-align:center;padding:1.5rem 1rem 1rem">
+                <Avatar User="r.From" Size="88" Ring="true" />
+                <a class="mt" href="/u/@r.From.UserName"><b>@r.From.DisplayName</b></a>
+                <span class="subtle">@Ui.TimeAgo(r.CreatedAt)</span>
+                <div class="row mt"><button class="btn btn-primary btn-sm" @onclick="() => Accept(r)">Confirm</button><button class="btn btn-sm" @onclick="() => Remove(r.From.Id)">Delete</button></div>
+            </div>
+        }
+    </div>
+}
+
+<h2 class="mt">People you may know</h2>
+<div class="grid-cards">
+    @foreach (var s in suggestions)
+    {
+        <div class="tile tile-arch" style="align-items:center;text-align:center;padding:1.5rem 1rem 1rem">
+            <Avatar User="s" Size="88" />
+            <a class="mt" href="/u/@s.UserName"><b>@s.DisplayName</b></a>
+            @if (sent.Contains(s.Id)) { <span class="subtle mt">Request sent ✓</span> }
+            else { <button class="btn btn-primary btn-sm mt" @onclick="() => Add(s)">+ Add friend</button> }
+        </div>
+    }
+</div>
+@if (suggestions.Count == 0) { <p class="muted">No suggestions right now.</p> }
+
+<h2 class="mt">Your friends (@friends.Count)</h2>
+<div class="grid-cards">
+    @foreach (var f in friends)
+    {
+        <a class="tile" href="/u/@f.UserName" style="align-items:center;text-align:center;padding:1rem"><Avatar User="f" Size="64" Link="false" /><b class="mt">@f.DisplayName</b><span class="subtle">@@@f.UserName</span></a>
+    }
+</div>
+
+@code {
+    private List<FriendRequestDto> requests = [];
+    private List<UserSummaryDto> suggestions = [], friends = [];
+    private readonly HashSet<Guid> sent = [];
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        try
+        {
+            requests = await Api.GetAsync<List<FriendRequestDto>>("api/friends/requests");
+            suggestions = await Api.GetAsync<List<UserSummaryDto>>("api/users/suggestions");
+            friends = await Api.GetAsync<List<UserSummaryDto>>("api/friends");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Accept(FriendRequestDto r)
+    {
+        try { await Api.PostAsync($"api/friends/{r.From.Id}/accept"); Toasts.Show($"You and {r.From.DisplayName} are now friends"); await Load(); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Remove(Guid id)
+    {
+        try { await Api.DeleteAsync($"api/friends/{id}"); await Load(); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Add(UserSummaryDto s)
+    {
+        try { await Api.PostAsync($"api/friends/{s.Id}"); sent.Add(s.Id); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

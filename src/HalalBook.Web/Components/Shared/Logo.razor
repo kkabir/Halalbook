@@ -1,0 +1,41 @@
+﻿@* HalalBook mark: mihrab arch, crescent and eight-point star, open book. *@
+<a href="/" class="brand" aria-label="HalalBook home">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="HalalBook">
+  <defs>
+    <linearGradient id="hbArch" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17a07e"/>
+      <stop offset="1" stop-color="#0a3a2c"/>
+    </linearGradient>
+    <linearGradient id="hbGold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f3dc8a"/>
+      <stop offset=".55" stop-color="#d4af37"/>
+      <stop offset="1" stop-color="#a8811c"/>
+    </linearGradient>
+    <mask id="hbCrescent">
+      <rect width="64" height="64" fill="#fff"/>
+      <circle cx="35.2" cy="24.4" r="6.1" fill="#000"/>
+    </mask>
+  </defs>
+  <!-- Mihrab arch -->
+  <path d="M10 61V31C10 18.5 20 9 32 3c12 6 22 15.5 22 28v30z" fill="url(#hbArch)"/>
+  <path d="M16.5 61V31.5c0-9 6.4-16 15.5-21 9.1 5 15.5 12 15.5 21V61" fill="none" stroke="url(#hbGold)" stroke-width="1.6"/>
+  <!-- Crescent and eight-point star -->
+  <circle cx="32" cy="26" r="7" fill="url(#hbGold)" mask="url(#hbCrescent)"/>
+  <g transform="translate(37.4 23.4)" fill="url(#hbGold)">
+    <rect x="-2.3" y="-2.3" width="4.6" height="4.6"/>
+    <rect x="-2.3" y="-2.3" width="4.6" height="4.6" transform="rotate(45)"/>
+  </g>
+  <!-- Open book -->
+  <path d="M18.5 45.5c4.6-2.6 9.3-2.4 13.5.6 4.2-3 8.9-3.2 13.5-.6v10.3c-4.6-2.3-9.3-2.1-13.5.8-4.2-2.9-8.9-3.1-13.5-.8z" fill="#fbf8f1"/>
+  <path d="M32 46.1v10.5" stroke="#c9a227" stroke-width="1.2"/>
+  <path d="M21.5 48.6c2.8-1 5.4-.9 7.8.3M21.5 51.6c2.8-1 5.4-.9 7.8.3M42.5 48.6c-2.8-1-5.4-.9-7.8.3M42.5 51.6c-2.8-1-5.4-.9-7.8.3" stroke="#13866a" stroke-width=".9" fill="none" stroke-linecap="round"/>
+</svg>
+    @if (ShowName)
+    {
+        <span class="brand-name">Halal<b>Book</b></span>
+    }
+</a>
+
+@code {
+    [Parameter] public bool ShowName { get; set; } = true;
+}

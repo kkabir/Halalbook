@@ -1,0 +1,308 @@
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+@inject NavigationManager Nav
+
+@if (!deleted)
+{
+    <article class="card post">
+        <header class="post-head">
+            @if (Post.Page is { } pageInfo)
+            {
+                <a class="avatar" href="/pages/@pageInfo.Handle" style="--size:44px">@if (pageInfo.AvatarUrl is { } pageAvatar) { <img src="@pageAvatar" alt="" /> } else { @Ui.Initials(pageInfo.Name) }</a>
+            }
+            else
+            {
+                <Avatar User="Post.Author" Size="44" />
+            }
+            <div class="grow">
+                <div>
+                    @if (Post.Page is { } pg)
+                    {
+                        <a class="post-author" href="/pages/@pg.Handle">@pg.Name</a>
+                    }
+                    else
+                    {
+                        <a class="post-author" href="/u/@Post.Author.UserName">@Post.Author.DisplayName</a>
+                        @if (Post.Author.IsVerified) { <span class="verified" title="Verified">✦</span> }
+                    }
+                    @if (Post.Feeling is { Length: > 0 }) { <span class="muted"> is feeling @Post.Feeling</span> }
+                    @if (Post.Group is { } g && ShowGroup) { <span class="muted"> ▸ </span><a class="post-author" href="/groups/@g.Id">@g.Name</a> }
+                </div>
+                <div class="post-meta">
+                    <a href="/post/@Post.Id" class="subtle">@Ui.TimeAgo(Post.CreatedAt)</a>
+                    @if (Post.EditedAt is not null) { <span>· edited</span> }
+                    <span>· @VisibilityIcon(Post.Visibility)</span>
+                    @if (Post.Location is { Length: > 0 }) { <span>· 📍 @Post.Location</span> }
+                </div>
+            </div>
+            <div class="menu">
+                <button class="icon-btn" @onclick="() => menuOpen = !menuOpen" aria-label="Post options">⋯</button>
+                @if (menuOpen)
+                {
+                    <div class="menu-pop" @onclick="() => menuOpen = false">
+                        <button @onclick="ToggleBookmark">@(Post.IsBookmarked ? "🔖 Remove from saved" : "🔖 Save post")</button>
+                        <button @onclick="Translate">🌐 Translate to English (AI)</button>
+                        <button @onclick="CopyLink">🔗 Copy link</button>
+                        @if (IsMine)
+                        {
+                            <button @onclick="StartEdit">✏️ Edit post</button>
+                            <button @onclick="Delete">🗑️ Delete post</button>
+                        }
+                        else
+                        {
+                            <button @onclick="() => reporting = true">🚩 Report post</button>
+                        }
+                    </div>
+                }
+            </div>
+        </header>
+
+        @if (Post.Moderation == ModerationStatus.PendingReview)
+        {
+            <div class="pending-banner">⏳ Only you can see this post while a moderator reviews it.</div>
+        }
+
+        @if (editing)
+        {
+            <div style="padding:0 1.1rem .75rem">
+                <textarea class="input" @bind="editText" rows="4"></textarea>
+                <div class="row mt" style="justify-content:flex-end">
+                    <button class="btn btn-ghost btn-sm" @onclick="() => editing = false">Cancel</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SaveEdit">Save</button>
+                </div>
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(Post.Content))
+        {
+            <div class="post-body @(Post.Content.Length < 90 && Post.Media.Count == 0 && Post.SharedPost is null ? "big" : "")">@RichText(Post.Content)</div>
+        }
+
+        @if (translation is not null)
+        {
+            <div style="padding:0 1.1rem .5rem"><div class="ai-summary"><span class="ai-tag">✨ Translated</span><br />@translation</div></div>
+        }
+
+        <MediaGrid Media="Post.Media" />
+
+        @if (Post.SharedPost is { } shared)
+        {
+            <div class="shared-post">
+                <div class="post-head"><Avatar User="shared.Author" Size="32" /><div><a class="post-author" href="/u/@shared.Author.UserName">@shared.Author.DisplayName</a><div class="post-meta"><a class="subtle" href="/post/@shared.Id">@Ui.TimeAgo(shared.CreatedAt)</a></div></div></div>
+                @if (!string.IsNullOrWhiteSpace(shared.Content)) { <div class="post-body">@RichText(shared.Content)</div> }
+                <MediaGrid Media="shared.Media" />
+            </div>
+        }
+
+        <div class="post-stats">
+            <span class="reaction-stack">
+                @foreach (var r in Post.Reactions.Where(r => r.Value > 0).OrderByDescending(r => r.Value).Take(3))
+                {
+                    <span class="e" title="@Ui.Label(r.Key)">@Ui.Emoji(r.Key)</span>
+                }
+                @if (Post.TotalReactions > 0) { <span style="margin-left:.6rem">@Post.TotalReactions</span> }
+            </span>
+            <span>
+                @if (Post.CommentCount > 0) { <a href="javascript:void(0)" class="subtle" @onclick="ToggleComments">@Post.CommentCount comments</a> }
+                @if (Post.ShareCount > 0) { <span> · @Post.ShareCount shares</span> }
+            </span>
+        </div>
+
+        <div class="post-actions">
+            <div class="react-wrap" @onmouseleave="() => pickerOpen = false">
+                @if (pickerOpen)
+                {
+                    <div class="react-picker">
+                        @foreach (var t in Enum.GetValues<ReactionType>())
+                        {
+                            <button title="@Ui.Label(t)" @onclick="() => React(t)">@Ui.Emoji(t)<span>@Ui.Label(t)</span></button>
+                        }
+                    </div>
+                }
+                <button class="action @(Post.MyReaction is not null ? "on" : "")" @onclick="QuickReact" @onmouseenter="() => pickerOpen = true">
+                    @if (Post.MyReaction is { } mine) { <span>@Ui.Emoji(mine)</span> <span>@Ui.Label(mine)</span> }
+                    else { <span>👍</span> <span>Like</span> }
+                </button>
+            </div>
+            <button class="action" @onclick="ToggleComments">💬 <span>Comment</span></button>
+            <button class="action" @onclick="() => sharing = true">↗ <span>Share</span></button>
+            <button class="action @(Post.IsBookmarked ? "on" : "")" @onclick="ToggleBookmark">🔖 <span>@(Post.IsBookmarked ? "Saved" : "Save")</span></button>
+        </div>
+
+        @if (showComments)
+        {
+            <CommentsSection PostId="Post.Id" CommentCount="Post.CommentCount" OnCountChanged="c => Post = Post with { CommentCount = c }" />
+        }
+    </article>
+}
+
+@if (sharing)
+{
+    <div class="overlay" @onclick="() => sharing = false">
+        <div class="modal" @onclick:stopPropagation>
+            <h2>Share post</h2>
+            <textarea class="input" placeholder="Say something about this…" @bind="shareText"></textarea>
+            <div class="row mt spread">
+                <button class="btn btn-outline" @onclick="CopyLink">🔗 Copy link</button>
+                <div class="row">
+                    <button class="btn btn-ghost" @onclick="() => sharing = false">Cancel</button>
+                    <button class="btn btn-primary" @onclick="Share">Share now</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (reporting)
+{
+    <div class="overlay" @onclick="() => reporting = false">
+        <div class="modal" @onclick:stopPropagation>
+            <h2>Report post</h2>
+            <p class="muted">Help keep HalalBook a safe, halal space. What's wrong with this post?</p>
+            <div class="row wrap">
+                @foreach (var reason in new[] { "Inappropriate or immodest content", "Hate or harassment", "Misinformation about Islam", "Spam or scam", "Violence", "Something else" })
+                {
+                    <button class="chip @(reportReason == reason ? "active" : "")" @onclick="() => reportReason = reason">@reason</button>
+                }
+            </div>
+            <div class="row mt" style="justify-content:flex-end">
+                <button class="btn btn-ghost" @onclick="() => reporting = false">Cancel</button>
+                <button class="btn btn-danger" disabled="@(reportReason is null)" @onclick="Report">Send report</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public PostDto Post { get; set; } = default!;
+    [Parameter] public bool ShowGroup { get; set; } = true;
+    [Parameter] public bool OpenComments { get; set; }
+    [Parameter] public EventCallback<PostDto> OnShared { get; set; }
+
+    private bool menuOpen, pickerOpen, showComments, sharing, reporting, editing, deleted;
+    private string? shareText, reportReason, translation, editText;
+
+    private bool IsMine => Post.Author.Id == Session.User?.Id;
+
+    protected override void OnInitialized() => showComments = OpenComments;
+
+    private static string VisibilityIcon(Visibility v) => v switch { Visibility.Friends => "👥 Friends", Visibility.OnlyMe => "🔒 Only me", _ => "🌐 Public" };
+
+    private RenderFragment RichText(string text) => builder =>
+    {
+        int seq = 0;
+        foreach (var token in System.Text.RegularExpressions.Regex.Split(text, @"((?<!\w)[#@][\w\.]{2,50})"))
+        {
+            if (token.Length > 1 && token[0] == '#')
+            {
+                builder.OpenElement(seq++, "a"); builder.AddAttribute(seq++, "href", $"/hashtag/{token[1..]}"); builder.AddAttribute(seq++, "class", "tag");
+                builder.AddContent(seq++, token); builder.CloseElement();
+            }
+            else if (token.Length > 1 && token[0] == '@')
+            {
+                builder.OpenElement(seq++, "a"); builder.AddAttribute(seq++, "href", $"/u/{token[1..].TrimEnd('.')}"); builder.AddAttribute(seq++, "class", "tag");
+                builder.AddContent(seq++, token); builder.CloseElement();
+            }
+            else builder.AddContent(seq++, token);
+        }
+    };
+
+    private async Task React(ReactionType type)
+    {
+        pickerOpen = false;
+        var previous = Post;
+        var counts = new Dictionary<ReactionType, int>(Post.Reactions);
+        if (Post.MyReaction is { } old) counts[old] = Math.Max(0, counts.GetValueOrDefault(old) - 1);
+        counts[type] = counts.GetValueOrDefault(type) + 1;
+        Post = Post with { MyReaction = type, Reactions = counts };
+        try { await Api.PutAsync($"api/posts/{Post.Id}/reaction", new ReactRequest(type)); }
+        catch (Exception ex) { Post = previous; Toasts.Error(ex); }
+    }
+
+    private async Task QuickReact()
+    {
+        if (Post.MyReaction is { } old)
+        {
+            var counts = new Dictionary<ReactionType, int>(Post.Reactions);
+            counts[old] = Math.Max(0, counts.GetValueOrDefault(old) - 1);
+            Post = Post with { MyReaction = null, Reactions = counts };
+            try { await Api.DeleteAsync($"api/posts/{Post.Id}/reaction"); } catch (Exception ex) { Toasts.Error(ex); }
+        }
+        else await React(ReactionType.Like);
+    }
+
+    private void ToggleComments() => showComments = !showComments;
+
+    private async Task ToggleBookmark()
+    {
+        try
+        {
+            if (Post.IsBookmarked) await Api.DeleteAsync($"api/posts/{Post.Id}/bookmark");
+            else await Api.PostAsync($"api/posts/{Post.Id}/bookmark");
+            Post = Post with { IsBookmarked = !Post.IsBookmarked };
+            Toasts.Show(Post.IsBookmarked ? "Saved to your bookmarks" : "Removed from bookmarks");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Share()
+    {
+        try
+        {
+            var created = await Api.PostAsync<PostDto>("api/posts", new CreatePostRequest(shareText ?? "", SharedPostId: Post.SharedPost?.Id ?? Post.Id));
+            sharing = false; shareText = null;
+            Post = Post with { ShareCount = Post.ShareCount + 1 };
+            Toasts.Show("Shared to your timeline");
+            await OnShared.InvokeAsync(created);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private async Task CopyLink()
+    {
+        await JS.InvokeVoidAsync("halalbook.copy", Nav.ToAbsoluteUri($"/post/{Post.Id}").ToString());
+        sharing = false;
+        Toasts.Show("Link copied");
+    }
+
+    private async Task Translate()
+    {
+        try
+        {
+            var res = await Api.PostAsync<AiTextResponse>("api/ai/translate", new AiTranslateRequest(Post.Content, "English"));
+            translation = res.UsedAi ? res.Text : "AI translation isn't configured on the server yet.";
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private void StartEdit() { editText = Post.Content; editing = true; }
+
+    private async Task SaveEdit()
+    {
+        try
+        {
+            Post = await Api.PutAsync<PostDto>($"api/posts/{Post.Id}", new UpdatePostRequest(editText ?? "", Post.Visibility));
+            editing = false;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Delete()
+    {
+        try { await Api.DeleteAsync($"api/posts/{Post.Id}"); deleted = true; Toasts.Show("Post deleted"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Report()
+    {
+        try
+        {
+            await Api.PostAsync("api/reports", new ReportRequest(ReportTarget.Post, Post.Id, reportReason!));
+            reporting = false;
+            Toasts.Show("Thank you. Our moderators will review it.");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

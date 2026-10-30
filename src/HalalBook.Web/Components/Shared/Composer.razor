@@ -1,0 +1,192 @@
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+
+<div class="card composer">
+    <div class="row" style="align-items:flex-start">
+        <Avatar User="Me" Size="44" />
+        <div class="grow">
+            <textarea placeholder="@Placeholder" @bind="text" @bind:event="oninput" rows="@(string.IsNullOrEmpty(text) ? 2 : 4)"></textarea>
+        </div>
+    </div>
+
+    @if (media.Count > 0)
+    {
+        <div class="media-grid n@(Math.Min(media.Count, 4))">
+            @foreach (var m in media)
+            {
+                <div class="thumb">
+                    @if (m.Type == MediaType.Video) { <video src="@(m.Url)#t=0.1" muted playsinline controls preload="metadata"></video> } else { <img src="@m.Url" alt="" /> }
+                    <button class="icon-btn x" @onclick="() => media.Remove(m)" aria-label="Remove">✕</button>
+                </div>
+            }
+        </div>
+    }
+
+    @if (uploading)
+    {
+        <div class="subtle">Uploading @uploadIndex of @uploadTotal… please keep this page open.</div>
+        <div class="upload-progress"><span style="width:@(uploadTotal == 0 ? 0 : (uploadIndex - 1) * 100 / uploadTotal + 100 / uploadTotal / 2)%"></span></div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(text) && text.Length > 3)
+    {
+        <div class="ai-bar">
+            <span class="ai-tag">✨ Noor AI</span>
+            <button class="chip" disabled="@aiBusy" @onclick='() => Compose("polish")'>Polish</button>
+            <button class="chip" disabled="@aiBusy" @onclick='() => Compose("shorter")'>Shorter</button>
+            <button class="chip" disabled="@aiBusy" @onclick='() => Compose("warmer")'>Warmer</button>
+            <button class="chip" disabled="@aiBusy" @onclick='() => Compose("arabic-greeting")'>Add a dua</button>
+            <button class="chip" disabled="@aiBusy" @onclick='() => Compose("caption")'>Caption</button>
+            @if (aiBusy) { <span class="subtle">thinking…</span> }
+        </div>
+    }
+
+    @if (suggestedTags.Count > 0)
+    {
+        <div class="row wrap" style="gap:.35rem;margin-bottom:.5rem">
+            <span class="subtle">Suggested:</span>
+            @foreach (var t in suggestedTags)
+            {
+                <button class="chip gold" @onclick="() => AddTag(t)">#@t</button>
+            }
+        </div>
+    }
+
+    @if (moderationNote is not null) { <div class="pending-banner" style="margin:0 0 .5rem">@moderationNote</div> }
+
+    @if (showExtras)
+    {
+        <div class="row wrap" style="margin-bottom:.5rem">
+            <input class="input grow" placeholder="Feeling… (grateful, blessed, motivated)" @bind="feeling" />
+            <input class="input grow" placeholder="📍 Location" @bind="location" />
+        </div>
+    }
+
+    <hr class="divider" />
+    <div class="row spread wrap">
+        <div class="composer-tools">
+            @if (ReelMode)
+            {
+                <label class="btn btn-gold btn-sm" title="Vertical video">
+                    🎬 @(media.Count == 0 ? "Choose video" : "Replace video")
+                    <InputFile OnChange="Upload" accept="video/*" style="display:none" />
+                </label>
+            }
+            else
+            {
+                <label class="btn btn-ghost btn-sm" title="Photos or videos (up to 10)">
+                    🖼️ Photo/Video
+                    <InputFile OnChange="Upload" multiple accept="image/*,video/*" style="display:none" />
+                </label>
+            }
+            <button class="btn btn-ghost btn-sm" @onclick="() => showExtras = !showExtras">😊 Feeling</button>
+            @if (AllowReel && !ReelMode)
+            {
+                <label class="btn btn-ghost btn-sm" style="gap:.3rem"><input type="checkbox" @bind="asReel" /> 🎬 Reel</label>
+            }
+        </div>
+        <div class="row">
+            @if (GroupId is null && PageId is null)
+            {
+                <select class="input" style="width:auto;padding:.4rem .7rem" @bind="visibility">
+                    <option value="@Visibility.Public">🌐 Public</option>
+                    <option value="@Visibility.Friends">👥 Friends</option>
+                    <option value="@Visibility.OnlyMe">🔒 Only me</option>
+                </select>
+            }
+            <button class="btn btn-primary" disabled="@(!CanPost)" @onclick="Submit">@(posting ? "Posting…" : "Post")</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid? GroupId { get; set; }
+    [Parameter] public Guid? PageId { get; set; }
+    [Parameter] public bool AllowReel { get; set; } = true;
+    /// <summary>TikTok-style flow: a single vertical video posted as a reel.</summary>
+    [Parameter] public bool ReelMode { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Share something beautiful…";
+    [Parameter] public EventCallback<PostDto> OnPosted { get; set; }
+
+    private string? text, feeling, location, moderationNote;
+    private readonly List<MediaDto> media = [];
+    private List<string> suggestedTags = [];
+    private Visibility visibility = Visibility.Public;
+    private bool uploading, posting, aiBusy, showExtras, asReel;
+    private int uploadIndex, uploadTotal;
+    private const long MaxImage = 10_000_000, MaxVideo = 100_000_000;
+
+    private UserSummaryDto? Me => Session.User is { } u ? new(u.Id, u.UserName, u.DisplayName, u.AvatarUrl, u.IsVerified) : null;
+    private bool CanPost => !posting && !uploading && (ReelMode ? media.Count == 1 : (!string.IsNullOrWhiteSpace(text) || media.Count > 0));
+
+    private async Task Upload(InputFileChangeEventArgs e)
+    {
+        var files = e.GetMultipleFiles(20).Take(ReelMode ? 1 : 10 - media.Count).ToList();
+        if (e.FileCount > files.Count && !ReelMode) Toasts.Show("A post can hold up to 10 photos or videos.", true);
+        if (ReelMode) media.Clear();
+        uploading = true; uploadTotal = files.Count; uploadIndex = 0;
+        try
+        {
+            foreach (var file in files)
+            {
+                uploadIndex++;
+                StateHasChanged();
+                var isVideo = file.ContentType.StartsWith("video");
+                if (ReelMode && !isVideo) { Toasts.Show("Reels need a video.", true); continue; }
+                if (file.Size > (isVideo ? MaxVideo : MaxImage))
+                {
+                    Toasts.Show($"{file.Name} is too large (max {(isVideo ? "100" : "10")} MB).", true);
+                    continue;
+                }
+                var up = await Api.UploadAsync(file, isVideo ? MaxVideo : MaxImage);
+                media.Add(new MediaDto(up.Url, up.Type));
+            }
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { uploading = false; }
+    }
+
+    private async Task Compose(string mode)
+    {
+        aiBusy = true;
+        try
+        {
+            var res = await Api.PostAsync<AiComposeResponse>("api/ai/compose", new AiComposeRequest(text!, mode));
+            if (res.UsedAi) text = res.Text;
+            else Toasts.Show("AI writing help needs a Claude API key on the server. Hashtags still work.");
+            var existing = HalalBookTags(text);
+            suggestedTags = res.SuggestedHashtags.Where(t => !existing.Contains(t)).ToList();
+            moderationNote = !res.Moderation.Allowed ? "⚠️ " + string.Join(" ", res.Moderation.Reasons)
+                : res.Moderation.NeedsReview ? "⏳ This may need a moderator's review before others see it." : null;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { aiBusy = false; }
+    }
+
+    private static HashSet<string> HalalBookTags(string? s) =>
+        System.Text.RegularExpressions.Regex.Matches(s ?? "", @"#(\w+)").Select(m => m.Groups[1].Value.ToLowerInvariant()).ToHashSet();
+
+    private void AddTag(string tag)
+    {
+        text = (text ?? "").TrimEnd() + " #" + tag;
+        suggestedTags.Remove(tag);
+    }
+
+    private async Task Submit()
+    {
+        posting = true;
+        try
+        {
+            var kind = (ReelMode || asReel) && media.FirstOrDefault()?.Type == MediaType.Video ? PostKind.Reel : PostKind.Standard;
+            var post = await Api.PostAsync<PostDto>("api/posts",
+                new CreatePostRequest(text ?? "", visibility, media.ToList(), GroupId, PageId, null, kind, feeling, location));
+            text = feeling = location = moderationNote = null;
+            media.Clear(); suggestedTags = []; showExtras = asReel = false;
+            Toasts.Show(post.Moderation == ModerationStatus.PendingReview ? "Posted. A moderator will review it shortly." : "Posted, alhamdulillah!");
+            await OnPosted.InvokeAsync(post);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { posting = false; }
+    }
+}

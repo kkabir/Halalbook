@@ -1,0 +1,63 @@
+@page "/calendar"
+@inject ApiClient Api
+@inject ClientClock Clock
+
+<PageTitle>Hijri calendar · HalalBook</PageTitle>
+
+<div class="page-hero row spread wrap">
+    <div>
+        @if (todayHijri is not null) { <div class="ar">@todayHijri.Day @todayHijri.MonthNameArabic @todayHijri.Year</div> }
+        <h1>Hijri calendar</h1>
+        <p>@todayHijri?.Formatted · Umm al-Qura calculation. Local moon sighting may differ by a day.</p>
+    </div>
+    <div class="row">
+        <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.4)" @onclick="() => Move(-1)">‹</button>
+        <b style="min-width:150px;text-align:center">@first.ToString("MMMM yyyy")</b>
+        <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.4)" @onclick="() => Move(1)">›</button>
+    </div>
+</div>
+
+<div class="cal">
+    @foreach (var d in new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" }) { <div class="dow">@d</div> }
+    @for (int i = 0; i < (int)first.DayOfWeek; i++) { <div></div> }
+    @foreach (var day in days)
+    {
+        <div class="day @(day.Date == today ? "today" : "") @(day.Occasions.Count > 0 ? "occasion" : "")">
+            <span class="g">@day.Date.Day</span>
+            <span class="h">@day.Hijri.Day @(day.Hijri.Day == 1 || day.Date.Day == 1 ? day.Hijri.MonthName : "")</span>
+            @foreach (var o in day.Occasions) { <span class="o">@o</span> }
+        </div>
+    }
+</div>
+
+<div class="card mt">
+    <div class="card-title">Upcoming Islamic dates</div>
+    @foreach (var o in upcoming)
+    {
+        <div class="list-item">
+            <div class="date-badge"><div class="m">@o.GregorianDate.ToString("MMM")</div><div class="d">@o.GregorianDate.Day</div></div>
+            <div class="grow"><b>@o.Name</b><div class="subtle">@o.Hijri.Formatted · @o.GregorianDate.ToString("dddd, MMMM d, yyyy")</div></div>
+            <span class="chip gold">in @((o.GregorianDate.DayNumber - today.DayNumber)) days</span>
+        </div>
+    }
+</div>
+
+@code {
+    private DateOnly today, first;
+    private List<CalendarDayDto> days = [];
+    private List<IslamicOccasionDto> upcoming = [];
+    private HijriDateDto? todayHijri;
+
+    protected override async Task OnInitializedAsync()
+    {
+        today = DateOnly.FromDateTime(Clock.Now);
+        first = new DateOnly(today.Year, today.Month, 1);
+        todayHijri = await Api.GetAsync<HijriDateDto>($"api/islamic/hijri?date={today:yyyy-MM-dd}");
+        upcoming = await Api.GetAsync<List<IslamicOccasionDto>>("api/islamic/occasions");
+        await Load();
+    }
+
+    private async Task Move(int delta) { first = first.AddMonths(delta); await Load(); }
+
+    private async Task Load() => days = await Api.GetAsync<List<CalendarDayDto>>($"api/islamic/calendar?year={first.Year}&month={first.Month}");
+}

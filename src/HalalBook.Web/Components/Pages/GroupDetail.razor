@@ -1,0 +1,129 @@
+@page "/groups/{Id:guid}"
+@inject ApiClient Api
+@inject Toasts Toasts
+
+<PageTitle>@(group?.Name ?? "Group") · HalalBook</PageTitle>
+
+@if (group is null) { <div class="spinner"></div> }
+else
+{
+    <div class="card" style="padding:0;overflow:hidden">
+        <div class="cover" style="height:240px">@if (group.CoverUrl is { } c) { <img src="@c" alt="" /> }</div>
+        <div style="padding:1rem 1.25rem" class="row spread wrap">
+            <div>
+                <h1 style="margin:0">@group.Name</h1>
+                <div class="muted">@(group.Privacy == GroupPrivacy.Private ? "🔒 Private group" : "🌐 Public group") · @group.MemberCount members · @group.Category</div>
+            </div>
+            <div class="row">
+                @if (group.IsMember)
+                {
+                    <button class="btn btn-outline" @onclick="Leave">✓ Joined</button>
+                }
+                else if (group.IsPending)
+                {
+                    <button class="btn btn-outline" disabled>Request sent</button>
+                }
+                else
+                {
+                    <button class="btn btn-primary" @onclick="Join">+ Join group</button>
+                }
+            </div>
+        </div>
+        <div class="tabs" style="padding:0 1rem;margin:0">
+            <button class="@(tab == "posts" ? "active" : "")" @onclick='() => tab = "posts"'>Discussion</button>
+            <button class="@(tab == "members" ? "active" : "")" @onclick="ShowMembers">Members</button>
+            <button class="@(tab == "events" ? "active" : "")" @onclick="ShowEvents">Events</button>
+            <button class="@(tab == "about" ? "active" : "")" @onclick='() => tab = "about"'>About</button>
+        </div>
+    </div>
+
+    <div class="feed-column mt">
+        @switch (tab)
+        {
+            case "about":
+                <div class="card"><div class="card-title">About this group</div><p style="white-space:pre-wrap">@group.Description</p><p class="subtle">Created @group.CreatedAt.ToString("MMMM d, yyyy")</p></div>
+                break;
+            case "members":
+                <div class="card">
+                    @if (group.IsAdmin && pending.Count > 0)
+                    {
+                        <div class="card-title">Requests to join</div>
+                        @foreach (var m in pending)
+                        {
+                            <div class="list-item"><Avatar User="m.User" /><b class="grow">@m.User.DisplayName</b><button class="btn btn-primary btn-sm" @onclick="() => Approve(m.User.Id)">Approve</button></div>
+                        }
+                        <hr class="ornament" />
+                    }
+                    <div class="card-title">Members</div>
+                    @foreach (var m in members) { <div class="list-item"><Avatar User="m.User" /><a class="grow" href="/u/@m.User.UserName"><b>@m.User.DisplayName</b></a>@if (m.Role == MemberRole.Admin) { <span class="chip gold">Admin</span> }</div> }
+                </div>
+                break;
+            case "events":
+                @foreach (var e in events) { <EventRow Event="e" /> }
+                @if (events.Count == 0) { <div class="card"><Empty Title="No upcoming events" /></div> }
+                break;
+            default:
+                @if (group.IsMember) { <Composer GroupId="group.Id" AllowReel="false" Placeholder="Share with the group…" OnPosted="p => list?.Prepend(p)" /> <div class="mt"></div> }
+                @if (group.Privacy == GroupPrivacy.Private && !group.IsMember)
+                {
+                    <div class="card"><Empty Title="This group is private" Text="Join to see the discussion." /></div>
+                }
+                else
+                {
+                    <PostList @ref="list" Url="@($"api/groups/{Id}/posts")" ShowGroup="false" EmptyTitle="No posts yet" EmptyText="Be the first to start a discussion." />
+                }
+                break;
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private GroupDto? group;
+    private PostList? list;
+    private string tab = "posts";
+    private List<MemberDto> members = [], pending = [];
+    private List<EventDto> events = [];
+
+    public record MemberDto(UserSummaryDto User, MemberRole Role, DateTime JoinedAt);
+
+    protected override async Task OnParametersSetAsync() { tab = "posts"; await Load(); }
+
+    private async Task Load()
+    {
+        try { group = await Api.GetAsync<GroupDto>($"api/groups/{Id}"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Join()
+    {
+        try { await Api.PostAsync($"api/groups/{Id}/join"); await Load(); Toasts.Show(group!.IsMember ? "Welcome to the group!" : "Request sent to the admins"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Leave()
+    {
+        try { await Api.DeleteAsync($"api/groups/{Id}/join"); await Load(); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task ShowMembers()
+    {
+        tab = "members";
+        members = await Api.GetAsync<List<MemberDto>>($"api/groups/{Id}/members");
+        if (group!.IsAdmin) pending = await Api.GetAsync<List<MemberDto>>($"api/groups/{Id}/members?pending=true");
+    }
+
+    private async Task ShowEvents()
+    {
+        tab = "events";
+        events = await Api.GetAsync<List<EventDto>>($"api/events?groupId={Id}");
+    }
+
+    private async Task Approve(Guid userId)
+    {
+        await Api.PostAsync($"api/groups/{Id}/members/{userId}/approve");
+        await Load();
+        await ShowMembers();
+    }
+}

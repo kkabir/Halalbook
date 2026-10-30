@@ -1,0 +1,143 @@
+using System.Text;
+using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
+using HalalBook.Api.Data;
+using HalalBook.Api.Endpoints;
+using HalalBook.Api.Hubs;
+using HalalBook.Api.Services;
+using HalalBook.Shared;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+
+var builder = WebApplication.CreateBuilder(args);
+var config = builder.Configuration;
+
+// ---------- Database: SQLite locally, SQL Server in production (SmarterASP.net) ----------
+builder.Services.AddDbContext<AppDbContext>(o =>
+{
+    var provider = config["Database:Provider"] ?? "Sqlite";
+    var cs = config.GetConnectionString("Default");
+    if (provider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase)) o.UseSqlServer(cs, s => s.EnableRetryOnFailure());
+    else o.UseSqlite(cs ?? "Data Source=halalbook.db");
+});
+
+// ---------- Options & services ----------
+var jwt = config.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
+if (string.IsNullOrWhiteSpace(jwt.Key) || jwt.Key.Length < 32)
+    throw new InvalidOperationException("Jwt:Key must be set to a random string of at least 32 characters (user-secrets, appsettings or environment).");
+builder.Services.AddSingleton(jwt);
+builder.Services.AddSingleton(config.GetSection("Ai").Get<AiOptions>() ?? new AiOptions());
+builder.Services.AddSingleton(config.GetSection("Moderation").Get<ModerationOptions>() ?? new ModerationOptions());
+builder.Services.AddSingleton<ContentModerator>();
+builder.Services.AddSingleton<TokenService>();
+builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+builder.Services.AddScoped<PostService>();
+builder.Services.AddScoped<Notifier>();
+builder.Services.AddHttpClient<AiService>(c => c.Timeout = TimeSpan.FromSeconds(60));
+
+builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddSignalR().AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = 110_000_000);
+builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = 110_000_000);
+builder.Services.AddOpenApi();
+builder.Services.AddProblemDetails();
+
+// ---------- Auth ----------
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(o =>
+    {
+        o.MapInboundClaims = false;
+        o.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidIssuer = jwt.Issuer,
+            ValidAudience = jwt.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Key)),
+            NameClaimType = System.Security.Claims.ClaimTypes.Name,
+            RoleClaimType = System.Security.Claims.ClaimTypes.Role,
+        };
+        // SignalR sends the token in the query string for WebSockets.
+        o.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = ctx =>
+            {
+                var token = ctx.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(token) && ctx.HttpContext.Request.Path.StartsWithSegments("/hubs")) ctx.Token = token;
+                return Task.CompletedTask;
+            },
+        };
+    });
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("moderator", p => p.RequireRole(nameof(UserRole.Moderator), nameof(UserRole.Admin)));
+builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, NameIdentifierUserIdProvider>();
+
+// ---------- CORS (halalbook.app + local dev) ----------
+var origins = config.GetSection("Cors:Origins").Get<string[]>() ?? ["https://halalbook.app", "https://www.halalbook.app"];
+builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
+
+// ---------- Rate limiting for AI calls ----------
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.AddPolicy("ai", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.User.Identity?.Name ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "anon",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) }));
+});
+
+var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    // SQL Server (production) evolves through EF migrations; local SQLite is created directly.
+    if (db.Database.IsSqlServer()) await db.Database.MigrateAsync();
+    else await db.Database.EnsureCreatedAsync();
+    if (app.Environment.IsDevelopment() && config.GetValue<bool>("Seed:Enabled"))
+        await SeedData.RunAsync(db, scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>(), config["Seed:Password"] ?? "");
+}
+
+app.UseForwardedHeaders(new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto });
+app.UseExceptionHandler();
+if (!app.Environment.IsDevelopment()) app.UseHsts();
+app.UseHttpsRedirection();
+// Uploaded photos and videos. File names are random GUIDs, so they can be cached forever; range requests let videos seek.
+var uploadsRoot = Path.Combine(app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot"), "uploads");
+Directory.CreateDirectory(uploadsRoot);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsRoot),
+    RequestPath = "/uploads",
+    OnPrepareResponse = ctx =>
+    {
+        ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+        ctx.Context.Response.Headers.XContentTypeOptions = "nosniff";
+        ctx.Context.Response.Headers.AccessControlAllowOrigin = "*";
+    },
+});
+app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseRateLimiter();
+
+app.MapOpenApi();
+app.MapGet("/", () => Results.Ok(new { name = "HalalBook API", status = "ok", docs = "/openapi/v1.json" })).ExcludeFromDescription();
+app.MapGet("/health", () => Results.Ok("healthy")).ExcludeFromDescription();
+app.MapUserEndpoints();
+app.MapPostEndpoints();
+app.MapCommunityEndpoints();
+app.MapMessagingEndpoints();
+app.MapPlatformEndpoints();
+app.MapHub<RealtimeHub>("/hubs/realtime");
+
+app.Run();
+
+public partial class Program;
+
+internal sealed class NameIdentifierUserIdProvider : Microsoft.AspNetCore.SignalR.IUserIdProvider
+{
+    public string? GetUserId(Microsoft.AspNetCore.SignalR.HubConnectionContext connection) =>
+        connection.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+}

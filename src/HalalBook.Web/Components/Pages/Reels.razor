@@ -1,0 +1,136 @@
+@page "/reels"
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<PageTitle>Reels · HalalBook</PageTitle>
+
+<div class="feed-column reels-page">
+    <div class="reel-create row">
+        <button class="btn btn-ghost btn-sm" @onclick="ToggleMute">@(muted ? "🔇 Sound off" : "🔊 Sound on")</button>
+        <button class="btn btn-gold btn-sm" @onclick="() => creating = true">🎬 Create reel</button>
+    </div>
+
+    @if (loading) { <div class="spinner"></div> }
+    else if (reels.Count == 0)
+    {
+        <div class="card mt"><Empty Title="No reels yet" Text="Short, beneficial vertical videos live here. Be the first to share one!"><button class="btn btn-primary" @onclick="() => creating = true">🎬 Create a reel</button></Empty></div>
+    }
+    else
+    {
+        <div class="reels" @ref="container">
+            @foreach (var r in reels)
+            {
+                <div class="reel" @key="r.Id">
+                    <video src="@r.Media[0].Url" loop playsinline muted preload="metadata" @onclick="() => TogglePlay(r.Id)" @ref="videoRefs[r.Id]"></video>
+                    <div class="reel-side">
+                        <div><button class="@(r.MyReaction is not null ? "on" : "")" @onclick="() => React(r)" title="MashaAllah">✨</button><small>@r.TotalReactions</small></div>
+                        <div><a href="/post/@r.Id" title="Comments">💬</a><small>@r.CommentCount</small></div>
+                        <div><button class="@(r.IsBookmarked ? "on" : "")" @onclick="() => Save(r)" title="Save">🔖</button></div>
+                        <div><button @onclick="() => Copy(r)" title="Share">↗</button><small>@r.ShareCount</small></div>
+                    </div>
+                    <div class="info">
+                        <div class="row"><Avatar User="r.Author" Size="38" Ring="true" /><a href="/u/@r.Author.UserName" style="color:#fff;font-weight:700">@r.Author.DisplayName</a></div>
+                        @if (!string.IsNullOrWhiteSpace(r.Content)) { <p style="margin:.5rem 0 0">@r.Content</p> }
+                    </div>
+                </div>
+            }
+            @if (hasMore) { <div class="center" style="padding:1rem"><button class="btn btn-outline" @onclick="More">Load more reels</button></div> }
+        </div>
+    }
+</div>
+
+@if (creating)
+{
+    <div class="overlay" @onclick="() => creating = false">
+        <div class="modal" style="width:min(640px,100%)" @onclick:stopPropagation>
+            <h2>Create a reel</h2>
+            <p class="subtle">Upload a vertical video (up to 100 MB). Keep it halal, short and beneficial.</p>
+            <Composer ReelMode="true" Placeholder="Write a caption… #reminder" OnPosted="Posted" />
+        </div>
+    </div>
+}
+
+@code {
+    private readonly List<PostDto> reels = [];
+    private readonly Dictionary<Guid, ElementReference> videoRefs = [];
+    private ElementReference container;
+    private int page = 1;
+    private bool loading = true, hasMore, creating, muted = true, observe;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (observe && reels.Count > 0) { observe = false; await JS.InvokeVoidAsync("halalbook.observeReels", container); }
+    }
+
+    private async Task Load()
+    {
+        try
+        {
+            var res = await Api.GetAsync<PagedResult<PostDto>>($"api/reels?page={page}");
+            reels.AddRange(res.Items.Where(r => r.Media.Count > 0 && reels.All(x => x.Id != r.Id)));
+            hasMore = res.HasMore;
+            observe = true;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { loading = false; }
+    }
+
+    private async Task More() { page++; await Load(); }
+
+    private async Task ToggleMute() => muted = await JS.InvokeAsync<bool>("halalbook.toggleMute", container);
+
+    private async Task TogglePlay(Guid id)
+    {
+        if (videoRefs.TryGetValue(id, out var v)) await JS.InvokeVoidAsync("halalbook.togglePlay", v);
+    }
+
+    private void Replace(PostDto old, PostDto updated) => reels[reels.IndexOf(old)] = updated;
+
+    private async Task React(PostDto r)
+    {
+        try
+        {
+            var counts = new Dictionary<ReactionType, int>(r.Reactions);
+            if (r.MyReaction is { } mine)
+            {
+                await Api.DeleteAsync($"api/posts/{r.Id}/reaction");
+                counts[mine] = Math.Max(0, counts.GetValueOrDefault(mine) - 1);
+                Replace(r, r with { MyReaction = null, Reactions = counts });
+            }
+            else
+            {
+                await Api.PutAsync($"api/posts/{r.Id}/reaction", new ReactRequest(ReactionType.MashaAllah));
+                counts[ReactionType.MashaAllah] = counts.GetValueOrDefault(ReactionType.MashaAllah) + 1;
+                Replace(r, r with { MyReaction = ReactionType.MashaAllah, Reactions = counts });
+            }
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Save(PostDto r)
+    {
+        try
+        {
+            if (r.IsBookmarked) await Api.DeleteAsync($"api/posts/{r.Id}/bookmark");
+            else await Api.PostAsync($"api/posts/{r.Id}/bookmark");
+            Replace(r, r with { IsBookmarked = !r.IsBookmarked });
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Copy(PostDto r)
+    {
+        await JS.InvokeVoidAsync("halalbook.copy", Nav.ToAbsoluteUri($"/post/{r.Id}").ToString());
+        Toasts.Show("Link copied");
+    }
+
+    private void Posted(PostDto p)
+    {
+        creating = false;
+        if (p.Kind == PostKind.Reel) { reels.Insert(0, p); observe = true; }
+    }
+}

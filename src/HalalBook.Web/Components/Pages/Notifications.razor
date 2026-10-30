@@ -1,0 +1,63 @@
+@page "/notifications"
+@implements IDisposable
+@inject ApiClient Api
+@inject Realtime Realtime
+@inject NavigationManager Nav
+
+<PageTitle>Notifications · HalalBook</PageTitle>
+
+<div class="feed-column">
+    <div class="row spread"><h1>Notifications</h1><button class="btn btn-ghost btn-sm" @onclick="ReadAll">Mark all as read</button></div>
+    <div class="card" style="padding:.5rem">
+        @if (items is null) { <div class="spinner"></div> }
+        else if (items.Count == 0) { <Empty Title="No notifications yet" Text="When people react, comment or connect with you, you'll see it here." /> }
+        else
+        {
+            @foreach (var n in items)
+            {
+                <a class="chat-item" style="border-radius:12px;@(n.IsRead ? "" : "background:var(--emerald-50)")" href="@(n.Link ?? "#")" @onclick="() => Read(n)">
+                    @if (n.Actor is not null) { <Avatar User="n.Actor" Size="48" Link="false" /> } else { <span class="avatar" style="--size:48px">🛡️</span> }
+                    <div class="grow">
+                        <div>@n.Message</div>
+                        <div class="subtle">@Icon(n.Type) @Ui.TimeAgo(n.CreatedAt)</div>
+                    </div>
+                    @if (!n.IsRead) { <span class="unread"></span> }
+                </a>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private List<NotificationDto>? items;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Realtime.NotificationReceived += OnNew;
+        items = await Api.GetAsync<List<NotificationDto>>("api/notifications");
+    }
+
+    private void OnNew(NotificationDto n) => InvokeAsync(() => { items?.Insert(0, n); StateHasChanged(); });
+
+    private static string Icon(NotificationType t) => t switch
+    {
+        NotificationType.FriendRequest or NotificationType.FriendAccepted => "🤝",
+        NotificationType.Reaction => "✨", NotificationType.Comment => "💬", NotificationType.Mention => "@",
+        NotificationType.Share => "↗", NotificationType.Follow => "➕", NotificationType.Moderation => "🛡️", _ => "🔔",
+    };
+
+    private async Task Read(NotificationDto n)
+    {
+        if (!n.IsRead) await Api.PostAsync($"api/notifications/{n.Id}/read");
+        await Realtime.RefreshCountsAsync();
+    }
+
+    private async Task ReadAll()
+    {
+        await Api.PostAsync("api/notifications/read-all");
+        items = items?.Select(n => n with { IsRead = true }).ToList();
+        Realtime.ClearNotifications();
+    }
+
+    public void Dispose() => Realtime.NotificationReceived -= OnNew;
+}

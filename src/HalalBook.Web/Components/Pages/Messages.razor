@@ -1,0 +1,158 @@
+@page "/messages"
+@page "/messages/{Id:guid}"
+@implements IDisposable
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Realtime Realtime
+@inject ClientClock Clock
+@inject Toasts Toasts
+@inject IJSRuntime JS
+
+<PageTitle>Messages · HalalBook</PageTitle>
+
+<div class="chat @(Id is null ? "" : "open")">
+    <div class="chat-list">
+        <div style="padding:1rem 1rem .5rem"><h2 style="margin:0">Messages</h2></div>
+        @foreach (var c in conversations)
+        {
+            <a class="chat-item @(c.Id == Id ? "active" : "")" href="/messages/@c.Id">
+                @if (c.Participants.FirstOrDefault() is { } other) { <Avatar User="other" Size="48" Link="false" /> } else { <span class="avatar" style="--size:48px">📝</span> }
+                <div class="grow">
+                    <div style="font-weight:@(c.UnreadCount > 0 ? 800 : 600)">@c.Title</div>
+                    <div class="subtle" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@(c.LastMessage is { } m ? (m.Sender.Id == Session.User?.Id ? "You: " : "") + m.Content : "Say salaam 👋")</div>
+                </div>
+                @if (c.UnreadCount > 0) { <span class="unread"></span> }
+            </a>
+        }
+        @if (conversations.Count == 0) { <Empty Title="No conversations yet" Text="Visit a profile and tap Message to start one." /> }
+    </div>
+
+    <div class="chat-main">
+        @if (current is null)
+        {
+            <div style="display:grid;place-items:center;height:100%"><Empty Title="Select a conversation" Text="Your messages are private between you and the people you talk to." /></div>
+        }
+        else
+        {
+            <div class="chat-head">
+                <a href="/messages" class="icon-btn" title="Back">←</a>
+                @if (current.Participants.FirstOrDefault() is { } o) { <Avatar User="o" Size="40" /> }
+                <div class="grow"><b>@current.Title</b>@if (typing) { <div class="subtle">typing…</div> }</div>
+            </div>
+            <div class="chat-body" @ref="body">
+                @foreach (var m in messages)
+                {
+                    var mine = m.Sender.Id == Session.User?.Id;
+                    <div class="bubble @(mine ? "mine" : "")">@if (current.IsGroup && !mine) {<b style="font-size:.78rem;display:block">@m.Sender.DisplayName</b>}@if (m.MediaUrl is { } url) {<img src="@url" alt="" style="border-radius:12px;max-height:260px" />}<span>@m.Content</span><time>@Clock.Local(m.SentAt).ToString("h:mm tt")</time></div>
+                }
+            </div>
+            <div class="chat-input">
+                <label class="icon-btn" title="Send a photo">🖼️<InputFile OnChange="SendPhoto" accept="image/*" style="display:none" /></label>
+                <input class="input" placeholder="Write a message…" @bind="text" @bind:event="oninput" @onkeydown="OnKey" style="border-radius:999px" />
+                <button class="btn btn-primary" disabled="@string.IsNullOrWhiteSpace(text)" @onclick="Send">Send</button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    private List<ConversationDto> conversations = [];
+    private List<MessageDto> messages = [];
+    private ConversationDto? current;
+    private string? text;
+    private bool typing, scroll;
+    private ElementReference body;
+    private DateTime lastTypingSent;
+    private System.Threading.Timer? typingTimer;
+
+    protected override void OnInitialized()
+    {
+        Realtime.MessageReceived += OnMessage;
+        Realtime.Typing += OnTyping;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            conversations = await Api.GetAsync<List<ConversationDto>>("api/conversations");
+            current = conversations.FirstOrDefault(c => c.Id == Id);
+            if (current is not null)
+            {
+                messages = await Api.GetAsync<List<MessageDto>>($"api/conversations/{current.Id}/messages");
+                scroll = true;
+                await Realtime.RefreshCountsAsync();
+            }
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (scroll) { scroll = false; await JS.InvokeVoidAsync("halalbook.scrollToBottom", body); }
+    }
+
+    private void OnMessage(MessageDto m) => InvokeAsync(async () =>
+    {
+        if (m.ConversationId == current?.Id)
+        {
+            if (messages.All(x => x.Id != m.Id)) messages.Add(m);
+            typing = false; scroll = true;
+            if (m.Sender.Id != Session.User?.Id) { await Api.PostAsync($"api/conversations/{m.ConversationId}/read"); await Realtime.RefreshCountsAsync(); }
+        }
+        conversations = await Api.GetAsync<List<ConversationDto>>("api/conversations");
+        StateHasChanged();
+    });
+
+    private void OnTyping(Guid conversationId, Guid userId) => InvokeAsync(() =>
+    {
+        if (conversationId != current?.Id) return;
+        typing = true;
+        typingTimer?.Dispose();
+        typingTimer = new System.Threading.Timer(_ => InvokeAsync(() => { typing = false; StateHasChanged(); }), null, 3000, Timeout.Infinite);
+        StateHasChanged();
+    });
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey) { await Send(); return; }
+        if (current is not null && DateTime.UtcNow - lastTypingSent > TimeSpan.FromSeconds(2))
+        {
+            lastTypingSent = DateTime.UtcNow;
+            await Realtime.SendTypingAsync(current.Id);
+        }
+    }
+
+    private async Task Send()
+    {
+        if (string.IsNullOrWhiteSpace(text) || current is null) return;
+        var content = text; text = null;
+        try
+        {
+            var m = await Api.PostAsync<MessageDto>($"api/conversations/{current.Id}/messages", new SendMessageRequest(content, null));
+            if (messages.All(x => x.Id != m.Id)) messages.Add(m);
+            scroll = true;
+        }
+        catch (Exception ex) { text = content; Toasts.Error(ex); }
+    }
+
+    private async Task SendPhoto(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var up = await Api.UploadAsync(e.File, 10_000_000);
+            var m = await Api.PostAsync<MessageDto>($"api/conversations/{current!.Id}/messages", new SendMessageRequest("", up.Url));
+            if (messages.All(x => x.Id != m.Id)) messages.Add(m);
+            scroll = true;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    public void Dispose()
+    {
+        Realtime.MessageReceived -= OnMessage;
+        Realtime.Typing -= OnTyping;
+        typingTimer?.Dispose();
+    }
+}

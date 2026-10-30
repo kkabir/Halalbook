@@ -1,0 +1,127 @@
+@page "/events"
+@page "/events/{Id:guid}"
+@inject ApiClient Api
+@inject Toasts Toasts
+@inject NavigationManager Nav
+@inject ClientClock Clock
+
+<PageTitle>Events · HalalBook</PageTitle>
+
+@if (Id is null)
+{
+    <div class="page-hero row spread wrap">
+        <div><h1>Events</h1><p>Iftars, halaqas, fundraisers and family days near you.</p></div>
+        <button class="btn btn-gold" @onclick="() => creating = true">+ Create event</button>
+    </div>
+    <div class="tabs">
+        <button class="@(mine ? "" : "active")" @onclick="() => SetMine(false)">Upcoming</button>
+        <button class="@(mine ? "active" : "")" @onclick="() => SetMine(true)">Your events</button>
+    </div>
+    <div class="feed-column">
+        @foreach (var e in events) { <EventRow Event="e" /> }
+        @if (events.Count == 0) { <div class="card"><Empty Title="No upcoming events" Text="Host one for your community, inshaAllah." /></div> }
+    </div>
+}
+else if (ev is not null)
+{
+    var local = Clock.Local(ev.StartsAt);
+    <div class="card" style="padding:0;overflow:hidden">
+        <div class="cover" style="height:260px">@if (ev.CoverUrl is { } c) { <img src="@c" alt="" /> }</div>
+        <div style="padding:1.25rem" class="row wrap" >
+            <div class="date-badge" style="width:70px"><div class="m">@local.ToString("MMM")</div><div class="d" style="font-size:1.8rem">@local.Day</div></div>
+            <div class="grow">
+                <div class="subtle" style="color:var(--gold-600);font-weight:700">@local.ToString("dddd, MMMM d · h:mm tt")@(ev.EndsAt is { } end ? " – " + Clock.Local(end).ToString("h:mm tt") : "")</div>
+                <h1 style="margin:.2rem 0">@ev.Title</h1>
+                <div class="muted">Hosted by <a href="/u/@ev.Host.UserName">@ev.Host.DisplayName</a>@if (ev.Group is { } g) { <span> in <a href="/groups/@g.Id">@g.Name</a></span> }</div>
+            </div>
+            <div class="row">
+                @foreach (var s in Enum.GetValues<RsvpStatus>())
+                {
+                    <button class="btn @(ev.MyRsvp == s ? "btn-primary" : "btn-outline")" @onclick="() => Rsvp(s)">@(s switch { RsvpStatus.Going => "✓ Going", RsvpStatus.Interested => "★ Interested", _ => "Can't go" })</button>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="feed-column mt">
+        <div class="card stack">
+            <div class="card-title">Details</div>
+            <div>👥 @ev.GoingCount going · @ev.InterestedCount interested</div>
+            @if (ev.Location is { Length: > 0 }) { <div>📍 @ev.Location</div> }
+            @if (ev.OnlineUrl is { Length: > 0 }) { <div>💻 <a href="@ev.OnlineUrl" target="_blank" rel="noopener nofollow">Join online</a></div> }
+            @if (ev.Category is { Length: > 0 }) { <div>🏷️ @ev.Category</div> }
+            <p style="white-space:pre-wrap">@ev.Description</p>
+        </div>
+    </div>
+}
+else { <div class="spinner"></div> }
+
+@if (creating)
+{
+    <div class="overlay" @onclick="() => creating = false">
+        <div class="modal stack" @onclick:stopPropagation>
+            <h2>Create an event</h2>
+            <label class="field">Title<input class="input" @bind="title" /></label>
+            <div class="row wrap">
+                <label class="field grow">Starts<input class="input" type="datetime-local" @bind="starts" /></label>
+                <label class="field grow">Ends<input class="input" type="datetime-local" @bind="ends" /></label>
+            </div>
+            <label class="field">Location<input class="input" @bind="location" placeholder="Masjid, hall or address" /></label>
+            <label class="field">Online link<input class="input" @bind="online" placeholder="https://" /></label>
+            <label class="field">Description<textarea class="input" @bind="description" rows="3"></textarea></label>
+            <label class="btn btn-outline">🖼️ @(cover is null ? "Add cover image" : "Change cover")<InputFile OnChange="Upload" accept="image/*" style="display:none" /></label>
+            <div class="row" style="justify-content:flex-end">
+                <button class="btn btn-ghost" @onclick="() => creating = false">Cancel</button>
+                <button class="btn btn-primary" @onclick="Create">Create event</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    private List<EventDto> events = [];
+    private EventDto? ev;
+    private bool mine, creating;
+    private string? title, location, online, description, cover;
+    private DateTime starts = DateTime.UtcNow.Date.AddDays(7).AddHours(18);
+    private DateTime? ends;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        ev = null;
+        if (Id is Guid id) ev = await Api.GetAsync<EventDto>($"api/events/{id}");
+        else await Load();
+    }
+
+    private async Task SetMine(bool m) { mine = m; await Load(); }
+
+    private async Task Load()
+    {
+        try { events = await Api.GetAsync<List<EventDto>>(mine ? "api/events?filter=mine" : "api/events"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Rsvp(RsvpStatus s)
+    {
+        try { await Api.PutAsync($"api/events/{ev!.Id}/rsvp", new RsvpRequest(s)); ev = await Api.GetAsync<EventDto>($"api/events/{ev.Id}"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Upload(InputFileChangeEventArgs e)
+    {
+        try { cover = (await Api.UploadAsync(e.File, 10_000_000)).Url; } catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Create()
+    {
+        try
+        {
+            var created = await Api.PostAsync<EventDto>("api/events", new CreateEventRequest(title ?? "", description,
+                Clock.ToUtc(starts), ends is { } e ? Clock.ToUtc(e) : null,
+                location, online, cover, "Community", null, null));
+            creating = false;
+            Nav.NavigateTo($"/events/{created.Id}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

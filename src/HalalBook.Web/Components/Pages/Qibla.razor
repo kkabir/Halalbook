@@ -1,0 +1,82 @@
+@page "/qibla"
+@implements IAsyncDisposable
+@inject ApiClient Api
+@inject AuthSession Session
+@inject IJSRuntime JS
+
+<PageTitle>Qibla · HalalBook</PageTitle>
+
+<div class="page-hero">
+    <div class="ar">فَوَلِّ وَجْهَكَ شَطْرَ الْمَسْجِدِ الْحَرَامِ</div>
+    <h1>Qibla finder</h1>
+    <p>The direction of the Ka'bah from where you are.</p>
+</div>
+
+<div class="feed-column">
+    <div class="card center">
+        @if (qibla is null)
+        {
+            @if (error is not null) { <Empty Title="We need your location" Text="@error"><a class="btn btn-primary" href="/settings">Set location</a></Empty> }
+            else { <div class="spinner"></div> }
+        }
+        else
+        {
+            <div class="compass" style="transform:rotate(@(Inv(-(heading ?? 0)))deg)">
+                <span class="n">N</span>
+                <div class="needle" style="transform:rotate(@(Inv(qibla.Bearing + 180))deg)"><div class="kaaba"></div></div>
+                <div class="hub"></div>
+            </div>
+            <h2 style="font-family:var(--font-display);font-size:2.2rem;margin:.5rem 0 0">@qibla.Bearing.ToString("0.0")°</h2>
+            <p class="muted">from true north · @qibla.DistanceKm.ToString("N0") km to Makkah</p>
+            @if (heading is null)
+            {
+                <p class="subtle">On a phone, tap below and hold your device flat to rotate the compass live.</p>
+                <button class="btn btn-gold" @onclick="StartCompass">🧭 Use device compass</button>
+            }
+            else { <p class="subtle">Turn until the Ka'bah marker points straight up.</p> }
+        }
+    </div>
+</div>
+
+@code {
+    private QiblaDto? qibla;
+    private double? heading;
+    private string? error;
+    private DotNetObjectReference<Qibla>? self;
+
+    private static string Inv(double d) => d.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    protected override async Task OnInitializedAsync()
+    {
+        double? lat = Session.User?.Latitude, lng = Session.User?.Longitude;
+        if (lat is null || lng is null)
+        {
+            var c = await JS.InvokeAsync<PrayerWidget.Coords?>("halalbook.getLocation");
+            lat = c?.Latitude; lng = c?.Longitude;
+        }
+        if (lat is null || lng is null) { error = "Allow location access in your browser, or set your coordinates in Settings."; return; }
+        qibla = await Api.GetAsync<QiblaDto>(FormattableString.Invariant($"api/islamic/qibla?lat={lat}&lng={lng}"));
+    }
+
+    private async Task StartCompass()
+    {
+        self = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("halalbook.watchHeading", self);
+    }
+
+    [JSInvokable]
+    public void OnHeading(double h)
+    {
+        heading = Math.Round(h);
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (self is not null)
+        {
+            try { await JS.InvokeVoidAsync("halalbook.stopHeading"); } catch (JSDisconnectedException) { }
+            self.Dispose();
+        }
+    }
+}

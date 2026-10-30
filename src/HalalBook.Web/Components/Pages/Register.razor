@@ -1,0 +1,45 @@
+@page "/register"
+@layout AuthLayout
+@inject ApiClient Api
+@inject AuthSession Session
+@inject NavigationManager Nav
+
+<PageTitle>Join · HalalBook</PageTitle>
+
+<div class="card">
+    <div class="center" style="margin-bottom:1.25rem">
+        <div class="arabic" style="font-size:1.6rem;color:var(--gold-600)">أَهْلًا وَسَهْلًا</div>
+        <h1 style="font-family:var(--font-display);font-weight:700">Join HalalBook</h1>
+        <p class="muted">It's free, and always will be.</p>
+    </div>
+    <form class="stack" @onsubmit="Submit">
+        <label class="field">Your name<input class="input" @bind="name" required /></label>
+        <label class="field">Username<input class="input" @bind="userName" autocomplete="username" required placeholder="letters, numbers, dots or _" /></label>
+        <label class="field">Email<input class="input" type="email" @bind="email" autocomplete="email" required /></label>
+        <label class="field">Password<input class="input" type="password" @bind="password" autocomplete="new-password" required minlength="8" /></label>
+        <label class="row" style="font-size:.85rem;color:var(--text-2)"><input type="checkbox" @bind="agree" /> I'll keep my posts kind, modest and halal.</label>
+        @if (error is not null) { <div class="error">@error</div> }
+        <button class="btn btn-gold btn-block" type="submit" disabled="@(busy || !agree)">@(busy ? "Creating account…" : "Create account")</button>
+    </form>
+    <hr class="ornament" style="margin:1.25rem 0" />
+    <p class="center muted">Already have an account? <a href="/login">Sign in</a></p>
+</div>
+
+@code {
+    private string? name, userName, email, password, error;
+    private bool busy, agree;
+
+    private async Task Submit()
+    {
+        busy = true; error = null;
+        try
+        {
+            var auth = await Api.PostAsync<AuthResponse>("api/auth/register", new RegisterRequest(userName ?? "", email ?? "", password ?? "", name ?? ""));
+            await Session.SignInAsync(auth);
+            Nav.NavigateTo("/");
+        }
+        catch (ApiException ex) { error = ex.Message; }
+        catch (Exception) { error = "We couldn't reach HalalBook. Please try again."; }
+        finally { busy = false; }
+    }
+}

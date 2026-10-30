@@ -1,0 +1,100 @@
+@page "/settings"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+@inject IJSRuntime JS
+
+<PageTitle>Settings · HalalBook</PageTitle>
+
+<div class="feed-column">
+    <div class="page-hero"><h1>Settings</h1><p>Your profile, location and prayer preferences.</p></div>
+
+    <div class="card stack">
+        <div class="card-title">Profile</div>
+        <div class="row">
+            <span class="avatar ring" style="--size:84px">@if (avatar is { } a) { <img src="@a" alt="" /> } else { @Ui.Initials(name ?? "?") }</span>
+            <div class="stack" style="gap:.4rem">
+                <label class="btn btn-outline btn-sm">Change photo<InputFile OnChange="e => Upload(e, true)" accept="image/*" style="display:none" /></label>
+                <label class="btn btn-outline btn-sm">Change cover<InputFile OnChange="e => Upload(e, false)" accept="image/*" style="display:none" /></label>
+            </div>
+            @if (cover is { } cv) { <img src="@cv" alt="" style="height:84px;border-radius:12px;margin-left:auto" /> }
+        </div>
+        <label class="field">Name<input class="input" @bind="name" /></label>
+        <label class="field">Bio<textarea class="input" @bind="bio" rows="3"></textarea></label>
+        <div class="row wrap">
+            <label class="field grow">Location<input class="input" @bind="location" placeholder="City, Country" /></label>
+            <label class="field grow">Website<input class="input" @bind="website" placeholder="https://" /></label>
+        </div>
+    </div>
+
+    <div class="card stack">
+        <div class="card-title">Prayer times</div>
+        <div class="row wrap">
+            <label class="field grow">Calculation method
+                <select class="input" @bind="method">
+                    @foreach (var m in methods) { <option value="@m.Key">@m.Name</option> }
+                </select>
+            </label>
+            <label class="field grow">Asr
+                <select class="input" @bind="asr">
+                    <option value="Shafi">Standard (Shafi'i, Maliki, Hanbali)</option>
+                    <option value="Hanafi">Hanafi</option>
+                </select>
+            </label>
+        </div>
+        <div class="row wrap">
+            <label class="field grow">Latitude<input class="input" type="number" step="any" @bind="lat" /></label>
+            <label class="field grow">Longitude<input class="input" type="number" step="any" @bind="lng" /></label>
+            <button class="btn btn-outline" style="align-self:flex-end" @onclick="Locate">📍 Use my location</button>
+        </div>
+    </div>
+
+    <div class="row mt" style="justify-content:flex-end">
+        <button class="btn btn-primary" disabled="@busy" @onclick="Save">Save changes</button>
+    </div>
+</div>
+
+@code {
+    private string? name, bio, location, website, avatar, cover, method, asr;
+    private double? lat, lng;
+    private bool busy;
+    private List<PrayerMethodDto> methods = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var u = Session.User!;
+        (name, bio, location, website, avatar, cover, method, asr, lat, lng) =
+            (u.DisplayName, u.Bio, u.Location, u.Website, u.AvatarUrl, u.CoverUrl, u.PrayerMethod, u.AsrSchool, u.Latitude, u.Longitude);
+        try { methods = await Api.GetAsync<List<PrayerMethodDto>>("api/islamic/methods"); } catch (Exception) { }
+    }
+
+    private async Task Upload(InputFileChangeEventArgs e, bool isAvatar)
+    {
+        try
+        {
+            var r = await Api.UploadAsync(e.File, 10_000_000);
+            if (isAvatar) avatar = r.Url; else cover = r.Url;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Locate()
+    {
+        var c = await JS.InvokeAsync<PrayerWidget.Coords?>("halalbook.getLocation");
+        if (c is null) { Toasts.Show("Location permission was denied.", true); return; }
+        lat = Math.Round(c.Latitude, 4); lng = Math.Round(c.Longitude, 4);
+    }
+
+    private async Task Save()
+    {
+        busy = true;
+        try
+        {
+            var u = await Api.PutAsync<UserDto>("api/users/me", new UpdateProfileRequest(name, bio, avatar, cover, location, website, lat, lng, method, asr));
+            await Session.UpdateUserAsync(u);
+            Toasts.Show("Saved, jazakAllahu khayran!");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+}

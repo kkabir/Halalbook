@@ -1,0 +1,61 @@
+@page "/"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+
+<PageTitle>HalalBook</PageTitle>
+
+<div class="feed-column">
+    <StoriesBar />
+    <Composer OnPosted="p => posts.Insert(0, p)" Placeholder="@($"What's on your heart, {FirstName}?")" />
+
+    <div class="mt">
+        @foreach (var p in posts)
+        {
+            <PostCard @key="p.Id" Post="p" OnShared="s => posts.Insert(0, s)" />
+        }
+    </div>
+
+    @if (loading)
+    {
+        <div class="spinner"></div>
+    }
+    else if (posts.Count == 0)
+    {
+        <div class="card"><Empty Title="Your feed is quiet" Text="Add friends, follow pages or join groups to fill it with goodness."><a class="btn btn-primary" href="/friends">Find friends</a></Empty></div>
+    }
+    else if (hasMore)
+    {
+        <div class="center mt"><button class="btn btn-outline" @onclick="LoadMore">Show more</button></div>
+    }
+    else
+    {
+        <hr class="ornament mt" />
+        <p class="center subtle">You're all caught up. Time for some dhikr? 📿</p>
+    }
+</div>
+
+@code {
+    private readonly List<PostDto> posts = [];
+    private int page = 1;
+    private bool loading = true, hasMore;
+
+    private string FirstName => Session.User?.DisplayName.Split(' ')[0] ?? "friend";
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        loading = true;
+        try
+        {
+            var res = await Api.GetAsync<PagedResult<PostDto>>($"api/feed?page={page}");
+            posts.AddRange(res.Items.Where(i => posts.All(p => p.Id != i.Id)));
+            hasMore = res.HasMore;
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { loading = false; }
+    }
+
+    private async Task LoadMore() { page++; await Load(); }
+}

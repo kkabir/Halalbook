@@ -1,0 +1,154 @@
+@page "/u/{UserName}"
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+@inject NavigationManager Nav
+
+<PageTitle>@(profile?.User.DisplayName ?? UserName) · HalalBook</PageTitle>
+
+@if (profile is null)
+{
+    @if (missing) { <div class="card"><Empty Title="Profile not found" Text="This account doesn't exist or isn't available." /></div> }
+    else { <div class="spinner"></div> }
+}
+else
+{
+    var p = profile;
+    <div class="card" style="padding:0;overflow:hidden">
+        <div class="cover">@if (p.CoverUrl is { } c) { <img src="@c" alt="" /> }</div>
+        <div class="profile-head">
+            <span class="avatar">@if (p.User.AvatarUrl is { } a) { <img src="@a" alt="" /> } else { @Ui.Initials(p.User.DisplayName) }</span>
+            <div class="grow" style="padding-bottom:.5rem">
+                <div class="profile-name">@p.User.DisplayName @if (p.User.IsVerified) { <span class="verified">✦</span> }</div>
+                <div class="muted">@@@p.User.UserName · @p.FriendCount friends · @p.FollowerCount followers</div>
+            </div>
+            <div class="row wrap" style="padding-bottom:.75rem">
+                @switch (p.Friendship)
+                {
+                    case FriendshipStatus.Self:
+                        <a class="btn btn-primary" href="/settings">✏️ Edit profile</a>
+                        break;
+                    case FriendshipStatus.Accepted:
+                        <button class="btn btn-outline" @onclick="Unfriend">✓ Friends</button>
+                        break;
+                    case FriendshipStatus.OutgoingRequest:
+                        <button class="btn btn-outline" @onclick="Unfriend">Cancel request</button>
+                        break;
+                    case FriendshipStatus.IncomingRequest:
+                        <button class="btn btn-primary" @onclick="Accept">Accept request</button>
+                        <button class="btn btn-outline" @onclick="Unfriend">Decline</button>
+                        break;
+                    default:
+                        <button class="btn btn-primary" @onclick="AddFriend">+ Add friend</button>
+                        break;
+                }
+                @if (p.Friendship != FriendshipStatus.Self)
+                {
+                    <button class="btn btn-outline" @onclick="ToggleFollow">@(p.IsFollowing ? "Following" : "Follow")</button>
+                    <button class="btn btn-gold" @onclick="Message">💬 Message</button>
+                    <div class="menu">
+                        <button class="icon-btn" @onclick="() => menu = !menu">⋯</button>
+                        @if (menu)
+                        {
+                            <div class="menu-pop" @onclick="() => menu = false">
+                                <button @onclick="ToggleBlock">@(p.IsBlocked ? "Unblock" : "🚫 Block")</button>
+                                <button @onclick="Report">🚩 Report profile</button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+        <div class="tabs" style="padding:0 1rem;margin-bottom:0">
+            <button class="@(tab == "posts" ? "active" : "")" @onclick='() => tab = "posts"'>Posts</button>
+            <button class="@(tab == "about" ? "active" : "")" @onclick='() => tab = "about"'>About</button>
+            <button class="@(tab == "friends" ? "active" : "")" @onclick="ShowFriends">Friends</button>
+        </div>
+    </div>
+
+    <div class="feed-column mt">
+        @if (tab == "about")
+        {
+            <div class="card stack">
+                <div class="card-title">About</div>
+                @if (p.Bio is { Length: > 0 }) { <p style="white-space:pre-wrap">@p.Bio</p> }
+                @if (p.Location is { Length: > 0 }) { <div>📍 Lives in <b>@p.Location</b></div> }
+                @if (p.Website is { Length: > 0 }) { <div>🔗 <a href="@p.Website" target="_blank" rel="noopener nofollow">@p.Website</a></div> }
+                <div>🗓️ Joined @p.JoinedAt.ToString("MMMM yyyy")</div>
+                <div>📝 @p.PostCount posts · following @p.FollowingCount</div>
+            </div>
+        }
+        else if (tab == "friends")
+        {
+            <div class="card">
+                <div class="card-title">Friends</div>
+                @if (friends is null) { <div class="spinner"></div> }
+                else if (friends.Count == 0) { <p class="muted">No friends to show yet.</p> }
+                else
+                {
+                    <div class="grid-cards">
+                        @foreach (var f in friends)
+                        {
+                            <a class="tile" href="/u/@f.UserName" style="align-items:center;padding:1rem;text-align:center"><Avatar User="f" Size="72" Link="false" /><b class="mt">@f.DisplayName</b></a>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            @if (p.Friendship == FriendshipStatus.Self) { <Composer OnPosted="p => list?.Prepend(p)" /> <div class="mt"></div> }
+            <PostList @ref="list" Url="@($"api/users/{p.User.UserName}/posts")" EmptyTitle="No posts yet" />
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string UserName { get; set; } = "";
+    private ProfileDto? profile;
+    private List<UserSummaryDto>? friends;
+    private PostList? list;
+    private string tab = "posts";
+    private bool missing, menu;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        profile = null; missing = false; friends = null; tab = "posts";
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        try { profile = await Api.GetAsync<ProfileDto>($"api/users/{UserName}"); }
+        catch (Exception) { missing = true; }
+    }
+
+    private async Task Do(Func<Task> action, string? toast = null)
+    {
+        try { await action(); await Load(); if (toast is not null) Toasts.Show(toast); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private Task AddFriend() => Do(() => Api.PostAsync($"api/friends/{profile!.User.Id}"), "Friend request sent");
+    private Task Accept() => Do(() => Api.PostAsync($"api/friends/{profile!.User.Id}/accept"), "You're now friends");
+    private Task Unfriend() => Do(() => Api.DeleteAsync($"api/friends/{profile!.User.Id}"));
+    private Task ToggleFollow() => Do(() => profile!.IsFollowing ? Api.DeleteAsync($"api/users/{profile.User.Id}/follow") : Api.PostAsync($"api/users/{profile.User.Id}/follow"));
+    private Task ToggleBlock() => Do(() => profile!.IsBlocked ? Api.DeleteAsync($"api/users/{profile.User.Id}/block") : Api.PostAsync($"api/users/{profile.User.Id}/block"), profile!.IsBlocked ? "Unblocked" : "Blocked");
+    private Task Report() => Do(() => Api.PostAsync("api/reports", new ReportRequest(ReportTarget.User, profile!.User.Id, "Reported from profile")), "Thank you. Our moderators will review it.");
+
+    private async Task ShowFriends()
+    {
+        tab = "friends";
+        friends ??= await Api.GetAsync<List<UserSummaryDto>>($"api/users/{UserName}/friends");
+    }
+
+    private async Task Message()
+    {
+        try
+        {
+            var conv = await Api.PostAsync<ConversationDto>("api/conversations", new StartConversationRequest([profile!.User.Id], null));
+            Nav.NavigateTo($"/messages/{conv.Id}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+}

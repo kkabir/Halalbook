@@ -1,0 +1,148 @@
+@inject ApiClient Api
+@inject AuthSession Session
+@inject Toasts Toasts
+
+<div class="comments">
+    @if (CommentCount >= 5)
+    {
+        @if (summary is null)
+        {
+            <button class="chip gold" style="align-self:flex-start" @onclick="Summarize" disabled="@summarizing">✨ @(summarizing ? "Summarizing…" : "Summarize discussion with AI")</button>
+        }
+        else
+        {
+            <div class="ai-summary"><span class="ai-tag">✨ Discussion summary</span><br />@summary</div>
+        }
+    }
+
+    @if (comments is null)
+    {
+        <div class="spinner"></div>
+    }
+    else
+    {
+        @foreach (var c in comments)
+        {
+            @CommentView(c, true)
+        }
+    }
+
+    <div class="comment-input">
+        <Avatar User="Me" Size="32" />
+        <input class="input" placeholder="@(replyTo is null ? "Write a comment…" : $"Reply to {replyTo.Author.DisplayName}…")" @bind="text" @bind:event="oninput" @onkeydown="OnKey" />
+        @if (replyTo is not null) { <button class="btn btn-ghost btn-sm" @onclick="() => replyTo = null">✕</button> }
+        <button class="btn btn-primary btn-sm" disabled="@(string.IsNullOrWhiteSpace(text) || sending)" @onclick="Send">Send</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid PostId { get; set; }
+    [Parameter] public int CommentCount { get; set; }
+    [Parameter] public EventCallback<int> OnCountChanged { get; set; }
+
+    private List<CommentDto>? comments;
+    private string? text, summary;
+    private CommentDto? replyTo;
+    private bool sending, summarizing;
+
+    private UserSummaryDto? Me => Session.User is { } u ? new(u.Id, u.UserName, u.DisplayName, u.AvatarUrl, u.IsVerified) : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { comments = await Api.GetAsync<List<CommentDto>>($"api/posts/{PostId}/comments"); }
+        catch (Exception ex) { comments = []; Toasts.Error(ex); }
+    }
+
+    private RenderFragment CommentView(CommentDto c, bool topLevel) => __builder =>
+    {
+        <div>
+            <div class="comment">
+                <Avatar User="c.Author" Size="32" />
+                <div>
+                    <div class="comment-bubble"><a class="name" href="/u/@c.Author.UserName">@c.Author.DisplayName</a><div>@c.Content</div></div>
+                    <div class="comment-actions">
+                        <button class="@(c.LikedByMe ? "on" : "")" @onclick="() => Like(c)">@(c.LikedByMe ? "Liked" : "Like")@(c.LikeCount > 0 ? $" · {c.LikeCount}" : "")</button>
+                        @if (topLevel) { <button @onclick="() => replyTo = c">Reply</button> }
+                        <span>@Ui.TimeAgo(c.CreatedAt)</span>
+                        @if (c.Author.Id == Session.User?.Id) { <button @onclick="() => Delete(c)">Delete</button> }
+                    </div>
+                </div>
+            </div>
+            @if (c.Replies.Count > 0)
+            {
+                <div class="replies">
+                    @foreach (var r in c.Replies) { @CommentView(r, false) }
+                </div>
+            }
+        </div>
+    };
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey) await Send();
+    }
+
+    private async Task Send()
+    {
+        if (string.IsNullOrWhiteSpace(text) || sending) return;
+        sending = true;
+        try
+        {
+            var created = await Api.PostAsync<CommentDto>($"api/posts/{PostId}/comments", new CreateCommentRequest(text, replyTo?.Id));
+            if (replyTo is not null)
+            {
+                var parent = comments!.First(c => c.Id == replyTo.Id);
+                comments![comments.IndexOf(parent)] = parent with { Replies = [.. parent.Replies, created] };
+            }
+            else comments!.Add(created);
+            text = null; replyTo = null;
+            CommentCount++;
+            await OnCountChanged.InvokeAsync(CommentCount);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { sending = false; }
+    }
+
+    private async Task Like(CommentDto c)
+    {
+        try
+        {
+            var liked = await Api.PostAsync<bool>($"api/comments/{c.Id}/like");
+            Replace(c, c with { LikedByMe = liked, LikeCount = c.LikeCount + (liked ? 1 : -1) });
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Delete(CommentDto c)
+    {
+        try
+        {
+            await Api.DeleteAsync($"api/comments/{c.Id}");
+            if (!comments!.Remove(c))
+                foreach (var p in comments.ToList())
+                    if (p.Replies.Contains(c)) comments[comments.IndexOf(p)] = p with { Replies = p.Replies.Where(r => r != c).ToList() };
+            CommentCount--;
+            await OnCountChanged.InvokeAsync(CommentCount);
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private void Replace(CommentDto old, CommentDto updated)
+    {
+        var i = comments!.IndexOf(old);
+        if (i >= 0) { comments[i] = updated; return; }
+        foreach (var p in comments!.ToList())
+        {
+            var j = p.Replies.IndexOf(old);
+            if (j >= 0) { var reps = p.Replies.ToList(); reps[j] = updated; comments[comments.IndexOf(p)] = p with { Replies = reps }; }
+        }
+    }
+
+    private async Task Summarize()
+    {
+        summarizing = true;
+        try { summary = (await Api.GetAsync<AiTextResponse>($"api/posts/{PostId}/summary")).Text; }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { summarizing = false; }
+    }
+}
