@@ -2,7 +2,8 @@ namespace HalalBook.Shared;
 
 // ---------- Enums ----------
 public enum UserRole { User, Moderator, Admin }
-public enum Visibility { Public, Friends, OnlyMe }
+/// <summary>Who can see a post. SpecificPeople and FriendsExcept use the post's audience list.</summary>
+public enum Visibility { Public, Friends, OnlyMe, SpecificPeople, FriendsExcept }
 /// <summary>Who may post on someone's profile (their timeline).</summary>
 public enum ProfilePostPermission { Friends, Everyone, OnlyMe }
 public enum PostKind { Standard, Reel }
@@ -60,16 +61,17 @@ public record UploadResult(string Url, MediaType Type);
 public record CreatePostRequest(
     string Content, Visibility Visibility = Visibility.Public, List<MediaDto>? Media = null,
     Guid? GroupId = null, Guid? PageId = null, Guid? SharedPostId = null, PostKind Kind = PostKind.Standard,
-    string? Feeling = null, string? Location = null, Guid? TargetUserId = null);
+    string? Feeling = null, string? Location = null, Guid? TargetUserId = null,
+    List<Guid>? AudienceUserIds = null, List<Guid>? GroupIds = null, bool AlsoOnProfile = false);
 
-public record UpdatePostRequest(string Content, Visibility Visibility);
+public record UpdatePostRequest(string Content, Visibility Visibility, List<Guid>? AudienceUserIds = null);
 
 public record PostDto(
     Guid Id, UserSummaryDto Author, string Content, Visibility Visibility, PostKind Kind, DateTime CreatedAt, DateTime? EditedAt,
     List<MediaDto> Media, List<string> Hashtags, int CommentCount, int ShareCount,
     Dictionary<ReactionType, int> Reactions, ReactionType? MyReaction, bool IsBookmarked,
     ModerationStatus Moderation, string? Feeling, string? Location,
-    GroupSummaryDto? Group, PageSummaryDto? Page, PostDto? SharedPost, UserSummaryDto? TargetUser = null)
+    GroupSummaryDto? Group, PageSummaryDto? Page, PostDto? SharedPost, UserSummaryDto? TargetUser = null, List<UserSummaryDto>? Audience = null)
 {
     public int TotalReactions => Reactions.Values.Sum();
 }

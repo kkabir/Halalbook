@@ -189,7 +189,14 @@
 
     protected override void OnInitialized() => showComments = OpenComments;
 
-    private static string VisibilityIcon(Visibility v) => v switch { Visibility.Friends => "👥 Friends", Visibility.OnlyMe => "🔒 Only me", _ => "🌐 Public" };
+    private string VisibilityIcon(Visibility v) => v switch
+    {
+        Visibility.Friends => "👥 Friends",
+        Visibility.OnlyMe => "🔒 Only me",
+        Visibility.SpecificPeople => Post.Audience is { } a ? $"👤 {string.Join(", ", a.Take(2).Select(x => x.DisplayName.Split(' ')[0]))}{(a.Count > 2 ? $" +{a.Count - 2}" : "")}" : "👤 Specific friends",
+        Visibility.FriendsExcept => Post.Audience is { Count: > 0 } ex ? $"👥 Friends except {ex.Count}" : "👥 Friends except…",
+        _ => "🌐 Public",
+    };
 
     private RenderFragment RichText(string text) => builder =>
     {

@@ -27,7 +27,10 @@ public partial class PostService(AppDbContext db)
         return db.Posts.Where(p => !p.IsDeleted
             && !blocked.Contains(p.AuthorId)
             && (p.Moderation == ModerationStatus.Approved || p.AuthorId == me || (isModerator && p.Moderation != ModerationStatus.Removed))
-            && (p.AuthorId == me || p.Visibility == Visibility.Public || (p.Visibility == Visibility.Friends && friends.Contains(p.AuthorId)))
+            && (p.AuthorId == me || p.Visibility == Visibility.Public
+                || (p.Visibility == Visibility.Friends && friends.Contains(p.AuthorId))
+                || (p.Visibility == Visibility.SpecificPeople && db.PostAudiences.Any(a => a.PostId == p.Id && a.UserId == me))
+                || (p.Visibility == Visibility.FriendsExcept && friends.Contains(p.AuthorId) && !db.PostAudiences.Any(a => a.PostId == p.Id && a.UserId == me)))
             && (p.GroupId == null || !privateGroups.Contains(p.GroupId.Value) || myGroups.Contains(p.GroupId.Value)));
     }
 
@@ -104,6 +107,10 @@ public partial class PostService(AppDbContext db)
         var shares = await db.Posts.Where(p => p.SharedPostId != null && ids.Contains(p.SharedPostId.Value) && !p.IsDeleted)
             .GroupBy(p => p.SharedPostId).Select(g => new { PostId = g.Key, Count = g.Count() }).ToListAsync();
         var bookmarks = await db.Bookmarks.Where(b => b.UserId == me && ids.Contains(b.PostId)).Select(b => b.PostId).ToListAsync();
+        // Only the author sees who a custom audience includes or excludes.
+        var mineCustom = posts.Where(p => p.AuthorId == me && p.Visibility is Visibility.SpecificPeople or Visibility.FriendsExcept).Select(p => p.Id).ToList();
+        var audiences = mineCustom.Count == 0 ? [] : await db.PostAudiences.Where(a => mineCustom.Contains(a.PostId))
+            .Join(db.Users, a => a.UserId, u => u.Id, (a, u) => new { a.PostId, User = u }).ToListAsync();
 
         return posts.Select(p => new PostDto(
             p.Id, p.Author.ToSummary(), p.Content, p.Visibility, p.Kind, p.CreatedAt, p.EditedAt,
@@ -120,7 +127,8 @@ public partial class PostService(AppDbContext db)
                     s.Media.OrderBy(m => m.SortOrder).Select(m => new MediaDto(m.Url, m.Type)).ToList(), [], 0, 0, [], null, false,
                     s.Moderation, s.Feeling, s.Location, null, null, null)
                 : null,
-            p.TargetUser?.ToSummary())).ToList();
+            p.TargetUser?.ToSummary(),
+            mineCustom.Contains(p.Id) ? audiences.Where(a => a.PostId == p.Id).Select(a => a.User.ToSummary()).ToList() : null)).ToList();
     }
 
     /// <summary>Replaces a post's hashtags with the ones found in its text.</summary>

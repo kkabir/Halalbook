@@ -317,3 +317,10 @@ public class LiveSession
     public int PeakViewers { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
+
+/// <summary>People a post is shared with (SpecificPeople) or hidden from (FriendsExcept).</summary>
+public class PostAudience
+{
+    public Guid PostId { get; set; }
+    public Guid UserId { get; set; }
+}

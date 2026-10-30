@@ -90,16 +90,18 @@
         <div class="row">
             @if (GroupId is null && PageId is null)
             {
-                <select class="input" style="width:auto;padding:.4rem .7rem" @bind="visibility">
-                    <option value="@Visibility.Public">🌐 Public</option>
-                    <option value="@Visibility.Friends">👥 Friends</option>
-                    <option value="@Visibility.OnlyMe">🔒 Only me</option>
-                </select>
+                <button class="btn btn-outline btn-sm audience-btn" @onclick="() => picking = true" title="Choose audience">@AudienceLabel ▾</button>
             }
             <button class="btn btn-primary" disabled="@(!CanPost)" @onclick="Submit">@(posting ? "Posting…" : "Post")</button>
         </div>
     </div>
 </div>
+
+@if (picking)
+{
+    <AudiencePicker Value="audience" ShowDestinations="TargetUserId is null" OnCancel="() => picking = false"
+                    OnDone="c => { audience = c; picking = false; }" />
+}
 
 @code {
     [Parameter] public Guid? GroupId { get; set; }
@@ -115,7 +117,24 @@
     private string? text, feeling, location, moderationNote;
     private readonly List<MediaDto> media = [];
     private List<string> suggestedTags = [];
-    private Visibility visibility = Visibility.Public;
+    private AudiencePicker.Choice audience = new(Visibility.Public, [], true, [], []);
+    private bool picking;
+
+    private string AudienceLabel
+    {
+        get
+        {
+            var (_, icon, name, _) = AudiencePicker.Options.First(o => o.Item1 == audience.Visibility);
+            var who = audience.Visibility switch
+            {
+                Visibility.SpecificPeople => $"{audience.People.Count} friend{(audience.People.Count == 1 ? "" : "s")}",
+                Visibility.FriendsExcept when audience.People.Count > 0 => $"Friends except {audience.People.Count}",
+                _ => name,
+            };
+            var groups = audience.GroupIds.Count switch { 0 => "", 1 => audience.GroupNames.FirstOrDefault() ?? "1 group", var n => $"{n} groups" };
+            return !audience.OnProfile ? $"🕌 {groups}" : groups.Length > 0 ? $"{icon} {who} + 🕌 {groups}" : $"{icon} {who}";
+        }
+    }
     private bool uploading, posting, aiBusy, showExtras, asReel;
     private int uploadIndex, uploadTotal;
     private InputFile? fileInput;
@@ -172,10 +191,15 @@
         {
             var kind = (ReelMode || asReel) && media.FirstOrDefault()?.Type == MediaType.Video ? PostKind.Reel : PostKind.Standard;
             var post = await Api.PostAsync<PostDto>("api/posts",
-                new CreatePostRequest(text ?? "", visibility, media.ToList(), GroupId, PageId, null, kind, feeling, location, TargetUserId));
+                new CreatePostRequest(text ?? "", audience.Visibility, media.ToList(), GroupId, PageId, null, kind, feeling, location, TargetUserId,
+                    audience.People, audience.GroupIds.Count > 0 ? audience.GroupIds : null, audience.OnProfile));
+            var postedTo = audience.GroupIds.Count;
             text = feeling = location = moderationNote = null;
+            audience = audience with { GroupIds = [], GroupNames = [], OnProfile = true };
             media.Clear(); suggestedTags = []; showExtras = asReel = false;
-            Toasts.Show(post.Moderation == ModerationStatus.PendingReview ? "Posted. A moderator will review it shortly." : "Posted, alhamdulillah!");
+            Toasts.Show(post.Moderation == ModerationStatus.PendingReview ? "Posted. A moderator will review it shortly."
+                : postedTo > 0 ? $"Posted{(audience.OnProfile ? " to your profile and" : " to")} {postedTo} group{(postedTo == 1 ? "" : "s")}, alhamdulillah!"
+                : "Posted, alhamdulillah!");
             await OnPosted.InvokeAsync(post);
         }
         catch (Exception ex) { Toasts.Error(ex); }

@@ -1,0 +1,125 @@
+@* Facebook-style "Post to" and audience chooser used by the composer. *@
+@inject ApiClient Api
+@inject Toasts Toasts
+
+<div class="overlay" @onclick="Cancel">
+    <div class="modal stack audience-modal" @onclick:stopPropagation>
+        @if (ShowDestinations)
+        {
+            <div>
+                <h2>Post to</h2>
+                <label class="audience-row"><input type="checkbox" checked="@onProfile" @onchange="e => onProfile = e.Value is true" /><span class="aud-ico">👤</span><div><b>Your profile</b><small>Your timeline and your friends' feeds</small></div></label>
+                @if (groups is null) { <div class="spinner"></div> }
+                @foreach (var g in groups ?? [])
+                {
+                    <label class="audience-row"><input type="checkbox" checked="@groupIds.Contains(g.Id)" @onchange="e => Toggle(groupIds, g.Id, e.Value is true)" /><span class="aud-ico">🕌</span><div><b>@g.Name</b><small>@(g.Privacy == GroupPrivacy.Private ? "Private group" : "Public group") · @g.MemberCount members</small></div></label>
+                }
+                @if (groups is { Count: 0 }) { <p class="subtle">Join groups to post in them too.</p> }
+            </div>
+            <hr class="divider" />
+        }
+
+        @if (onProfile || !ShowDestinations)
+        {
+            <div>
+                <h2>Who can see your post?</h2>
+                <p class="subtle" style="margin-top:-.3rem">Your post will show in feed, on your profile and in search results for this audience.</p>
+                @foreach (var (v, icon, name, hint) in Options)
+                {
+                    <label class="audience-row @(visibility == v ? "active" : "")">
+                        <input type="radio" name="aud" checked="@(visibility == v)" @onchange="() => Pick(v)" />
+                        <span class="aud-ico">@icon</span><div><b>@name</b><small>@hint</small></div>
+                    </label>
+                }
+            </div>
+
+            @if (visibility is Visibility.SpecificPeople or Visibility.FriendsExcept)
+            {
+                <div>
+                    <b>@(visibility == Visibility.SpecificPeople ? "Share with" : "Don't show to") (@people.Count)</b>
+                    <input class="input mt" placeholder="Search friends" @bind="search" @bind:event="oninput" />
+                    <div class="audience-friends">
+                        @if (friends is null) { <div class="spinner"></div> }
+                        @foreach (var f in (friends ?? []).Where(f => string.IsNullOrWhiteSpace(search) || f.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase)).Take(100))
+                        {
+                            <label class="audience-row compact">
+                                <input type="checkbox" checked="@people.Contains(f.Id)" @onchange="e => Toggle(people, f.Id, e.Value is true)" />
+                                <Avatar User="f" Size="30" Link="false" /><span>@f.DisplayName</span>
+                            </label>
+                        }
+                        @if (friends is { Count: 0 }) { <p class="subtle">Add friends to choose them here.</p> }
+                    </div>
+                </div>
+            }
+        }
+
+        @if (error is not null) { <div class="error">@error</div> }
+        <div class="row" style="justify-content:flex-end">
+            <button class="btn btn-ghost" @onclick="Cancel">Cancel</button>
+            <button class="btn btn-primary" @onclick="Done">Done</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    public record Choice(Visibility Visibility, List<Guid> People, bool OnProfile, List<Guid> GroupIds, List<string> GroupNames);
+
+    [Parameter] public Choice Value { get; set; } = new(Visibility.Public, [], true, [], []);
+    [Parameter] public bool ShowDestinations { get; set; } = true;
+    [Parameter] public EventCallback<Choice> OnDone { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    public static readonly (Visibility, string, string, string)[] Options =
+    [
+        (Visibility.Public, "🌐", "Public", "Anyone on or off HalalBook"),
+        (Visibility.Friends, "👥", "Friends", "Your friends on HalalBook"),
+        (Visibility.FriendsExcept, "👥", "Friends except…", "Don't show to some friends"),
+        (Visibility.SpecificPeople, "👤", "Specific friends", "Only show to some friends"),
+        (Visibility.OnlyMe, "🔒", "Only me", "Only you can see it"),
+    ];
+
+    private Visibility visibility;
+    private bool onProfile;
+    private HashSet<Guid> people = [], groupIds = [];
+    private List<UserSummaryDto>? friends;
+    private List<GroupDto>? groups;
+    private string? search, error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        visibility = Value.Visibility;
+        onProfile = Value.OnProfile;
+        people = [.. Value.People];
+        groupIds = [.. Value.GroupIds];
+        if (ShowDestinations)
+        {
+            try { groups = await Api.GetAsync<List<GroupDto>>("api/groups?filter=mine"); } catch (Exception) { groups = []; }
+        }
+        if (visibility is Visibility.SpecificPeople or Visibility.FriendsExcept) await LoadFriends();
+    }
+
+    private async Task Pick(Visibility v)
+    {
+        if (v != visibility && (v is Visibility.SpecificPeople || visibility is Visibility.SpecificPeople)) people.Clear();
+        visibility = v;
+        if (v is Visibility.SpecificPeople or Visibility.FriendsExcept) await LoadFriends();
+    }
+
+    private async Task LoadFriends()
+    {
+        if (friends is not null) return;
+        try { friends = await Api.GetAsync<List<UserSummaryDto>>("api/friends"); } catch (Exception ex) { friends = []; Toasts.Error(ex); }
+    }
+
+    private static void Toggle(HashSet<Guid> set, Guid id, bool on) { if (on) set.Add(id); else set.Remove(id); }
+
+    private Task Cancel() => OnCancel.InvokeAsync();
+
+    private async Task Done()
+    {
+        if (ShowDestinations && !onProfile && groupIds.Count == 0) { error = "Choose where to post."; return; }
+        if (visibility == Visibility.SpecificPeople && onProfile && people.Count == 0) { error = "Choose at least one friend."; return; }
+        var names = (groups ?? []).Where(g => groupIds.Contains(g.Id)).Select(g => g.Name).ToList();
+        await OnDone.InvokeAsync(new Choice(visibility, [.. people], onProfile, [.. groupIds], names));
+    }
+}

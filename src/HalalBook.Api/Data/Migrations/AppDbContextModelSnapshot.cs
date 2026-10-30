@@ -615,6 +615,21 @@ namespace HalalBook.Api.Data.Migrations
                     b.ToTable("Posts");
                 });
 
+            modelBuilder.Entity("HalalBook.Api.Data.PostAudience", b =>
+                {
+                    b.Property<Guid>("PostId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("PostId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PostAudiences");
+                });
+
             modelBuilder.Entity("HalalBook.Api.Data.PostHashtag", b =>
                 {
                     b.Property<Guid>("PostId")

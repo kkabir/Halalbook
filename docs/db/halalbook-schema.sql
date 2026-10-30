@@ -853,3 +853,36 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030030543_PostAudience'
+)
+BEGIN
+    CREATE TABLE [PostAudiences] (
+        [PostId] uniqueidentifier NOT NULL,
+        [UserId] uniqueidentifier NOT NULL,
+        CONSTRAINT [PK_PostAudiences] PRIMARY KEY ([PostId], [UserId])
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030030543_PostAudience'
+)
+BEGIN
+    CREATE INDEX [IX_PostAudiences_UserId] ON [PostAudiences] ([UserId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030030543_PostAudience'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261030030543_PostAudience', N'10.0.14');
+END;
+
+COMMIT;
+GO
+

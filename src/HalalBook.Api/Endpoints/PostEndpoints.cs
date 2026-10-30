@@ -38,8 +38,23 @@ public static class PostEndpoints
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["content"] = ["Write something or add a photo or video."] });
             if (content.Length > 10000) return Results.ValidationProblem(new Dictionary<string, string[]> { ["content"] = ["Posts are limited to 10,000 characters."] });
 
-            if (req.GroupId is Guid gid && !await db.GroupMembers.AnyAsync(m => m.GroupId == gid && m.UserId == me && m.IsApproved))
-                return Results.Problem("Join the group to post in it.", statusCode: 403);
+            // Destinations: one or more groups, optionally also your profile (like Facebook's "Post to").
+            var groupIds = (req.GroupIds ?? []).Concat(req.GroupId is Guid g0 ? [g0] : []).Distinct().Take(20).ToList();
+            foreach (var gid in groupIds)
+                if (!await db.GroupMembers.AnyAsync(m => m.GroupId == gid && m.UserId == me && m.IsApproved))
+                    return Results.Problem("Join the group to post in it.", statusCode: 403);
+            var onProfile = groupIds.Count == 0 || req.AlsoOnProfile;
+            if (groupIds.Count > 0 && (req.PageId is not null || req.TargetUserId is not null)) return Results.BadRequest();
+
+            // Custom audiences can only name your friends.
+            var audience = new List<Guid>();
+            if (req.Visibility is Visibility.SpecificPeople or Visibility.FriendsExcept)
+            {
+                var friendIds = await svc.FriendIdsAsync(me);
+                audience = (req.AudienceUserIds ?? []).Distinct().Where(friendIds.Contains).Take(500).ToList();
+                if (req.Visibility == Visibility.SpecificPeople && audience.Count == 0)
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["audience"] = ["Choose at least one friend to share with."] });
+            }
             Guid? target = req.TargetUserId == me ? null : req.TargetUserId;
             if (target is Guid tid)
             {
@@ -54,17 +69,29 @@ public static class PostEndpoints
             var moderation = await ai.ModerateAsync(content, ct);
             if (!moderation.Allowed) return Results.Problem(string.Join(" ", moderation.Reasons), statusCode: 422, title: "Content not allowed");
 
-            var post = new Post
+            Post NewPost(Guid? groupId) => new()
             {
-                AuthorId = me, Content = content, Visibility = req.Visibility, Kind = req.Kind,
-                GroupId = req.GroupId, PageId = req.PageId, SharedPostId = req.SharedPostId, TargetUserId = target,
+                AuthorId = me, Content = content, Kind = req.Kind,
+                // Group posts follow the group's privacy; custom audiences apply to your profile.
+                Visibility = groupId is null ? req.Visibility : Visibility.Public,
+                GroupId = groupId, PageId = groupId is null ? req.PageId : null, SharedPostId = req.SharedPostId,
+                TargetUserId = groupId is null ? target : null,
                 Feeling = req.Feeling, Location = req.Location,
                 Moderation = moderation.NeedsReview ? ModerationStatus.PendingReview : ModerationStatus.Approved,
                 ModerationNote = moderation.NeedsReview ? string.Join(" ", moderation.Reasons) : null,
                 Media = (req.Media ?? []).Take(10).Select((m, i) => new PostMedia { Url = m.Url, Type = m.Type, SortOrder = i }).ToList(),
             };
-            db.Posts.Add(post);
-            await svc.SyncHashtagsAsync(post);
+            var created = new List<Post>();
+            if (onProfile) created.Add(NewPost(null));
+            created.AddRange(groupIds.Select(g => NewPost(g)));
+            foreach (var p in created)
+            {
+                db.Posts.Add(p);
+                await svc.SyncHashtagsAsync(p);
+            }
+            var post = created[0];
+            if (post.GroupId is null && audience.Count > 0)
+                db.PostAudiences.AddRange(audience.Select(uid => new PostAudience { PostId = post.Id, UserId = uid }));
             await db.SaveChangesAsync();
 
             var meUser = (await db.Users.FindAsync(me))!;
@@ -91,7 +118,13 @@ public static class PostEndpoints
             var moderation = await ai.ModerateAsync(req.Content, ct);
             if (!moderation.Allowed) return Results.Problem(string.Join(" ", moderation.Reasons), statusCode: 422, title: "Content not allowed");
             post.Content = req.Content.Trim();
-            post.Visibility = req.Visibility;
+            if (req.Visibility is Visibility.SpecificPeople or Visibility.FriendsExcept && req.AudienceUserIds is not null)
+            {
+                var friendIds = await svc.FriendIdsAsync(cp.UserId());
+                await db.PostAudiences.Where(a => a.PostId == id).ExecuteDeleteAsync(ct);
+                db.PostAudiences.AddRange(req.AudienceUserIds.Distinct().Where(friendIds.Contains).Select(uid => new PostAudience { PostId = id, UserId = uid }));
+            }
+            post.Visibility = post.GroupId is null ? req.Visibility : post.Visibility;
             post.EditedAt = DateTime.UtcNow;
             if (moderation.NeedsReview) post.Moderation = ModerationStatus.PendingReview;
             await svc.SyncHashtagsAsync(post);

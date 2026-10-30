@@ -253,4 +253,62 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var res = await c.PostAsync("/api/media?purpose=comment", form);
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, res.StatusCode);
     }
+
+    private async Task<(HttpClient Client, Guid Id)> SignUpWithId(string prefix)
+    {
+        var c = await SignUp(prefix + "_" + Random.Shared.Next(99999));
+        return (c, (await c.GetFromJsonAsync<UserDto>("/api/users/me", Json))!.Id);
+    }
+
+    private static async Task MakeFriends(HttpClient a, Guid aId, HttpClient b, Guid bId)
+    {
+        (await a.PostAsync($"/api/friends/{bId}", null)).EnsureSuccessStatusCode();
+        (await b.PostAsync($"/api/friends/{aId}/accept", null)).EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task CustomAudiences_AreEnforced()
+    {
+        var (nadia, nadiaId) = await SignUpWithId("nadia");
+        var (omar, omarId) = await SignUpWithId("omarx");
+        var (sami, samiId) = await SignUpWithId("sami");
+        await MakeFriends(nadia, nadiaId, omar, omarId);
+        await MakeFriends(nadia, nadiaId, sami, samiId);
+
+        async Task<Guid> Post(Visibility v, params Guid[] people) =>
+            (await (await nadia.PostAsJsonAsync("/api/posts", new CreatePostRequest($"For {v}", v, AudienceUserIds: [.. people]), Json))
+                .Content.ReadFromJsonAsync<PostDto>(Json))!.Id;
+
+        var onlyOmar = await Post(Visibility.SpecificPeople, omarId);
+        var notSami = await Post(Visibility.FriendsExcept, samiId);
+
+        Assert.Equal(HttpStatusCode.OK, (await omar.GetAsync($"/api/posts/{onlyOmar}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await sami.GetAsync($"/api/posts/{onlyOmar}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await omar.GetAsync($"/api/posts/{notSami}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await sami.GetAsync($"/api/posts/{notSami}")).StatusCode);
+
+        // The author sees who the audience is.
+        var mine = (await nadia.GetFromJsonAsync<PostDto>($"/api/posts/{onlyOmar}", Json))!;
+        Assert.Equal(omarId, Assert.Single(mine.Audience!).Id);
+        // Others don't.
+        Assert.Null((await omar.GetFromJsonAsync<PostDto>($"/api/posts/{onlyOmar}", Json))!.Audience);
+    }
+
+    [Fact]
+    public async Task PostToSeveralGroupsAndProfile()
+    {
+        var (c, _) = await SignUpWithId("rania");
+        async Task<Guid> Group(string name) =>
+            (await (await c.PostAsJsonAsync("/api/groups", new CreateGroupRequest(name, null, null, GroupPrivacy.Public, "Faith"), Json))
+                .Content.ReadFromJsonAsync<GroupDto>(Json))!.Id;
+        var g1 = await Group("Sisters circle");
+        var g2 = await Group("Quran study");
+
+        var res = await c.PostAsJsonAsync("/api/posts", new CreatePostRequest("Halaqa tonight after Isha", GroupIds: [g1, g2], AlsoOnProfile: true), Json);
+        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
+        Assert.Single((await c.GetFromJsonAsync<PagedResult<PostDto>>($"/api/groups/{g1}/posts", Json))!.Items);
+        Assert.Single((await c.GetFromJsonAsync<PagedResult<PostDto>>($"/api/groups/{g2}/posts", Json))!.Items);
+        var me = (await c.GetFromJsonAsync<UserDto>("/api/users/me", Json))!;
+        Assert.Contains((await c.GetFromJsonAsync<PagedResult<PostDto>>($"/api/users/{me.UserName}/posts", Json))!.Items, p => p.Content.StartsWith("Halaqa"));
+    }
 }

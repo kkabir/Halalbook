@@ -30,6 +30,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<EmailCode> EmailCodes => Set<EmailCode>();
     public DbSet<LiveSession> LiveSessions => Set<LiveSession>();
+    public DbSet<PostAudience> PostAudiences => Set<PostAudience>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -64,6 +65,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(x => x.TargetUser).WithMany().HasForeignKey(x => x.TargetUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(x => x.Media).WithOne().HasForeignKey(x => x.PostId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Hashtags).WithOne().HasForeignKey(x => x.PostId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<PostAudience>(e =>
+        {
+            e.HasKey(x => new { x.PostId, x.UserId });
+            e.HasIndex(x => x.UserId);
         });
 
         b.Entity<Hashtag>().HasIndex(x => x.Tag).IsUnique();
