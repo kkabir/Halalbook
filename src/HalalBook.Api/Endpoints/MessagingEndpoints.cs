@@ -33,7 +33,7 @@ public static class MessagingEndpoints
         });
 
         // Opens the existing 1:1 conversation, or starts a new one (group when more than one other person).
-        chats.MapPost("/", async (StartConversationRequest req, ClaimsPrincipal cp, AppDbContext db, PostService svc) =>
+        chats.MapPost("/", async (StartConversationRequest req, ClaimsPrincipal cp, AppDbContext db, PostService svc, PrivacyService privacy) =>
         {
             var me = cp.UserId();
             var others = req.ParticipantIds.Where(id => id != me).Distinct().ToList();
@@ -50,6 +50,10 @@ public static class MessagingEndpoints
                     .FirstOrDefaultAsync();
                 if (existing is not null) return Results.Ok(ToDto(existing, me, null, 0));
             }
+            // New conversations respect each person's "who can message me" setting.
+            foreach (var other in await db.Users.Where(u => others.Contains(u.Id)).ToListAsync())
+                if (!PrivacyService.Allows(other.WhoCanMessage, await privacy.RelationAsync(me, other.Id)))
+                    return Results.Problem($"{other.DisplayName} only accepts messages from {PrivacyService.Describe(other.WhoCanMessage)}.", statusCode: 403);
             var conv = new Conversation { IsGroup = others.Count > 1, Title = req.Title };
             conv.Participants.AddRange(others.Append(me).Select(id => new ConversationParticipant { UserId = id }));
             db.Conversations.Add(conv);

@@ -442,4 +442,29 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         (await admin.PutAsJsonAsync($"/api/admin/errors/{logged!.Id}", new UpdateErrorRequest(ErrorStatus.Resolved, "Fixed"), Json)).EnsureSuccessStatusCode();
         Assert.Contains((await admin.GetFromJsonAsync<List<ErrorLogDto>>("/api/admin/errors?status=Resolved", Json))!, e => e.Id == logged.Id);
     }
+
+    [Fact]
+    public async Task PrivacySettings_AreEnforced()
+    {
+        var (owner, ownerId) = await SignUpWithId("private");
+        var (stranger, _) = await SignUpWithId("stranger");
+        var ownerName = (await owner.GetFromJsonAsync<UserDto>("/api/users/me", Json))!.UserName;
+
+        var settings = new PrivacySettingsDto(PrivacyAudience.Friends, PrivacyAudience.FriendsOfFriends, PrivacyAudience.OnlyMe, PrivacyAudience.Friends, PrivacyAudience.Friends);
+        var saved = (await (await owner.PutAsJsonAsync("/api/users/me/privacy", settings, Json)).Content.ReadFromJsonAsync<UserDto>(Json))!;
+        Assert.Equal(PrivacyAudience.Friends, saved.Privacy!.WhoCanMessage);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await stranger.PostAsJsonAsync("/api/conversations", new StartConversationRequest([ownerId], null), Json)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await stranger.PostAsync($"/api/friends/{ownerId}", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await stranger.GetAsync($"/api/users/{ownerName}/friends")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await stranger.PostAsync($"/api/users/{ownerId}/follow", null)).StatusCode);
+
+        var profile = (await stranger.GetFromJsonAsync<ProfileDto>($"/api/users/{ownerName}", Json))!;
+        Assert.False(profile.CanMessage);
+        Assert.False(profile.CanAddFriend);
+        Assert.False(profile.CanSeeFriends);
+
+        var search = (await stranger.GetFromJsonAsync<SearchResultDto>($"/api/search?q={ownerName}", Json))!;
+        Assert.DoesNotContain(search.People, x => x.Id == ownerId);
+    }
 }

@@ -6,6 +6,10 @@ public enum UserRole { User, Moderator, Admin }
 public enum Visibility { Public, Friends, OnlyMe, SpecificPeople, FriendsExcept }
 /// <summary>Who may post on someone's profile (their timeline).</summary>
 public enum ProfilePostPermission { Friends, Everyone, OnlyMe }
+/// <summary>Facebook-style privacy audiences for contact and discovery settings.</summary>
+public enum PrivacyAudience { Everyone, FriendsOfFriends, Friends, OnlyMe }
+public record PrivacySettingsDto(PrivacyAudience WhoCanMessage, PrivacyAudience WhoCanSendFriendRequests,
+    PrivacyAudience WhoCanSeeFriendsList, PrivacyAudience WhoCanFindMe, PrivacyAudience WhoCanFollow);
 public enum PostKind { Standard, Reel }
 public enum MediaType { Image, Video }
 public enum ReactionType { Like, Love, MashaAllah, SubhanAllah, Ameen, Sad }
@@ -43,12 +47,14 @@ public record UserDto(
     Guid Id, string UserName, string Email, string DisplayName, string? Bio, string? AvatarUrl, string? CoverUrl,
     string? Location, string? Website, UserRole Role, bool IsVerified, DateTime JoinedAt,
     double? Latitude, double? Longitude, string PrayerMethod, string AsrSchool, bool EmailConfirmed = false, bool TwoFactorEnabled = false, bool ShowOnlineStatus = true,
-    ProfilePostPermission WhoCanPost = ProfilePostPermission.Friends, string? AcceptedTermsVersion = null);
+    ProfilePostPermission WhoCanPost = ProfilePostPermission.Friends, string? AcceptedTermsVersion = null,
+    PrivacySettingsDto? Privacy = null);
 
 public record ProfileDto(
     UserSummaryDto User, string? Bio, string? CoverUrl, string? Location, string? Website, DateTime JoinedAt,
     int FriendCount, int FollowerCount, int FollowingCount, int PostCount,
-    FriendshipStatus Friendship, bool IsFollowing, bool IsBlocked, bool IsOnline = false, DateTime? LastSeenAt = null, bool CanPost = false);
+    FriendshipStatus Friendship, bool IsFollowing, bool IsBlocked, bool IsOnline = false, DateTime? LastSeenAt = null, bool CanPost = false,
+    bool CanMessage = true, bool CanAddFriend = true, bool CanSeeFriends = true, bool CanFollow = true, int MutualFriends = 0);
 
 public record UpdateProfileRequest(
     string? DisplayName, string? Bio, string? AvatarUrl, string? CoverUrl, string? Location, string? Website,

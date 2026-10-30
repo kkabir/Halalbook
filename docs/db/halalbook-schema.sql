@@ -1045,3 +1045,56 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030041228_PrivacySettings'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [WhoCanFindMe] int NOT NULL DEFAULT 0;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030041228_PrivacySettings'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [WhoCanFollow] int NOT NULL DEFAULT 0;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030041228_PrivacySettings'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [WhoCanMessage] int NOT NULL DEFAULT 0;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030041228_PrivacySettings'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [WhoCanSeeFriendsList] int NOT NULL DEFAULT 0;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030041228_PrivacySettings'
+)
+BEGIN
+    ALTER TABLE [Users] ADD [WhoCanSendFriendRequests] int NOT NULL DEFAULT 0;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261030041228_PrivacySettings'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261030041228_PrivacySettings', N'10.0.14');
+END;
+
+COMMIT;
+GO
+

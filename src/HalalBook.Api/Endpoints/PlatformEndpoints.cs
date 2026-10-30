@@ -56,7 +56,7 @@ public static class PlatformEndpoints
     public static void MapPlatformEndpoints(this IEndpointRouteBuilder app)
     {
         // ---------- Search ----------
-        app.MapGet("/api/search", async (string q, ClaimsPrincipal cp, AppDbContext db, PostService svc) =>
+        app.MapGet("/api/search", async (string q, ClaimsPrincipal cp, AppDbContext db, PostService svc, PrivacyService privacy) =>
         {
             var me = cp.UserId();
             var term = (q ?? "").Trim();
@@ -65,7 +65,11 @@ public static class PlatformEndpoints
             var tag = term.TrimStart('#').ToLowerInvariant();
             var like = $"%{term}%";
 
+            var friendIds = await svc.FriendIdsAsync(me);
+            var fof = (await privacy.FriendsOfFriendsAsync(me)).ToList();
             var people = await db.Users.Where(u => !blocked.Contains(u.Id) && !u.IsSuspended &&
+                    (u.WhoCanFindMe == PrivacyAudience.Everyone || friendIds.Contains(u.Id)
+                     || (u.WhoCanFindMe == PrivacyAudience.FriendsOfFriends && fof.Contains(u.Id))) &&
                     (EF.Functions.Like(u.DisplayName, like) || EF.Functions.Like(u.UserName, like)))
                 .OrderBy(u => u.DisplayName).Take(10).Select(u => u.ToSummary()).ToListAsync();
             var visible = await svc.VisibleToAsync(me);

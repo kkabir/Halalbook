@@ -39,13 +39,14 @@ public static partial class UserEndpoints
             return Results.Ok(u.ToDto());
         });
 
-        users.MapGet("/{userName}", async (string userName, ClaimsPrincipal cp, AppDbContext db, PostService posts, PresenceTracker presence) =>
+        users.MapGet("/{userName}", async (string userName, ClaimsPrincipal cp, AppDbContext db, PostService posts, PresenceTracker presence, PrivacyService privacy) =>
         {
             var me = cp.UserId();
             var key = userName.ToUpperInvariant();
             var u = await db.Users.FirstOrDefaultAsync(x => x.NormalizedUserName == key);
             if (u is null || (await posts.BlockedIdsAsync(me)).Contains(u.Id)) return Results.NotFound();
 
+            var rel = await privacy.RelationAsync(me, u.Id);
             var f = await db.Friendships.FirstOrDefaultAsync(x =>
                 (x.RequesterId == me && x.AddresseeId == u.Id) || (x.RequesterId == u.Id && x.AddresseeId == me));
             var status = u.Id == me ? FriendshipStatus.Self
@@ -63,7 +64,10 @@ public static partial class UserEndpoints
                 await db.Blocks.AnyAsync(x => x.BlockerId == me && x.BlockedId == u.Id),
                 await PresenceEndpoints.CanSeePresence(db, me, u) && presence.IsOnline(u.Id),
                 await PresenceEndpoints.CanSeePresence(db, me, u) ? u.LastSeenAt : null,
-                u.Id != me && await CanPostOnProfileAsync(db, me, u.Id) is null));
+                u.Id != me && await CanPostOnProfileAsync(db, me, u.Id) is null,
+                PrivacyService.Allows(u.WhoCanMessage, rel), PrivacyService.Allows(u.WhoCanSendFriendRequests, rel),
+                PrivacyService.Allows(u.WhoCanSeeFriendsList, rel), PrivacyService.Allows(u.WhoCanFollow, rel),
+                await privacy.MutualFriendsAsync(me, u.Id)));
         });
 
         users.MapGet("/{userName}/posts", async (string userName, int? page, ClaimsPrincipal cp, AppDbContext db, PostService posts) =>
@@ -75,11 +79,13 @@ public static partial class UserEndpoints
             return Results.Ok(await posts.PageAsync(visible.Where(p => ((p.AuthorId == u.Id && p.TargetUserId == null) || p.TargetUserId == u.Id) && p.GroupId == null && p.PageId == null), cp.UserId(), page ?? 1, 15));
         });
 
-        users.MapGet("/{userName}/friends", async (string userName, AppDbContext db, PostService posts) =>
+        users.MapGet("/{userName}/friends", async (string userName, ClaimsPrincipal cp, AppDbContext db, PostService posts, PrivacyService privacy) =>
         {
             var key = userName.ToUpperInvariant();
             var u = await db.Users.FirstOrDefaultAsync(x => x.NormalizedUserName == key);
             if (u is null) return Results.NotFound();
+            if (!PrivacyService.Allows(u.WhoCanSeeFriendsList, await privacy.RelationAsync(cp.UserId(), u.Id)))
+                return Results.Problem($"{u.DisplayName} keeps their friends list private.", statusCode: 403);
             var ids = await posts.FriendIdsAsync(u.Id);
             return Results.Ok(await db.Users.Where(x => ids.Contains(x.Id)).OrderBy(x => x.DisplayName).Select(x => x.ToSummary()).ToListAsync());
         });
@@ -98,7 +104,8 @@ public static partial class UserEndpoints
             var ranked = fof.Where(id => id != me && !related.Contains(id) && !blocked.Contains(id))
                 .GroupBy(id => id).OrderByDescending(g => g.Count()).Take(12).Select(g => g.Key).ToList();
             if (ranked.Count < 12)
-                ranked.AddRange(await db.Users.Where(u => u.Id != me && !related.Contains(u.Id) && !blocked.Contains(u.Id) && !ranked.Contains(u.Id))
+                ranked.AddRange(await db.Users.Where(u => u.Id != me && !related.Contains(u.Id) && !blocked.Contains(u.Id) && !ranked.Contains(u.Id)
+                        && u.WhoCanFindMe == PrivacyAudience.Everyone && u.WhoCanSendFriendRequests == PrivacyAudience.Everyone)
                     .OrderByDescending(u => u.CreatedAt).Take(12 - ranked.Count).Select(u => u.Id).ToListAsync());
             var users = await db.Users.Where(u => ranked.Contains(u.Id)).ToListAsync();
             return Results.Ok(ranked.Select(id => users.First(u => u.Id == id).ToSummary()).ToList());
@@ -122,10 +129,14 @@ public static partial class UserEndpoints
                 .Select(f => new FriendRequestDto(f.Id, f.Requester.ToSummary(), f.Addressee.ToSummary(), f.CreatedAt)).ToListAsync();
         });
 
-        friends.MapPost("/{userId:guid}", async (Guid userId, ClaimsPrincipal cp, AppDbContext db, Notifier notifier) =>
+        friends.MapPost("/{userId:guid}", async (Guid userId, ClaimsPrincipal cp, AppDbContext db, Notifier notifier, PrivacyService privacy) =>
         {
             var me = cp.UserId();
-            if (userId == me || !await db.Users.AnyAsync(u => u.Id == userId)) return Results.BadRequest();
+            var target = await db.Users.FindAsync(userId);
+            if (userId == me || target is null) return Results.BadRequest();
+            var incoming = await db.Friendships.AnyAsync(f => f.RequesterId == userId && f.AddresseeId == me);
+            if (!incoming && !PrivacyService.Allows(target.WhoCanSendFriendRequests, await privacy.RelationAsync(me, userId)))
+                return Results.Problem($"{target.DisplayName} only accepts friend requests from {PrivacyService.Describe(target.WhoCanSendFriendRequests)}.", statusCode: 403);
             if (await db.Blocks.AnyAsync(b => (b.BlockerId == me && b.BlockedId == userId) || (b.BlockerId == userId && b.BlockedId == me))) return Results.Forbid();
             var existing = await db.Friendships.FirstOrDefaultAsync(f =>
                 (f.RequesterId == me && f.AddresseeId == userId) || (f.RequesterId == userId && f.AddresseeId == me));
@@ -176,10 +187,13 @@ public static partial class UserEndpoints
         });
 
         // ---- Follow / block ----
-        users.MapPost("/{userId:guid}/follow", async (Guid userId, ClaimsPrincipal cp, AppDbContext db, Notifier notifier) =>
+        users.MapPost("/{userId:guid}/follow", async (Guid userId, ClaimsPrincipal cp, AppDbContext db, Notifier notifier, PrivacyService privacy) =>
         {
             var me = cp.UserId();
-            if (userId == me || !await db.Users.AnyAsync(u => u.Id == userId)) return Results.BadRequest();
+            var target = await db.Users.FindAsync(userId);
+            if (userId == me || target is null) return Results.BadRequest();
+            if (!PrivacyService.Allows(target.WhoCanFollow, await privacy.RelationAsync(me, userId)))
+                return Results.Problem($"{target.DisplayName} can only be followed by {PrivacyService.Describe(target.WhoCanFollow)}.", statusCode: 403);
             if (await db.Follows.AnyAsync(f => f.FollowerId == me && f.FolloweeId == userId)) return Results.Ok();
             db.Follows.Add(new Follow { FollowerId = me, FolloweeId = userId });
             await db.SaveChangesAsync();
@@ -210,6 +224,20 @@ public static partial class UserEndpoints
         {
             await db.Blocks.Where(b => b.BlockerId == cp.UserId() && b.BlockedId == userId).ExecuteDeleteAsync();
             return Results.NoContent();
+        });
+
+        users.MapPut("/me/privacy", async (PrivacySettingsDto req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var u = await db.Users.FindAsync(cp.UserId());
+            if (u is null) return Results.Unauthorized();
+            u.WhoCanMessage = req.WhoCanMessage;
+            // Friend requests and search can't be "only me", or nobody could ever connect with you.
+            u.WhoCanSendFriendRequests = req.WhoCanSendFriendRequests is PrivacyAudience.Friends or PrivacyAudience.OnlyMe ? PrivacyAudience.FriendsOfFriends : req.WhoCanSendFriendRequests;
+            u.WhoCanSeeFriendsList = req.WhoCanSeeFriendsList;
+            u.WhoCanFindMe = req.WhoCanFindMe == PrivacyAudience.OnlyMe ? PrivacyAudience.Friends : req.WhoCanFindMe;
+            u.WhoCanFollow = req.WhoCanFollow == PrivacyAudience.OnlyMe ? PrivacyAudience.Friends : req.WhoCanFollow;
+            await db.SaveChangesAsync();
+            return Results.Ok(u.ToDto());
         });
 
         users.MapGet("/me/blocked", async (ClaimsPrincipal cp, AppDbContext db) =>

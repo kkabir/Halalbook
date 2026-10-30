@@ -712,3 +712,5 @@ label.field { display: flex; flex-direction: column; gap: .35rem; font-weight: 6
 .kv > span:nth-child(odd) { color: var(--text-3); }
 .stack { background: #0b1d17; color: #cfe8dc; padding: .8rem; border-radius: 10px; font-size: .75rem; max-height: 280px; overflow: auto; white-space: pre-wrap; margin-top: .75rem; }
 @media (max-width: 860px) { .admin-split { grid-template-columns: 1fr; } .admin-detail { position: static; } .admin-list { max-height: none; } }
+
+.privacy-row { padding: .45rem 0; border-top: 1px solid var(--border); gap: .5rem; }

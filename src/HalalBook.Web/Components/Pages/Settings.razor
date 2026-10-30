@@ -88,6 +88,20 @@
     </div>
 
     <div class="card stack mt">
+        <div class="card-title">Privacy</div>
+        <p class="subtle" style="margin:0">Choose who can reach you and find you, just like on Facebook.</p>
+        @foreach (var (key, label, hint, options) in PrivacyRows)
+        {
+            <label class="row spread wrap privacy-row">
+                <div class="grow"><b>@label</b><div class="subtle">@hint</div></div>
+                <select class="input" style="width:auto" value="@Get(key)" @onchange="e => SetPrivacy(key, e.Value?.ToString())">
+                    @foreach (var o in options) { <option value="@o">@AudienceName(o)</option> }
+                </select>
+            </label>
+        }
+    </div>
+
+    <div class="card stack mt">
         <div class="card-title">Blocked people</div>
         <p class="subtle" style="margin:0">Blocked people can't see your posts or profile, message you, post on your profile or add you as a friend.</p>
         @if (blocked is null) { <div class="spinner"></div> }
@@ -144,6 +158,47 @@
     [Inject] private Realtime Realtime { get; set; } = default!;
 
     private List<UserSummaryDto>? blocked;
+
+    private static readonly PrivacyAudience[] AllFour = [PrivacyAudience.Everyone, PrivacyAudience.FriendsOfFriends, PrivacyAudience.Friends, PrivacyAudience.OnlyMe];
+    private static readonly (string, string, string, PrivacyAudience[])[] PrivacyRows =
+    [
+        ("message", "Who can message you", "People outside this audience can't start a new chat with you.", AllFour),
+        ("friend", "Who can send you friend requests", "", [PrivacyAudience.Everyone, PrivacyAudience.FriendsOfFriends]),
+        ("friends", "Who can see your friends list", "", AllFour),
+        ("find", "Who can find you in search", "", [PrivacyAudience.Everyone, PrivacyAudience.FriendsOfFriends, PrivacyAudience.Friends]),
+        ("follow", "Who can follow you", "Followers see your public posts in their feed.", [PrivacyAudience.Everyone, PrivacyAudience.FriendsOfFriends, PrivacyAudience.Friends]),
+    ];
+
+    private static string AudienceName(PrivacyAudience a) => a switch
+    {
+        PrivacyAudience.Everyone => "🌐 Everyone", PrivacyAudience.FriendsOfFriends => "👥 Friends of friends",
+        PrivacyAudience.Friends => "👥 Friends", _ => "🔒 Only me",
+    };
+
+    private PrivacySettingsDto Privacy => Session.User?.Privacy ?? new(PrivacyAudience.Everyone, PrivacyAudience.Everyone, PrivacyAudience.Everyone, PrivacyAudience.Everyone, PrivacyAudience.Everyone);
+
+    private PrivacyAudience Get(string key) => key switch
+    {
+        "message" => Privacy.WhoCanMessage, "friend" => Privacy.WhoCanSendFriendRequests, "friends" => Privacy.WhoCanSeeFriendsList,
+        "find" => Privacy.WhoCanFindMe, _ => Privacy.WhoCanFollow,
+    };
+
+    private async Task SetPrivacy(string key, string? value)
+    {
+        if (!Enum.TryParse<PrivacyAudience>(value, out var a)) return;
+        var p = key switch
+        {
+            "message" => Privacy with { WhoCanMessage = a }, "friend" => Privacy with { WhoCanSendFriendRequests = a },
+            "friends" => Privacy with { WhoCanSeeFriendsList = a }, "find" => Privacy with { WhoCanFindMe = a }, _ => Privacy with { WhoCanFollow = a },
+        };
+        try
+        {
+            var u = await Api.PutAsync<UserDto>("api/users/me/privacy", p);
+            await Session.UpdateUserAsync(u);
+            Toasts.Show("Privacy updated");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

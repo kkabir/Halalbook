@@ -37,6 +37,7 @@ builder.Services.AddSingleton<TokenService>();
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<PostService>();
 builder.Services.AddScoped<Notifier>();
+builder.Services.AddScoped<PrivacyService>();
 builder.Services.AddHttpClient<AiService>(c => c.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddSingleton(config.GetSection("Email").Get<EmailOptions>() ?? new EmailOptions());
 builder.Services.AddSingleton(config.GetSection("Auth").Get<AuthOptions>() ?? new AuthOptions());

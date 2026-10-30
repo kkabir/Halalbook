@@ -24,6 +24,11 @@ public class User
     public bool ShowOnlineStatus { get; set; } = true;
     public DateTime? LastSeenAt { get; set; }
     public ProfilePostPermission WhoCanPost { get; set; }
+    public PrivacyAudience WhoCanMessage { get; set; } = PrivacyAudience.Everyone;
+    public PrivacyAudience WhoCanSendFriendRequests { get; set; } = PrivacyAudience.Everyone;
+    public PrivacyAudience WhoCanSeeFriendsList { get; set; } = PrivacyAudience.Everyone;
+    public PrivacyAudience WhoCanFindMe { get; set; } = PrivacyAudience.Everyone;
+    public PrivacyAudience WhoCanFollow { get; set; } = PrivacyAudience.Everyone;
     /// <summary>Which version of the Community Agreement the person last read and accepted, and when.</summary>
     public string? AcceptedTermsVersion { get; set; }
     public DateTime? AcceptedTermsAt { get; set; }

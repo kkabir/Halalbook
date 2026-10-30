@@ -44,6 +44,7 @@ else
             <div class="grow" style="padding-bottom:.5rem">
                 <div class="profile-name">@p.User.DisplayName @if (p.User.IsVerified) { <span class="verified">✦</span> }</div>
                 <div class="muted">@@@p.User.UserName · @p.FriendCount friends · @p.FollowerCount followers</div>
+                @if (p.MutualFriends > 0) { <div class="subtle">👥 @p.MutualFriends mutual friend@(p.MutualFriends == 1 ? "" : "s")</div> }
                 @if (p.Friendship != FriendshipStatus.Self && Ui.LastSeen(p.IsOnline || Realtime.IsOnline(p.User.Id), p.LastSeenAt) is { Length: > 0 } seen)
                 {
                     <div class="active-text">● @seen</div>
@@ -66,13 +67,13 @@ else
                         <button class="btn btn-outline" @onclick="Unfriend">Decline</button>
                         break;
                     default:
-                        <button class="btn btn-primary" @onclick="AddFriend">+ Add friend</button>
+                        @if (p.CanAddFriend) { <button class="btn btn-primary" @onclick="AddFriend">+ Add friend</button> }
                         break;
                 }
                 @if (p.Friendship != FriendshipStatus.Self)
                 {
-                    <button class="btn btn-outline" @onclick="ToggleFollow">@(p.IsFollowing ? "Following" : "Follow")</button>
-                    <button class="btn btn-gold" @onclick="Message">💬 Message</button>
+                    @if (p.CanFollow || p.IsFollowing) { <button class="btn btn-outline" @onclick="ToggleFollow">@(p.IsFollowing ? "Following" : "Follow")</button> }
+                    @if (p.CanMessage) { <button class="btn btn-gold" @onclick="Message">💬 Message</button> }
                     <div class="menu">
                         <button class="icon-btn" @onclick="() => menu = !menu">⋯</button>
                         @if (menu)
@@ -89,7 +90,7 @@ else
         <div class="tabs" style="padding:0 1rem;margin-bottom:0">
             <button class="@(tab == "posts" ? "active" : "")" @onclick='() => tab = "posts"'>Posts</button>
             <button class="@(tab == "about" ? "active" : "")" @onclick='() => tab = "about"'>About</button>
-            <button class="@(tab == "friends" ? "active" : "")" @onclick="ShowFriends">Friends</button>
+            @if (p.CanSeeFriends) { <button class="@(tab == "friends" ? "active" : "")" @onclick="ShowFriends">Friends</button> }
         </div>
     </div>
 

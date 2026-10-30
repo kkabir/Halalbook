@@ -1024,7 +1024,22 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<string>("Website")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("WhoCanFindMe")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WhoCanFollow")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WhoCanMessage")
+                        .HasColumnType("int");
+
                     b.Property<int>("WhoCanPost")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WhoCanSeeFriendsList")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WhoCanSendFriendRequests")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
