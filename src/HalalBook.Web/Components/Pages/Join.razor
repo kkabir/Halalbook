@@ -1,0 +1,53 @@
+@page "/join/{Code}"
+@attribute [ExcludeFromInteractiveRouting]
+@layout PublicLayout
+@inject IHttpClientFactory Http
+@inject IConfiguration Config
+
+@* Server-rendered so the invite shows as "Aisha invited you" with her photo when pasted into WhatsApp, Messenger or SMS. *@
+
+<PageTitle>@Title</PageTitle>
+<HeadContent>
+    <meta property="og:site_name" content="HalalBook" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="@Title" />
+    <meta property="og:description" content="Join a beautiful, safe social home for the Ummah: friends and family, reels, live shows, prayer times and 19 languages." />
+    <meta property="og:image" content="@(inviter?.AvatarUrl is { Length: > 0 } a && a.StartsWith("http") ? a : $"{SearchEngineFiles.SiteUrl(Config)}/img/og-image.png")" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="robots" content="noindex" />
+</HeadContent>
+
+<div class="card center join-card">
+    @if (inviter is null)
+    {
+        <img src="img/logo-mark.svg" alt="" width="80" height="80" />
+        <h1>You're invited to HalalBook</h1>
+    }
+    else
+    {
+        <span class="avatar ring" style="--size:96px">@if (inviter.AvatarUrl is { } a) { <img src="@a" alt="" /> } else { @Ui.Initials(inviter.DisplayName) }</span>
+        <h1>@inviter.DisplayName invited you to HalalBook</h1>
+    }
+    <p class="arabic" style="font-size:1.4rem;color:var(--gold-600);margin:.25rem 0">أَهْلًا وَسَهْلًا</p>
+    <p class="muted">A beautiful, safe social home for the Ummah. Join free and you'll be friends with @(inviter?.DisplayName.Split(' ')[0] ?? "them") straight away.</p>
+    <a class="btn btn-gold btn-block" href="/register?invite=@Uri.EscapeDataString(Code)">Join free</a>
+    <p class="subtle mt">Already a member? <a href="/login">Sign in</a> · <a href="/welcome">What is HalalBook?</a></p>
+</div>
+
+@code {
+    [Parameter] public string Code { get; set; } = "";
+    private UserSummaryDto? inviter;
+
+    private string Title => inviter is null ? "You're invited to HalalBook" : $"{inviter.DisplayName} invited you to HalalBook";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            using var http = Http.CreateClient("api");
+            var res = await http.GetAsync($"api/public/invites/{Uri.EscapeDataString(Code)}");
+            if (res.IsSuccessStatusCode) inviter = await res.Content.ReadFromJsonAsync<UserSummaryDto>(ApiClient.Json);
+        }
+        catch (HttpRequestException) { }
+    }
+}

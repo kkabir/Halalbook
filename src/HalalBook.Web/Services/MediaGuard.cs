@@ -39,6 +39,7 @@ public class MediaGuard(ApiClient api, IJSRuntime js, Toasts toasts)
             var f = files[i];
             var isVideo = f.ContentType.StartsWith("video");
             if (isVideo && !videoAllowed) { toasts.Show("Only photos can be added here.", true); continue; }
+            if (!isVideo) f = await ShrinkAsync(f, purpose);
             var maxMb = isVideo ? l.MaxVideoMB : purpose == "comment" ? l.MaxCommentImageMB : l.MaxImageMB;
             if (f.Size > maxMb * 1_000_000) { toasts.Show($"{f.Name} is too large. The limit is {maxMb:0.#} MB.", true); continue; }
             if (isVideo && i < durations.Length && durations[i] > maxSeconds + 1)
@@ -56,6 +57,25 @@ public class MediaGuard(ApiClient api, IJSRuntime js, Toasts toasts)
             catch (Exception ex) { toasts.Error(ex); }
         }
         return results;
+    }
+
+    /// <summary>
+    /// Resizes large photos in the browser before they are sent, so a 12 MB phone photo uploads as a few hundred KB
+    /// and feeds load fast on slow connections. Animated GIFs and small images are left alone.
+    /// </summary>
+    private static async Task<IBrowserFile> ShrinkAsync(IBrowserFile f, string purpose)
+    {
+        var isHeic = f.ContentType is "image/heic" or "image/heif" || f.Name.EndsWith(".heic", StringComparison.OrdinalIgnoreCase);
+        // iPhone HEIC photos are always converted, since browsers and the server can't show them as they are.
+        if (f.ContentType is "image/gif" or "image/svg+xml" || (f.Size < 400_000 && !isHeic)) return f;
+        var max = purpose switch { "profile" => 1080, "comment" or "message" => 1280, _ => 2048 };
+        var format = f.ContentType == "image/png" ? "image/png" : "image/jpeg";
+        try
+        {
+            var small = await f.RequestImageFileAsync(format, max, max);
+            return small.Size > 0 && (isHeic || small.Size < f.Size) ? small : f;
+        }
+        catch (Exception) { return f; } // Formats the browser can't draw (such as some HEIC photos) upload as they are.
     }
 
     private static string Format(int s) => s >= 60 ? $"{s / 60}:{s % 60:00} min" : $"{s} seconds";

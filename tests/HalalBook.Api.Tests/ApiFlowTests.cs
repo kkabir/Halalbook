@@ -604,4 +604,24 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Contains(pub.Id.ToString(), json);
         Assert.DoesNotContain(friends.Id.ToString(), json);
     }
+
+    [Fact]
+    public async Task InviteLink_MakesNewMemberAFriend()
+    {
+        var (inviter, inviterId) = await SignUpWithId("inviter");
+        var info = (await inviter.GetFromJsonAsync<InviteInfoDto>("/api/users/me/invites", Json))!;
+        Assert.Contains($"/join/{info.Code}", info.Link);
+        Assert.Equal(info.Code, (await inviter.GetFromJsonAsync<InviteInfoDto>("/api/users/me/invites", Json))!.Code);
+
+        var who = (await factory.CreateClient().GetFromJsonAsync<UserSummaryDto>($"/api/public/invites/{info.Code}", Json))!;
+        Assert.Equal(inviterId, who.Id);
+        Assert.Equal(HttpStatusCode.NotFound, (await factory.CreateClient().GetAsync("/api/public/invites/nope1234")).StatusCode);
+
+        var res = await factory.CreateClient().PostAsJsonAsync("/api/auth/register",
+            new RegisterRequest("invitee", "invitee@example.test", "Invitee-Pass-123", "Invited Person", Terms.Version, info.Code), Json);
+        res.EnsureSuccessStatusCode();
+        var after = (await inviter.GetFromJsonAsync<InviteInfoDto>("/api/users/me/invites", Json))!;
+        Assert.Equal(1, after.JoinedCount);
+        Assert.Equal("invitee", after.Joined[0].UserName);
+    }
 }

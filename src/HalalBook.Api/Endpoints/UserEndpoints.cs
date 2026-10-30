@@ -260,6 +260,24 @@ public static partial class UserEndpoints
             return Results.NoContent();
         });
 
+        // The member's personal invite link (created on first use) and who joined through it.
+        users.MapGet("/me/invites", async (ClaimsPrincipal cp, AppDbContext db, SeoOptions seo) =>
+        {
+            var u = await db.Users.FindAsync(cp.UserId());
+            if (u is null) return Results.Unauthorized();
+            if (u.InviteCode is null)
+            {
+                const string alphabet = "abcdefghjkmnpqrstuvwxyz23456789"; // no look-alike characters
+                do u.InviteCode = new string(Enumerable.Range(0, 8).Select(_ => alphabet[Random.Shared.Next(alphabet.Length)]).ToArray());
+                while (await db.Users.AnyAsync(x => x.InviteCode == u.InviteCode));
+                await db.SaveChangesAsync();
+            }
+            var joined = db.Users.Where(x => x.InvitedById == u.Id);
+            var recent = await joined.OrderByDescending(x => x.CreatedAt).Take(12).ToListAsync();
+            return Results.Ok(new InviteInfoDto(u.InviteCode, $"{seo.SiteUrl.TrimEnd('/')}/join/{u.InviteCode}",
+                await joined.CountAsync(), recent.Select(x => x.ToSummary()).ToList()));
+        });
+
         users.MapPut("/me/language", async (LanguageSettingsRequest req, ClaimsPrincipal cp, AppDbContext db) =>
         {
             var u = await db.Users.FindAsync(cp.UserId());

@@ -22,6 +22,7 @@ else
         <div class="arabic" style="font-size:1.6rem;color:var(--gold-600)">أَهْلًا وَسَهْلًا</div>
         <h1 style="font-family:var(--font-display);font-weight:700">@T("Join HalalBook")</h1>
         <p class="muted">It's free, and always will be.</p>
+        @if (!string.IsNullOrEmpty(Invite)) { <p class="subtle">🤝 You'll be friends with the person who invited you as soon as you join.</p> }
     </div>
     <form class="stack" @onsubmit="Submit">
         <label class="field">@T("Your name")<input class="input" @bind="name" required /></label>
@@ -39,6 +40,8 @@ else
 }
 
 @code {
+    /// <summary>Code from a friend's invite link (/join/{code}).</summary>
+    [SupplyParameterFromQuery] public string? Invite { get; set; }
     private string? name, userName, email, password, error;
     private bool busy;
 
@@ -60,7 +63,7 @@ else
         busy = true; error = null;
         try
         {
-            var result = await Api.PostAsync<AuthResult>("api/auth/register", new RegisterRequest(userName ?? "", email ?? "", password ?? "", name ?? "", Terms.Version));
+            var result = await Api.PostAsync<AuthResult>("api/auth/register", new RegisterRequest(userName ?? "", email ?? "", password ?? "", name ?? "", Terms.Version, Invite));
             await AuthFlow.ContinueAsync(result, Session, Nav, null);
         }
         catch (ApiException ex) { error = ex.Message; showTerms = false; }

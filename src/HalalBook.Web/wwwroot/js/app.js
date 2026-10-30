@@ -36,6 +36,16 @@ window.halalbook = {
 
     copy: (text) => navigator.clipboard?.writeText(text),
 
+    // Draws a QR code for a link into an element (the library loads on first use).
+    qr: async (el, text) => {
+        if (!window.qrcode) await new Promise((ok, fail) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+            s.onload = ok; s.onerror = fail; document.head.appendChild(s);
+        });
+        const q = qrcode(0, 'M'); q.addData(text); q.make();
+        el.innerHTML = q.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+    },
     // The phone's own share sheet (Instagram, Snapchat, Signal...). Returns false where unsupported.
     nativeShare: async (title, url) => {
         if (!navigator.share) return false;

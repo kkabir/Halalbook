@@ -1117,6 +1117,13 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<string>("InviteCode")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid?>("InvitedById")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsSuspended")
                         .HasColumnType("bit");
 
@@ -1197,6 +1204,10 @@ namespace HalalBook.Api.Data.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("InviteCode")
+                        .IsUnique()
+                        .HasFilter("[InviteCode] IS NOT NULL");
 
                     b.HasIndex("NormalizedEmail")
                         .IsUnique();

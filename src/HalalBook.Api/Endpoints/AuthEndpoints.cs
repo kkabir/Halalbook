@@ -24,7 +24,7 @@ public static partial class AuthEndpoints
         var auth = app.MapGroup("/api/auth").WithTags("Auth").RequireRateLimiting("auth");
 
         auth.MapPost("/register", async (RegisterRequest req, AppDbContext db, TokenService tokens, IPasswordHasher<User> hasher,
-            AuthOptions options, Mailer mailer) =>
+            AuthOptions options, Mailer mailer, Notifier notifier) =>
         {
             var errors = new Dictionary<string, string[]>();
             if (!UserNameRegex().IsMatch(req.UserName ?? "")) errors["userName"] = ["Use 3-32 letters, numbers, dots or underscores."];
@@ -49,7 +49,18 @@ public static partial class AuthEndpoints
             };
             user.PasswordHash = hasher.HashPassword(user, req.Password!);
             db.Users.Add(user);
+            // Joined through a friend's invite link: they become friends straight away.
+            var inviter = string.IsNullOrWhiteSpace(req.InviteCode) ? null
+                : await db.Users.FirstOrDefaultAsync(u => u.InviteCode == req.InviteCode.Trim() && !u.IsSuspended);
+            if (inviter is not null)
+            {
+                user.InvitedById = inviter.Id;
+                db.Friendships.Add(new Friendship { RequesterId = inviter.Id, AddresseeId = user.Id, Accepted = true });
+            }
             await db.SaveChangesAsync();
+            if (inviter is not null)
+                await notifier.SendAsync(inviter.Id, user.Id, NotificationType.FriendAccepted,
+                    $"{user.DisplayName} joined HalalBook from your invite. You're now friends! 🎉", $"/u/{user.UserName}");
 
             if (options.RequireConfirmedEmail)
                 return Results.Ok(await mailer.SendCodeAsync(user, EmailCodePurpose.VerifyEmail));

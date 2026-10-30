@@ -43,6 +43,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<User>(e =>
         {
             e.HasIndex(x => x.NormalizedUserName).IsUnique();
+            e.HasIndex(x => x.InviteCode).IsUnique().HasFilter("[InviteCode] IS NOT NULL");
+            e.Property(x => x.InviteCode).HasMaxLength(16);
             e.HasIndex(x => x.NormalizedEmail).IsUnique();
             e.Property(x => x.UserName).HasMaxLength(32);
             e.Property(x => x.NormalizedUserName).HasMaxLength(32);

@@ -16,7 +16,7 @@
     }
     @if (!IsSharedPost)
     {
-        @* Shared posts (/p/{id}) write their own preview tags. *@
+        @* Shared posts (/p/{id}) and invites (/join/{code}) write their own preview tags. *@
         <meta property="og:site_name" content="HalalBook" />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="@SiteUrl/" />
@@ -67,7 +67,7 @@
     ];
 
     private string SiteUrl => SearchEngineFiles.SiteUrl(Config);
-    private bool IsSharedPost => HttpContext.Request.Path.StartsWithSegments("/p");
+    private bool IsSharedPost => HttpContext.Request.Path.StartsWithSegments("/p") || HttpContext.Request.Path.StartsWithSegments("/join");
 
     // Tells search engines what HalalBook is, so it can show as a named site with a search box.
     private string StructuredData => System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object>

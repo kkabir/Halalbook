@@ -52,6 +52,11 @@ public static class PostEndpoints
             return list.Count == 1 ? Results.Ok(list[0]) : Results.NotFound();
         }).WithTags("Posts");
 
+        // Who sent an invite link, for the "X invited you" page. Only the code reveals the person.
+        app.MapGet("/api/public/invites/{code}", async (string code, AppDbContext db) =>
+            await db.Users.FirstOrDefaultAsync(u => u.InviteCode == code && !u.IsSuspended) is { } u ? Results.Ok(u.ToSummary()) : Results.NotFound())
+            .WithTags("Users");
+
         // Public posts for the web app's sitemap.xml, newest first.
         app.MapGet("/api/public/sitemap", async (AppDbContext db) =>
         {

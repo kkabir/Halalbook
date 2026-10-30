@@ -149,6 +149,8 @@ public static class PlatformEndpoints
         islamic.MapGet("/hijri", (DateOnly? date, int? adjust) => HijriService.ToHijri(date ?? DateOnly.FromDateTime(DateTime.UtcNow), adjust ?? 0));
         islamic.MapGet("/calendar", (int year, int month) => HijriService.Month(year, month));
         islamic.MapGet("/occasions", () => HijriService.Upcoming(DateOnly.FromDateTime(DateTime.UtcNow)));
+        islamic.MapGet("/ayah-of-the-day", async (string? lang, DailyAyahService ayahs, CancellationToken ct) =>
+            await ayahs.TodayAsync(lang, ct) is { } a ? Results.Ok(a) : Results.Problem("The verse of the day is unavailable right now.", statusCode: 503));
 
         // ---------- AI ----------
         var ai = app.MapGroup("/api/ai").WithTags("AI").RequireAuthorization().RequireRateLimiting("ai");

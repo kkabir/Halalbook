@@ -30,6 +30,9 @@ public class User
     public bool AutoTranslate { get; set; } = true;
     /// <summary>The post shown first on this person's profile.</summary>
     public Guid? PinnedPostId { get; set; }
+    /// <summary>Code in this person's invite link (halalbook.app/join/{code}), and who invited them.</summary>
+    public string? InviteCode { get; set; }
+    public Guid? InvitedById { get; set; }
     public PrivacyAudience WhoCanSendFriendRequests { get; set; } = PrivacyAudience.Everyone;
     public PrivacyAudience WhoCanSeeFriendsList { get; set; } = PrivacyAudience.Everyone;
     public PrivacyAudience WhoCanFindMe { get; set; } = PrivacyAudience.Everyone;

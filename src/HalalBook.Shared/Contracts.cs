@@ -23,7 +23,10 @@ public enum ReportTarget { Post, Comment, User, Story, Message }
 public enum NotificationType { FriendRequest, FriendAccepted, Follow, Reaction, Comment, Mention, Share, GroupInvite, EventInvite, Message, Moderation, System, Live }
 
 // ---------- Auth ----------
-public record RegisterRequest(string UserName, string Email, string Password, string DisplayName, string? AcceptedTermsVersion = null);
+public record RegisterRequest(string UserName, string Email, string Password, string DisplayName, string? AcceptedTermsVersion = null,
+    string? InviteCode = null);
+/// <summary>A member's personal invite link and the people who joined through it.</summary>
+public record InviteInfoDto(string Code, string Link, int JoinedCount, List<UserSummaryDto> Joined);
 public record AcceptTermsRequest(string Version);
 public record LoginRequest(string UserNameOrEmail, string Password);
 public record AuthResponse(string Token, DateTime ExpiresAt, UserDto User);
@@ -155,6 +158,8 @@ public record HijriDateDto(int Year, int Month, int Day, string MonthName, strin
 public record CalendarDayDto(DateOnly Date, HijriDateDto Hijri, List<string> Occasions);
 public record IslamicOccasionDto(string Name, HijriDateDto Hijri, DateOnly GregorianDate);
 public record PrayerMethodDto(string Key, string Name);
+/// <summary>The verse of the day: reference like "2:286", Arabic text, and a translation in the reader's language.</summary>
+public record AyahDto(string Reference, string SurahName, string SurahNameArabic, string Arabic, string? Translation, string Language);
 
 // ---------- AI ----------
 public record AiComposeRequest(string Text, string Mode = "polish"); // polish | shorter | warmer | arabic-greeting | caption

@@ -43,6 +43,7 @@ builder.Services.AddSingleton<PostTranslationQueue>();
 builder.Services.AddHostedService<PostTranslationWorker>();
 builder.Services.AddSingleton(config.GetSection("Seo").Get<SeoOptions>() ?? new SeoOptions());
 builder.Services.AddSingleton<IndexNowQueue>();
+builder.Services.AddSingleton<DailyAyahService>();
 builder.Services.AddHostedService<IndexNowWorker>();
 builder.Services.AddHttpClient<AiService>(c => c.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddSingleton(config.GetSection("Email").Get<EmailOptions>() ?? new EmailOptions());

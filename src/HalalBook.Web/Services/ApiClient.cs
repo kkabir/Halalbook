@@ -80,12 +80,20 @@ public class ApiClient(HttpClient http, AuthSession session)
     }
 
     /// <param name="frames">For videos: JPEG stills from across the video, used by the server's content check.</param>
+    /// <summary>The file name with an extension matching its type, since photos resized in the browser may change format.</summary>
+    private static string UploadName(IBrowserFile file)
+    {
+        var ext = file.ContentType switch { "image/jpeg" => ".jpg", "image/png" => ".png", "image/webp" => ".webp", _ => null };
+        var current = Path.GetExtension(file.Name).ToLowerInvariant();
+        return ext is null || current == ext || (ext == ".jpg" && current == ".jpeg") ? file.Name : Path.ChangeExtension(file.Name, ext);
+    }
+
     public async Task<UploadResult> UploadAsync(IBrowserFile file, long maxBytes = 60_000_001, string purpose = "post", IReadOnlyList<byte[]>? frames = null)
     {
         using var content = new MultipartFormDataContent();
         var stream = new StreamContent(file.OpenReadStream(maxBytes));
         stream.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrEmpty(file.ContentType) ? "application/octet-stream" : file.ContentType);
-        content.Add(stream, "file", file.Name);
+        content.Add(stream, "file", UploadName(file));
         for (int i = 0; i < (frames?.Count ?? 0); i++)
         {
             var frame = new ByteArrayContent(frames![i]);
