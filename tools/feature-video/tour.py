@@ -89,7 +89,7 @@ async def seed(browser):
 CAPTION_JS = """t => {
   let el = document.getElementById('__cap');
   if (!el) { el = document.createElement('div'); el.id = '__cap';
-    el.style.cssText = 'position:fixed;left:12px;right:12px;bottom:84px;z-index:99999;padding:12px 16px;border-radius:16px;' +
+    el.style.cssText = (innerWidth > 900 ? 'position:fixed;left:50%;transform:translateX(-50%);bottom:28px;font-size:26px !important;padding:14px 34px;' : 'position:fixed;left:12px;right:12px;bottom:84px;padding:12px 16px;') + 'z-index:99999;border-radius:16px;' +
       'background:linear-gradient(135deg,#0d4a39,#06261c);color:#f3dc8a;font:800 19px/1.25 "Plus Jakarta Sans",sans-serif;' +
       'text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.35);border:1px solid #c9a227;pointer-events:none;transition:opacity .3s';
     document.body.appendChild(el); }
@@ -131,8 +131,14 @@ async def main():
         signed_in = await lp.evaluate("() => JSON.stringify(Object.fromEntries(Object.entries(localStorage)))")
         await pre.close()
 
-        ctx = await browser.new_context(ignore_https_errors=True, viewport={"width": 390, "height": 844}, device_scale_factor=2,
-                                        is_mobile=True, has_touch=True, record_video_dir=HERE, record_video_size={"width": 780, "height": 1688})
+        # TOUR_LAYOUT=wide records the full computer layout for a 1920x1080 (16:9) full-screen video; otherwise a phone.
+        if os.environ.get("TOUR_LAYOUT") == "wide":
+            ctx = await browser.new_context(ignore_https_errors=True, viewport={"width": 1920, "height": 1080},
+                                            record_video_dir=HERE, record_video_size={"width": 1920, "height": 1080})
+        else:
+            # The recording captures CSS pixels, so record at the viewport's own size (a large phone) to fill the frame.
+            ctx = await browser.new_context(ignore_https_errors=True, viewport={"width": 540, "height": 1170},
+                                            is_mobile=True, has_touch=True, record_video_dir=HERE, record_video_size={"width": 540, "height": 1170})
         page = await ctx.new_page()
         tour = Tour(page)
 
@@ -211,7 +217,7 @@ async def main():
 
         video = page.video
         await ctx.close()
-        os.replace(await video.path(), os.path.join(HERE, "tour.webm"))
+        os.replace(await video.path(), os.path.join(HERE, "tour-wide.webm" if os.environ.get("TOUR_LAYOUT") == "wide" else "tour.webm"))
         json.dump(tour.timings, open(os.path.join(HERE, "timings.json"), "w"), indent=1)
         await browser.close()
 

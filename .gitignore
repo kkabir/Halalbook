@@ -503,3 +503,5 @@ tools/feature-video/*.mp4
 tools/feature-video/lengths.json
 tools/feature-video/timings.json
 docs/video/
+tools/feature-video/frames/
+tools/feature-video/frame.png
