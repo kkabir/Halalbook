@@ -13,7 +13,7 @@
         <div class="row spread wrap" style="gap:.6rem">
             <label class="field" style="margin:0">@T("Currency")
                 <select class="input" value="@currency" @onchange="ChangeCurrency">
-                    @foreach (var c in nisab?.Currencies ?? [currency]) { <option value="@c">@c</option> }
+                    @foreach (var c in nisab?.Currencies ?? [currency]) { <option value="@c" selected="@(c == currency)">@c</option> }
                 </select>
             </label>
             <div class="zakat-nisab-choice">

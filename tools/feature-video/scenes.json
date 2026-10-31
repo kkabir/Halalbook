@@ -1,0 +1,16 @@
+[
+  { "id": "01-welcome", "caption": "Welcome to HalalBook", "say": "Welcome to HalalBook. A beautiful, safe social home for friends and family, open to everyone." },
+  { "id": "02-signup", "caption": "Join in a minute", "say": "Joining takes a minute. Choose whether you'd like Islamic features like prayer times and the dua wall, or keep it general. You can change this any time." },
+  { "id": "03-home", "caption": "Your home feed", "say": "Your home feed starts with your day: the verse of the day in your own language, Jummah reminders on Fridays, and friends' birthdays." },
+  { "id": "04-post", "caption": "Post, poll or schedule", "say": "Share a post, a photo or a video. Add a poll, ask your friends for dua, or tap the clock to schedule it for later. Type the at sign to mention a friend." },
+  { "id": "05-poll", "caption": "Live poll results", "say": "Friends vote in your poll with one tap, and see the results straight away." },
+  { "id": "06-shorts", "caption": "Reels and short videos", "say": "Short videos are grouped by subject. Tap one and they play one after another, like on Facebook and TikTok." },
+  { "id": "07-chat", "caption": "Messages in your language", "say": "In Messages, every chat is translated into your language automatically. React to a message, reply to it, send a voice note, or mark it urgent." },
+  { "id": "08-market", "caption": "Marketplace", "say": "The Marketplace lets you buy and sell with people nearby. Halal items only. Message the seller with one tap." },
+  { "id": "09-khatm", "caption": "Quran khatm together", "say": "Start a Quran khatm with your family. Everyone takes a juz, and HalalBook tells you when all thirty are finished." },
+  { "id": "10-zakat", "caption": "Zakat calculator", "say": "The Zakat calculator uses today's gold and silver prices in your own currency." },
+  { "id": "11-tasbeeh", "caption": "Tasbeeh", "say": "And the tasbeeh counts your dhikr with a gentle buzz, after every salah." },
+  { "id": "12-settings", "caption": "You're in control", "say": "In Settings, you're in control. Choose a calm feed with fewer heated posts, set Do Not Disturb with your family always getting through, and pick your language." },
+  { "id": "13-arabic", "caption": "19 languages", "say": "HalalBook speaks nineteen languages, including Arabic, Urdu and Bangla, and turns right to left for Arabic." },
+  { "id": "14-end", "caption": "halalbook.app", "say": "HalalBook. Your community is waiting. Join free at halal book dot app." }
+]

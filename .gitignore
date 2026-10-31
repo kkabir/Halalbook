@@ -494,3 +494,12 @@ src/HalalBook.Api/emails/
 
 # Generated keys (Web Push)
 **/App_Data/vapid.json
+
+# Feature video working files
+tools/feature-video/seed.json
+tools/feature-video/*.wav
+tools/feature-video/*.webm
+tools/feature-video/*.mp4
+tools/feature-video/lengths.json
+tools/feature-video/timings.json
+docs/video/
