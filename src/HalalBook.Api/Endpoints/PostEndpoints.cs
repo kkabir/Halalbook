@@ -152,7 +152,7 @@ public static class PostEndpoints
         });
 
         posts.MapPost("/", async (CreatePostRequest req, ClaimsPrincipal cp, AppDbContext db, PostService svc, AiService ai, Notifier notifier, IWebHostEnvironment env,
-            PostTranslationQueue translations, IndexNowQueue indexNow, CancellationToken ct) =>
+            PostTranslationQueue translations, IndexNowQueue indexNow, TopicQueue topics, CancellationToken ct) =>
         {
             var me = cp.UserId();
             var content = (req.Content ?? "").Trim();
@@ -249,6 +249,7 @@ public static class PostEndpoints
 
             // "Reach the whole Ummah": translate into the main languages in the background.
             if (req.TranslateForUmmah && content.Length > 0) foreach (var p in created) translations.Enqueue(p.Id);
+            if (content.Length > 0) foreach (var p in created) topics.Enqueue(p.Id);
             // Public posts are announced to search engines (scheduled ones when they go out).
             foreach (var p in created.Where(p => p.PublishAt is null && p.Visibility == Visibility.Public && p.Moderation == ModerationStatus.Approved && p.GroupId is null))
                 indexNow.Enqueue($"/p/{p.Id}");

@@ -300,6 +300,16 @@ public static partial class UserEndpoints
             return Results.Ok(u.ToDto());
         });
 
+        users.MapPut("/me/feed", async (FeedSettingsDto req, ClaimsPrincipal cp, AppDbContext db) =>
+        {
+            var u = await db.Users.FindAsync(cp.UserId());
+            if (u is null) return Results.Unauthorized();
+            u.CalmFeed = req.CalmMode;
+            u.LessOfTopics = string.Join(',', (req.LessOf ?? []).Where(Topics.All.Contains).Distinct());
+            await db.SaveChangesAsync();
+            return Results.Ok(u.ToDto());
+        });
+
         users.MapPut("/me/birthday", async (BirthdaySettingsRequest req, ClaimsPrincipal cp, AppDbContext db) =>
         {
             var u = await db.Users.FindAsync(cp.UserId());

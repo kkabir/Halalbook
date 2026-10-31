@@ -1057,6 +1057,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<Guid?>("GroupId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("Heated")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -1093,6 +1096,9 @@ namespace HalalBook.Api.Data.Migrations
 
                     b.Property<Guid?>("TargetUserId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Topic")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Translations")
                         .HasColumnType("nvarchar(max)");
@@ -1444,6 +1450,9 @@ namespace HalalBook.Api.Data.Migrations
                     b.Property<DateOnly?>("Birthday")
                         .HasColumnType("date");
 
+                    b.Property<bool>("CalmFeed")
+                        .HasColumnType("bit");
+
                     b.Property<string>("CoverUrl")
                         .HasColumnType("nvarchar(max)");
 
@@ -1492,6 +1501,9 @@ namespace HalalBook.Api.Data.Migrations
 
                     b.Property<double?>("Latitude")
                         .HasColumnType("float");
+
+                    b.Property<string>("LessOfTopics")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Location")
                         .HasColumnType("nvarchar(max)");

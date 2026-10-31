@@ -53,13 +53,16 @@ public partial class PostService(AppDbContext db)
             .Where(p => p.Kind != PostKind.Reel && p.CreatedAt > since)
             .Select(p => new
             {
-                p.Id, p.AuthorId, p.CreatedAt, p.GroupId, p.PageId,
+                p.Id, p.AuthorId, p.CreatedAt, p.GroupId, p.PageId, p.Topic, p.Heated,
                 Reactions = db.Reactions.Count(r => r.PostId == p.Id),
                 Comments = db.Comments.Count(c => c.PostId == p.Id && !c.IsDeleted),
             })
             .OrderByDescending(p => p.CreatedAt).Take(500).ToListAsync();
 
         var now = DateTime.UtcNow;
+        // Calm feed: the reader's own choice to see fewer heated posts and less of some topics (lowered, not hidden).
+        var feedPrefs = await db.Users.Where(u => u.Id == me).Select(u => new { u.CalmFeed, u.LessOfTopics }).FirstOrDefaultAsync();
+        var lessOf = (feedPrefs?.LessOfTopics ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
         // Interests learned from what you engaged with in the last 30 days: hashtags you reacted to, commented on or saved,
         // and the people whose posts you interact with most.
         var month = DateTime.UtcNow.AddDays(-30);
@@ -90,7 +93,9 @@ public partial class PostService(AppDbContext db)
             engagement += Math.Min(3, interest);
             double hours = (now - c.CreatedAt).TotalHours;
             double freshness = 1 / Math.Pow(hours + 2, 1.2);
-            return (c.Id, Score: (affinity + engagement) * freshness);
+            double calm = (c.Topic is { } topic && lessOf.Contains(topic) && c.AuthorId != me ? 0.12 : 1)
+                * (feedPrefs?.CalmFeed == true && c.Heated && c.AuthorId != me ? 0.1 : 1);
+            return (c.Id, Score: (affinity + engagement) * freshness * calm);
         }).OrderByDescending(x => x.Score).ToList();
 
         var pageIds = ranked.Skip((page - 1) * pageSize).Take(pageSize).Select(x => x.Id).ToList();
@@ -163,7 +168,7 @@ public partial class PostService(AppDbContext db)
             mineCustom.Contains(p.Id) ? audiences.Where(a => a.PostId == p.Id).Select(a => a.User.ToSummary()).ToList() : null,
             p.FriendListId is Guid fl && p.AuthorId == me ? listNames.GetValueOrDefault(fl) : null,
             p.LifeEvent, p.LifeEventDate, pinned.Contains(p.Id),
-            p.Language, Translated(p), Translated(p) is null ? null : reader!.Language, p.ViewCount, polls.GetValueOrDefault(p.Id), p.PublishAt)).ToList();
+            p.Language, Translated(p), Translated(p) is null ? null : reader!.Language, p.ViewCount, polls.GetValueOrDefault(p.Id), p.PublishAt, p.Topic)).ToList();
     }
 
     /// <summary>Polls on these posts with their counts and this reader's vote.</summary>

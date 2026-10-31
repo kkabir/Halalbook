@@ -1201,3 +1201,13 @@ input.switch:focus-visible { outline: 2px solid var(--gold-500); outline-offset:
 .trend-rank { grid-row: span 2; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: .8rem;
     background: linear-gradient(135deg, var(--gold-300), var(--gold-600)); color: #2b2205; }
 .trend-tag small { color: var(--text-3); }
+
+/* ---------- Ask search & week recap ---------- */
+.ask-result { border: 1px solid var(--gold-300); background: linear-gradient(135deg, var(--gold-100, #fbf3da), var(--surface)); }
+.week-card { background: linear-gradient(160deg, var(--emerald-800), #06261c); color: #fff; border: 0; }
+.week-card .icon-btn { color: #fff; }
+.week-stats { display: grid; grid-template-columns: repeat(4, 1fr); text-align: center; margin: .7rem 0; }
+.week-stats b { display: block; font-size: 1.5rem; color: var(--gold-300); }
+.week-stats span { font-size: .72rem; opacity: .8; }
+.week-summary { margin: 0 0 .4rem; line-height: 1.55; }
+.week-card a { color: var(--gold-300); }

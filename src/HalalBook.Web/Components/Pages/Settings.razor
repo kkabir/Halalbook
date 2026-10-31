@@ -126,6 +126,22 @@
         </label>
     </div>
 
+    <div class="card stack mt">
+        <div class="card-title">🕊️ @T("Calm feed")</div>
+        <label class="row spread privacy-row" style="border-top:0;cursor:pointer">
+            <div class="grow"><b>@T("Fewer heated posts")</b><div class="subtle">@T("AI notices angry, mocking or argumentative posts and shows you fewer of them.")</div></div>
+            <input type="checkbox" role="switch" class="switch" checked="@(Feed.CalmMode)" @onchange="e => SaveFeed(Feed with { CalmMode = e.Value is true })" />
+        </label>
+        <div><b>@T("See less about")</b><div class="subtle">@T("Tap topics you'd like to see less of. You'll still see them sometimes, and always on your friends' profiles.")</div></div>
+        <div class="row wrap" style="gap:.35rem">
+            @foreach (var t in FeedTopics)
+            {
+                var on = Feed.LessOf?.Contains(t) == true;
+                <button class="chip @(on ? "active" : "")" @onclick="() => ToggleTopic(t)">@(on ? "− " : "")@T(t)</button>
+            }
+        </div>
+    </div>
+
     <MuteBlockSettings />
 
     <div class="card stack mt">
@@ -319,6 +335,22 @@
     {
         theme = t;
         try { await JS.InvokeVoidAsync("halalbook.setTheme", t); } catch (JSException) { }
+    }
+
+    private static readonly string[] FeedTopics = ["Politics", "News", "Sports", "Business", "Tech", "Humor", "Food", "Travel", "Health", "Learning", "Charity", "Faith", "Family"];
+    private FeedSettingsDto Feed => Session.User?.Feed ?? new();
+
+    private async Task ToggleTopic(string t)
+    {
+        var list = (Feed.LessOf ?? []).ToList();
+        if (!list.Remove(t)) list.Add(t);
+        await SaveFeed(Feed with { LessOf = list });
+    }
+
+    private async Task SaveFeed(FeedSettingsDto f)
+    {
+        try { await Session.UpdateUserAsync(await Api.PutAsync<UserDto>("api/users/me/feed", f)); }
+        catch (Exception ex) { Toasts.Error(ex); }
     }
 
     private async Task SetBirthday(ChangeEventArgs e)

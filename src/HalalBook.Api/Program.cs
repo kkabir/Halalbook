@@ -53,6 +53,8 @@ builder.Services.AddSingleton<VapidKeys>();
 builder.Services.AddSingleton<PushQueue>();
 builder.Services.AddHostedService<PushWorker>();
 builder.Services.AddHostedService<IndexNowWorker>();
+builder.Services.AddSingleton<TopicQueue>();
+builder.Services.AddHostedService<TopicWorker>();
 builder.Services.AddSingleton<ScheduledPostPublisher>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ScheduledPostPublisher>());
 builder.Services.AddHttpClient<AiService>(c => c.Timeout = TimeSpan.FromSeconds(60));

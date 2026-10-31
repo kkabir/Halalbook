@@ -73,7 +73,8 @@ public static class Mapping
         u.EmailConfirmed, u.TwoFactorEnabled, u.ShowOnlineStatus, u.WhoCanPost, u.AcceptedTermsVersion,
         new PrivacySettingsDto(u.WhoCanMessage, u.WhoCanSendFriendRequests, u.WhoCanSeeFriendsList, u.WhoCanFindMe, u.WhoCanFollow),
         u.Language, u.AutoTranslate, u.FaithFeatures,
-        new NotificationSettingsDto(u.NotifyShowPreview, u.NotifyDisappearing, u.DoNotDisturb, u.VipsBreakThrough), u.Birthday, u.ShowBirthday);
+        new NotificationSettingsDto(u.NotifyShowPreview, u.NotifyDisappearing, u.DoNotDisturb, u.VipsBreakThrough), u.Birthday, u.ShowBirthday,
+        new FeedSettingsDto(u.CalmFeed, string.IsNullOrEmpty(u.LessOfTopics) ? [] : u.LessOfTopics.Split(',').ToList()));
 
     public static GroupSummaryDto ToSummary(this Group g) => new(g.Id, g.Name, g.CoverUrl);
     public static PageSummaryDto ToSummary(this Page p) => new(p.Id, p.Name, p.Handle, p.AvatarUrl);

@@ -200,6 +200,40 @@ public static class PlatformEndpoints
         ai.MapPost("/replies", (SmartRepliesRequest req, AiService svc, CancellationToken ct) => svc.SmartRepliesAsync(req, ct));
         ai.MapPost("/tone", (ToneRequest req, AiService svc, CancellationToken ct) => svc.ToneCheckAsync(req.Text, ct));
 
+        // Search in plain words: "Ramadan recipes my friends posted last week".
+        ai.MapGet("/search", async (string q, ClaimsPrincipal cp, AppDbContext db, PostService posts, AiService svc, CancellationToken ct) =>
+        {
+            var question = (q ?? "").Trim();
+            if (question.Length < 3) return Results.BadRequest();
+            var plan = await svc.PlanSearchAsync(question, ct);
+            var used = plan is not null;
+            plan ??= SearchPlan.FromWords(question);
+            return Results.Ok(new AskSearchResult(AskSearch.Describe(plan), await AskSearch.RunAsync(plan, cp.UserId(), db, posts), used));
+        });
+
+        // Your week on HalalBook: a few numbers and a warm sentence or two.
+        ai.MapGet("/week", async (ClaimsPrincipal cp, AppDbContext db, PostService posts, AiService svc, CancellationToken ct) =>
+        {
+            var me = cp.UserId();
+            var since = DateTime.UtcNow.AddDays(-7);
+            var mine = db.Posts.Where(p => p.AuthorId == me && !p.IsDeleted && p.PublishAt == null && p.CreatedAt > since);
+            var postCount = await mine.CountAsync(ct);
+            var reactions = await db.Reactions.CountAsync(r => r.CreatedAt > since && r.UserId != me && r.PostId != null && db.Posts.Any(p => p.Id == r.PostId && p.AuthorId == me), ct);
+            var comments = await db.Comments.CountAsync(c => c.CreatedAt > since && c.AuthorId != me && !c.IsDeleted && db.Posts.Any(p => p.Id == c.PostId && p.AuthorId == me), ct);
+            var newFriends = await db.Friendships.CountAsync(f => f.Accepted && f.CreatedAt > since && (f.RequesterId == me || f.AddresseeId == me), ct);
+            var topId = await mine.OrderByDescending(p => db.Reactions.Count(r => r.PostId == p.Id) + 2 * db.Comments.Count(c => c.PostId == p.Id)).Select(p => (Guid?)p.Id).FirstOrDefaultAsync(ct);
+            var top = topId is Guid t ? (await posts.BuildAsync(db.Posts.Where(p => p.Id == t), me)).FirstOrDefault() : null;
+            var user = await db.Users.FindAsync([me], ct);
+            var name = user?.DisplayName.Split(' ')[0] ?? "friend";
+            var facts = $"Posts: {postCount}. Reactions received: {reactions}. Comments received: {comments}. New friends: {newFriends}." +
+                (top is null ? "" : $" Most loved post: \"{(top.Content.Length > 200 ? top.Content[..200] : top.Content)}\".");
+            var ai = await svc.WeekSummaryAsync(name, Languages.Get(user?.Language).EnglishName, facts, ct);
+            var summary = ai ?? (postCount + reactions + comments + newFriends == 0
+                ? $"A quiet week, {name}. Share something good this week, people are waiting to hear from you! 🌿"
+                : $"MashaAllah {name}! {postCount} posts, {reactions} reactions, {comments} comments and {newFriends} new friends this week. 🌟");
+            return new WeekRecapDto(postCount, reactions, comments, newFriends, top, summary.Trim(), ai is not null);
+        });
+
         // "Catch me up": the most relevant posts from the last two days, summarized.
         ai.MapGet("/digest", async (ClaimsPrincipal cp, AppDbContext db, PostService posts, AiService svc, CancellationToken ct) =>
         {

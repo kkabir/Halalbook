@@ -87,6 +87,19 @@ window.halalbook = {
             v.closest('a')?.addEventListener('mouseleave', () => v.pause());
         });
     }),
+    // ---------- Read aloud ----------
+    // Speaks text with the phone's own voice for that language; tapping Listen again stops it.
+    speak: (text, lang) => {
+        const s = window.speechSynthesis;
+        if (!s) return;
+        if (s.speaking) { s.cancel(); return; }
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = lang || document.documentElement.lang || 'en';
+        const voice = s.getVoices().find(v => v.lang?.toLowerCase().startsWith(u.lang.toLowerCase()));
+        if (voice) u.voice = voice;
+        u.rate = 0.98;
+        s.speak(u);
+    },
     // ---------- Theme: "auto" follows the phone, or force light/dark ----------
     getTheme: () => { try { return localStorage.getItem('hb.theme') || 'auto'; } catch { return 'auto'; } },
     setTheme: (t) => {

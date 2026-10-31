@@ -48,6 +48,11 @@
                         <button @onclick="ToggleBookmark">@(Post.IsBookmarked ? "🔖 Remove from saved" : "🔖 Save post")</button>
                         <button @onclick="TranslateToMine">🌐 @T("See translation")</button>
                         <button @onclick="CheckSources">📖 Check Quran and hadith sources (AI)</button>
+                        <button @onclick="Listen">🔊 @T("Listen")</button>
+                        @if (!IsMine && Post.Topic is { } topic && topic != "Other")
+                        {
+                            <button @onclick="() => SeeLess(topic)">🕊️ @T("See less about") @T(topic)</button>
+                        }
                         <button data-url="@Nav.ToAbsoluteUri($"/p/{Post.SharedPost?.Id ?? Post.Id}")" onclick="halalbook.copyLink(this)"><span data-label>🔗 @T("Copy link")</span></button>
                         @if (IsMine && Post.Group is null)
                         {
@@ -257,6 +262,26 @@
         Post = Post with { MyReaction = type, Reactions = counts };
         try { await Api.PutAsync($"api/posts/{Post.Id}/reaction", new ReactRequest(type)); }
         catch (Exception ex) { Post = previous; Toasts.Error(ex); }
+    }
+
+    /// <summary>Reads the post aloud in the language it's shown in.</summary>
+    private async Task Listen()
+    {
+        var text = showOriginal ? Post.Content : (liveTranslation ?? Post.TranslatedContent ?? Post.Content);
+        var lang = showOriginal || (liveTranslation ?? Post.TranslatedContent) is null ? Post.OriginalLanguage ?? I18n.Language : I18n.Language;
+        try { await JS.InvokeVoidAsync("halalbook.speak", $"{Post.Author.DisplayName}. {text}", lang); } catch (JSException) { }
+    }
+
+    private async Task SeeLess(string topic)
+    {
+        var feed = Session.User?.Feed ?? new FeedSettingsDto();
+        var list = (feed.LessOf ?? []).Append(topic).Distinct().ToList();
+        try
+        {
+            await Session.UpdateUserAsync(await Api.PutAsync<UserDto>("api/users/me/feed", feed with { LessOf = list }));
+            Toasts.Show($"{T("You'll see less about")} {T(topic)}. {T("Change it any time in Settings.")}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
     }
 
     private async Task MadeDua()

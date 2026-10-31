@@ -198,3 +198,15 @@ public class BirthdayTests
     public void CountsDaysToNextBirthday(string birthday, string today, int expected) =>
         Assert.Equal(expected, HalalBook.Api.Endpoints.UserEndpoints.DaysUntil(DateOnly.Parse(birthday), DateOnly.Parse(today)));
 }
+
+public class TopicTests
+{
+    [Theory]
+    [InlineData("The election results are a disgrace, the minister should resign", "Politics")]
+    [InlineData("Alhamdulillah, finished the Quran this Ramadan", "Faith")]
+    [InlineData("Try this biryani recipe for iftar", "Food")]
+    public void GuessesTopic(string text, string topic) => Assert.Equal(topic, Topics.Guess(text).Topic);
+
+    [Fact]
+    public void NoticesHeatedTone() => Assert.True(Topics.Guess("You are all liars and traitors, shame on you").Heated);
+}

@@ -1,0 +1,46 @@
+@inject ApiClient Api
+@inject ClientClock Clock
+@inject IJSRuntime JS
+
+@* Fridays and Saturdays: a friendly look back at your week, once (dismissible). *@
+
+@if (recap is { } r && !hidden)
+{
+    <div class="card week-card">
+        <div class="row spread"><b>📅 @T("Your week on HalalBook")</b><button class="icon-btn" title="@T("Hide")" @onclick="Hide">✕</button></div>
+        <div class="week-stats">
+            <div><b>@r.Posts</b><span>@T("posts")</span></div>
+            <div><b>@r.ReactionsReceived</b><span>@T("reactions")</span></div>
+            <div><b>@r.CommentsReceived</b><span>@T("comments")</span></div>
+            <div><b>@r.NewFriends</b><span>@T("new friends")</span></div>
+        </div>
+        <p class="week-summary" dir="auto">@r.Summary</p>
+        @if (r.TopPost is { } top) { <a class="subtle" href="/post/@top.Id">⭐ @T("See your most-loved post")</a> }
+    </div>
+}
+
+@code {
+    private WeekRecapDto? recap;
+    private bool hidden;
+    private string Key => $"hb.week.{System.Globalization.ISOWeek.GetWeekOfYear(Clock.Now)}";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Clock.LoadAsync();
+        if (Clock.Now.DayOfWeek is not (DayOfWeek.Friday or DayOfWeek.Saturday)) return;
+        try
+        {
+            if (await JS.InvokeAsync<string?>("localStorage.getItem", Key) is not null) return;
+            recap = await Api.GetAsync<WeekRecapDto>("api/ai/week");
+            StateHasChanged();
+        }
+        catch (Exception) { }
+    }
+
+    private async Task Hide()
+    {
+        hidden = true;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", Key, "1"); } catch (JSException) { }
+    }
+}

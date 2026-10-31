@@ -899,4 +899,25 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await b.PutAsJsonAsync($"/api/posts/{post.Id}/reaction", new ReactRequest(ReactionType.Love), Json);
         Assert.Contains((await b.GetFromJsonAsync<List<PostDto>>("/api/posts/trending", Json))!, p => p.Id == post.Id);
     }
+
+    [Fact]
+    public async Task CalmFeed_AskSearchAndWeekRecap()
+    {
+        var (a, aId) = await SignUpWithId("calmA");
+        var (b, bId) = await SignUpWithId("calmB");
+        await a.PostAsync($"/api/friends/{bId}", null);
+        await b.PostAsync($"/api/friends/{aId}/accept", null);
+        var post = (await (await a.PostAsJsonAsync("/api/posts", new CreatePostRequest("My mum's biryani recipe for iftar #recipe", Visibility.Friends), Json)).Content.ReadFromJsonAsync<PostDto>(Json))!;
+
+        var u = (await (await b.PutAsJsonAsync("/api/users/me/feed", new FeedSettingsDto(true, ["Politics", "Nonsense"]), Json)).Content.ReadFromJsonAsync<UserDto>(Json))!;
+        Assert.True(u.Feed!.CalmMode);
+        Assert.Equal(["Politics"], u.Feed.LessOf);
+
+        var found = (await b.GetFromJsonAsync<AskSearchResult>("/api/ai/search?q=biryani recipes my friends posted", Json))!;
+        Assert.Contains(found.Posts, p => p.Id == post.Id);
+
+        var week = (await a.GetFromJsonAsync<WeekRecapDto>("/api/ai/week", Json))!;
+        Assert.True(week.Posts >= 1);
+        Assert.False(string.IsNullOrWhiteSpace(week.Summary));
+    }
 }

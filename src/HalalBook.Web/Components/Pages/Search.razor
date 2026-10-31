@@ -6,6 +6,19 @@
 
 <div class="feed-column">
     <h1>Results for “@Q”</h1>
+    @if (asked is not null || asking)
+    {
+        <div class="card ask-result">
+            <div class="row spread"><b>✨ @T("Noor searched for")</b>@if (asking) { <span class="subtle">…</span> }</div>
+            @if (asked is not null)
+            {
+                <div class="subtle">@asked.Understood</div>
+                @if (asked.Posts.Count == 0) { <p class="muted" style="margin:.4rem 0 0">@T("No posts matched. Try other words.")</p> }
+            }
+        </div>
+        @foreach (var p in asked?.Posts ?? []) { <PostCard @key="p.Id" Post="p" /> }
+        @if (asked?.Posts.Count > 0) { <h2 class="mt">@T("Other results")</h2> }
+    }
     @if (result is null) { <div class="spinner"></div> }
     else if (result.People.Count + result.Posts.Count + result.Groups.Count + result.Pages.Count + result.Events.Count + result.Hashtags.Count == 0)
     {
@@ -54,10 +67,22 @@
 @code {
     [SupplyParameterFromQuery] public string? Q { get; set; }
     private SearchResultDto? result;
+    private AskSearchResult? asked;
+    private bool asking;
+
+    /// <summary>A question in plain words (three or more words, not a #hashtag) is also answered by Noor.</summary>
+    private bool IsQuestion => Q is { } q && !q.TrimStart().StartsWith('#') && q.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 3;
 
     protected override async Task OnParametersSetAsync()
     {
-        result = null;
-        result = await Api.GetAsync<SearchResultDto>($"api/search?q={Uri.EscapeDataString(Q ?? "")}");
+        result = null; asked = null;
+        var plain = Api.GetAsync<SearchResultDto>($"api/search?q={Uri.EscapeDataString(Q ?? "")}");
+        if (IsQuestion)
+        {
+            asking = true;
+            try { asked = await Api.GetAsync<AskSearchResult>($"api/ai/search?q={Uri.EscapeDataString(Q!)}"); } catch (Exception) { }
+            asking = false;
+        }
+        result = await plain;
     }
 }

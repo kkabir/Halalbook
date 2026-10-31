@@ -55,7 +55,9 @@ public record UserDto(
     double? Latitude, double? Longitude, string PrayerMethod, string AsrSchool, bool EmailConfirmed = false, bool TwoFactorEnabled = false, bool ShowOnlineStatus = true,
     ProfilePostPermission WhoCanPost = ProfilePostPermission.Friends, string? AcceptedTermsVersion = null,
     PrivacySettingsDto? Privacy = null, string Language = "en", bool AutoTranslate = true, bool FaithFeatures = true,
-    NotificationSettingsDto? Notifications = null, DateOnly? Birthday = null, bool ShowBirthday = true);
+    NotificationSettingsDto? Notifications = null, DateOnly? Birthday = null, bool ShowBirthday = true, FeedSettingsDto? Feed = null);
+/// <summary>Calm feed: fewer heated posts, and less of the chosen topics.</summary>
+public record FeedSettingsDto(bool CalmMode = false, List<string>? LessOf = null);
 /// <summary>Friends see the day and month only, never the year.</summary>
 public record BirthdaySettingsRequest(DateOnly? Birthday, bool ShowBirthday);
 public record BirthdayDto(UserSummaryDto User, int Month, int Day, int DaysAway);
@@ -104,7 +106,7 @@ public record PostDto(
     GroupSummaryDto? Group, PageSummaryDto? Page, PostDto? SharedPost, UserSummaryDto? TargetUser = null, List<UserSummaryDto>? Audience = null, string? FriendListName = null,
     string? LifeEvent = null, DateOnly? LifeEventDate = null, bool IsPinned = false,
     string? OriginalLanguage = null, string? TranslatedContent = null, string? TranslatedTo = null, int ViewCount = 0, PollDto? Poll = null,
-    DateTime? ScheduledFor = null)
+    DateTime? ScheduledFor = null, string? Topic = null)
 {
     public int TotalReactions => Reactions.Values.Sum();
 }
@@ -175,6 +177,10 @@ public record SendPostRequest(Guid PostId, List<Guid> UserIds, string? Note);
 public record NotificationDto(Guid Id, NotificationType Type, UserSummaryDto? Actor, string Message, string? Link, bool IsRead, DateTime CreatedAt);
 
 // ---------- Search / discovery ----------
+/// <summary>A search written in plain words, as Noor understood it, and the posts that match.</summary>
+public record AskSearchResult(string Understood, List<PostDto> Posts, bool UsedAi);
+/// <summary>A friendly look back at someone's week.</summary>
+public record WeekRecapDto(int Posts, int ReactionsReceived, int CommentsReceived, int NewFriends, PostDto? TopPost, string Summary, bool UsedAi);
 public record SearchResultDto(List<UserSummaryDto> People, List<PostDto> Posts, List<GroupDto> Groups, List<PageDto> Pages, List<EventDto> Events, List<HashtagDto> Hashtags);
 public record HashtagDto(string Tag, int PostCount);
 

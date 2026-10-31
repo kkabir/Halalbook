@@ -31,6 +31,9 @@ public class User
     /// <summary>HalalBook is open to everyone: members who aren't Muslim can hide the Islamic tools.</summary>
     public bool FaithFeatures { get; set; } = true;
     public DateOnly? Birthday { get; set; }
+    /// <summary>Calm feed settings: fewer heated posts, and less of these topics (comma-separated).</summary>
+    public bool CalmFeed { get; set; }
+    public string? LessOfTopics { get; set; }
     public bool ShowBirthday { get; set; } = true;
     /// <summary>Phone notification settings (see NotificationSettingsDto).</summary>
     public bool NotifyShowPreview { get; set; } = true;
@@ -218,6 +221,9 @@ public class Post
     public int ViewCount { get; set; }
     /// <summary>Scheduled posts stay hidden (except from their author) until this time (UTC), then appear as new.</summary>
     public DateTime? PublishAt { get; set; }
+    /// <summary>What it's about (see Topics.All) and whether the tone is heated, labelled in the background.</summary>
+    public string? Topic { get; set; }
+    public bool Heated { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? EditedAt { get; set; }
     public bool IsDeleted { get; set; }
