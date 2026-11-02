@@ -10,7 +10,10 @@
     <div class="row" style="align-items:flex-start">
         <Avatar User="Me" Size="44" />
         <div class="grow">
-            <textarea placeholder="@T(Placeholder)" @bind="text" @bind:event="oninput" rows="@(string.IsNullOrEmpty(text) ? 2 : 4)"></textarea>
+            <div class="dictate-host" data-dictate>
+                <textarea placeholder="@T(Placeholder)" @bind="text" @bind:event="oninput" rows="@(string.IsNullOrEmpty(text) ? 2 : 4)"></textarea>
+                <button type="button" class="dictate-btn" title="@T("Speak to type")" onclick="halalbook.dictate(this)">🎙️</button>
+            </div>
             <MentionSuggest @bind-Text="text" />
         </div>
     </div>

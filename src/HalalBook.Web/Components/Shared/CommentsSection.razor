@@ -49,7 +49,8 @@
     }
     <div class="comment-input">
         <Avatar User="Me" Size="32" />
-        <div class="grow mention-host">
+        <div class="grow mention-host dictate-host" data-dictate>
+            <button type="button" class="dictate-btn small" title="@T("Speak to type")" onclick="halalbook.dictate(this)">🎙️</button>
             <input class="input" placeholder="@(replyTo is null ? T("Write a comment…") : $"{T("Reply to")} {replyTo.Author.DisplayName}…")" @bind="text" @bind:event="oninput" @onkeydown="OnKey" />
             <MentionSuggest @bind-Text="text" />
         </div>

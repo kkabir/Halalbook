@@ -87,6 +87,39 @@ window.halalbook = {
             v.closest('a')?.addEventListener('mouseleave', () => v.pause());
         });
     }),
+    // ---------- Speak to type ----------
+    // Listens in the reader's language and types what's said into the nearest box (Chrome, Edge, Safari, Android).
+    // Called straight from the button's onclick; tap again to stop.
+    dictate: (button) => {
+        const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!Rec) { alert('Speaking to type isn\'t supported in this browser. Try Chrome or Safari.'); return; }
+        if (button.__rec) { button.__rec.stop(); return; }
+        const box = button.closest('[data-dictate]')?.querySelector('textarea, input.input');
+        if (!box) return;
+        const locales = { en: 'en-US', ar: 'ar-SA', ur: 'ur-PK', bn: 'bn-BD', id: 'id-ID', ms: 'ms-MY', tr: 'tr-TR', fa: 'fa-IR', fr: 'fr-FR',
+            hi: 'hi-IN', es: 'es-ES', de: 'de-DE', so: 'so-SO', ha: 'ha-NG', sw: 'sw-KE', ru: 'ru-RU', zh: 'zh-CN', uz: 'uz-UZ', ps: 'ps-AF' };
+        const rec = new Rec();
+        rec.lang = locales[document.documentElement.lang] || navigator.language || 'en-US';
+        rec.interimResults = true;
+        rec.continuous = true;
+        const start = box.value ? box.value.replace(/\s*$/, ' ') : '';
+        let finalText = '';
+        rec.onresult = (e) => {
+            let interim = '';
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+                if (e.results[i].isFinal) finalText += e.results[i][0].transcript + ' ';
+                else interim += e.results[i][0].transcript;
+            }
+            box.value = start + finalText + interim;
+            box.dispatchEvent(new Event('input', { bubbles: true })); // Blazor's binding picks it up
+        };
+        const done = () => { button.__rec = null; button.classList.remove('listening'); };
+        rec.onend = done;
+        rec.onerror = (e) => { done(); if (e.error === 'not-allowed') alert('Please allow the microphone to speak to type.'); };
+        button.__rec = rec;
+        button.classList.add('listening');
+        rec.start();
+    },
     // Reads a button's data-text in data-lang; called straight from onclick so phones allow it.
     speakEl: (button) => window.halalbook.speak(button.dataset.text, button.dataset.lang),
     // ---------- Read aloud ----------

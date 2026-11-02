@@ -137,6 +137,12 @@
                                 {
                                     <button class="bubble-lang" @onclick="() => original.Remove(m.Id)">🌍 @Languages.Get(m.OriginalLanguage).NativeName · @T("Translate")</button>
                                 }
+                                @if (!string.IsNullOrEmpty(m.Content))
+                                {
+                                    <button class="bubble-lang" title="@T("Listen")" data-text="@(translated ?? m.Content)"
+                                            data-lang="@(translated is not null ? I18n.Language : m.OriginalLanguage ?? Languages.GuessFromScript(m.Content) ?? I18n.Language)"
+                                            onclick="event.stopPropagation(); halalbook.speakEl(this)">🔊</button>
+                                }
                                 <time>@Clock.Local(m.SentAt).ToString("h:mm tt")</time>
                             </div>
                             @if (m.Reactions is { Count: > 0 } rs)
@@ -180,7 +186,10 @@
                 <div class="chat-input">
                     <label class="icon-btn" title="@T("Send a photo")">🖼️<InputFile OnChange="SendPhoto" accept="image/*" style="display:none" /></label>
                     <button class="icon-btn urgent-toggle @(urgent ? "on" : "")" title="@T("Mark as urgent")" @onclick="() => urgent = !urgent">🚨</button>
-                    <input class="input @(urgent ? "urgent" : "")" placeholder="@(urgent ? T("Urgent message…") : T("Write a message…"))" @bind="text" @bind:event="oninput" @onkeydown="OnKey" dir="auto" />
+                    <div class="grow dictate-host" data-dictate>
+                        <input class="input @(urgent ? "urgent" : "")" placeholder="@(urgent ? T("Urgent message…") : T("Write a message…"))" @bind="text" @bind:event="oninput" @onkeydown="OnKey" dir="auto" />
+                        <button type="button" class="dictate-btn small" title="@T("Speak to type")" onclick="halalbook.dictate(this)">🎙️</button>
+                    </div>
                     @if (string.IsNullOrWhiteSpace(text))
                     {
                         <button class="send-btn mic" @onclick="StartVoice" title="@T("Record a voice note")">🎤</button>
