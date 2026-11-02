@@ -48,7 +48,18 @@
                         <button @onclick="ToggleBookmark">@(Post.IsBookmarked ? "🔖 Remove from saved" : "🔖 Save post")</button>
                         <button @onclick="TranslateToMine">🌐 @T("See translation")</button>
                         <button @onclick="CheckSources">📖 Check Quran and hadith sources (AI)</button>
-                        <button @onclick="Listen">🔊 @T("Listen")</button>
+                        @* Runs in the browser straight from the tap: phones only allow speech that starts from a tap. *@
+                        <button data-text="@($"{Post.Author.DisplayName}. {ListenText}")" data-lang="@ListenLang" onclick="halalbook.speakEl(this)">🔊 @T("Listen")</button>
+                        <button @onclick:stopPropagation="true" @onclick="() => pickLanguage = !pickLanguage">🌐 @T("Translate to…")</button>
+                        @if (pickLanguage)
+                        {
+                            <div class="lang-menu" @onclick:stopPropagation="true">
+                                @foreach (var l in Languages.All)
+                                {
+                                    <button @onclick="() => TranslateTo(l.Code)">@l.NativeName</button>
+                                }
+                            </div>
+                        }
                         @if (!IsMine && Post.Topic is { } topic && topic != "Other")
                         {
                             <button @onclick="() => SeeLess(topic)">🕊️ @T("See less about") @T(topic)</button>
@@ -105,7 +116,9 @@
             <div class="post-body @(shown.Length < 90 && Post.Media.Count == 0 && Post.SharedPost is null ? "big" : "")" dir="auto">@RichText(shown)</div>
             @if (!showOriginal && (liveTranslation ?? Post.TranslatedContent) is not null)
             {
-                <div class="translation-note">🌍 @T("Translated from") @Languages.Get(Post.OriginalLanguage ?? liveSource).NativeName · <a href="javascript:void(0)" @onclick="() => showOriginal = true">@T("See original")</a></div>
+                <div class="translation-note">🌍 @T("Translated from") @Languages.Get(Post.OriginalLanguage ?? liveSource).NativeName@(liveTarget is { } lt && lt != I18n.Language ? $" → {Languages.Get(lt).NativeName}" : "") ·
+                    <a href="javascript:void(0)" @onclick="() => showOriginal = true">@T("See original")</a> ·
+                    <button class="note-listen" data-text="@ListenText" data-lang="@ListenLang" onclick="halalbook.speakEl(this)">🔊 @T("Listen")</button></div>
             }
             else if (NeedsTranslation)
             {
@@ -264,13 +277,11 @@
         catch (Exception ex) { Post = previous; Toasts.Error(ex); }
     }
 
-    /// <summary>Reads the post aloud in the language it's shown in.</summary>
-    private async Task Listen()
-    {
-        var text = showOriginal ? Post.Content : (liveTranslation ?? Post.TranslatedContent ?? Post.Content);
-        var lang = showOriginal || (liveTranslation ?? Post.TranslatedContent) is null ? Post.OriginalLanguage ?? I18n.Language : I18n.Language;
-        try { await JS.InvokeVoidAsync("halalbook.speak", $"{Post.Author.DisplayName}. {text}", lang); } catch (JSException) { }
-    }
+    /// <summary>The text as shown (original or translated), and its language, for reading aloud.</summary>
+    private bool ShowingTranslation => !showOriginal && (liveTranslation ?? Post.TranslatedContent) is not null;
+    private string ListenText => ShowingTranslation ? (liveTranslation ?? Post.TranslatedContent)! : Post.Content;
+    private string ListenLang => ShowingTranslation ? liveTarget ?? I18n.Language
+        : Post.OriginalLanguage ?? Languages.GuessFromScript(Post.Content) ?? I18n.Language;
 
     private async Task SeeLess(string topic)
     {
@@ -320,8 +331,8 @@
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
 
-    private string? sources, liveTranslation, liveSource;
-    private bool checkingSources, showOriginal, translating;
+    private string? sources, liveTranslation, liveSource, liveTarget;
+    private bool checkingSources, showOriginal, translating, pickLanguage;
 
     /// <summary>Offer a translation when the post is (or looks) written in another language than the reader's.</summary>
     private bool NeedsTranslation
@@ -334,14 +345,18 @@
         }
     }
 
-    private async Task TranslateToMine()
+    private Task TranslateToMine() => TranslateTo(I18n.Language);
+
+    private async Task TranslateTo(string lang)
     {
+        pickLanguage = false; menuOpen = false;
         translating = true;
         try
         {
-            var r = await Api.GetAsync<TranslatedTextDto>($"api/posts/{Post.Id}/translation?lang={I18n.Language}");
-            if (r.UsedAi) { liveTranslation = r.Text; liveSource = r.SourceLanguage; showOriginal = false; }
-            else Toasts.Show(T("Translation needs the AI assistant, which isn't configured yet."));
+            var r = await Api.GetAsync<TranslatedTextDto>($"api/posts/{Post.Id}/translation?lang={lang}");
+            if (r.UsedAi) { liveTranslation = r.Text; liveSource = r.SourceLanguage; liveTarget = lang; showOriginal = false; }
+            else if (r.SourceLanguage == lang) Toasts.Show($"{T("This post is already in")} {Languages.Get(lang).NativeName}.");
+            else Toasts.Show(T("Translation isn't available right now. Please try again in a moment."));
         }
         catch (Exception ex) { Toasts.Error(ex); }
         finally { translating = false; }

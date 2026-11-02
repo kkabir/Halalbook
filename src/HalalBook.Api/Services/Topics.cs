@@ -1,3 +1,4 @@
+using HalalBook.Shared;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
@@ -60,8 +61,11 @@ public class TopicWorker(TopicQueue queue, IServiceScopeFactory scopes, ILogger<
                 var ai = scope.ServiceProvider.GetRequiredService<AiService>();
                 var post = await db.Posts.FindAsync([id], stoppingToken);
                 if (post is null || string.IsNullOrWhiteSpace(post.Content)) continue;
-                var (topic, heated) = await ai.ClassifyTopicAsync(post.Content, stoppingToken) ?? Topics.Guess(post.Content);
+                var label = await ai.ClassifyTopicAsync(post.Content, stoppingToken);
+                var (topic, heated) = label is { } l ? (l.Topic, l.Heated) : Topics.Guess(post.Content);
                 (post.Topic, post.Heated) = (topic, heated);
+                // The language too, so readers of other languages are offered "See translation" (scripts like Latin can't be told apart by letters).
+                if (label?.Language is { } lang) post.Language = lang;
                 await db.SaveChangesAsync(stoppingToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException) { log.LogWarning(ex, "Could not label post {PostId}", id); }
@@ -72,17 +76,19 @@ public class TopicWorker(TopicQueue queue, IServiceScopeFactory scopes, ILogger<
 public partial class AiService
 {
     /// <summary>One of <see cref="Topics.All"/>, and whether the tone is heated. Null without AI.</summary>
-    public async Task<(string Topic, bool Heated)?> ClassifyTopicAsync(string text, CancellationToken ct)
+    public async Task<(string Topic, bool Heated, string? Language)?> ClassifyTopicAsync(string text, CancellationToken ct)
     {
         if (!IsEnabled) return null;
         var reply = await AskOnce("Label a social media post. Reply with only JSON: {\"topic\": one of " + string.Join(", ", Topics.All) +
-            ", \"heated\": true if it is angry, mocking, insulting or picking a fight, otherwise false}.",
+            ", \"heated\": true if it is angry, mocking, insulting or picking a fight, otherwise false, \"language\": the ISO 639-1 code of the language it is written in}.",
             text.Length > 1500 ? text[..1500] : text, 60, ct);
         try
         {
             var json = JsonNode.Parse(reply![reply.IndexOf('{')..(reply.LastIndexOf('}') + 1)])!;
             var topic = json["topic"]?.GetValue<string>();
-            return (Topics.All.Contains(topic) ? topic! : "Other", json["heated"]?.GetValue<bool>() ?? false);
+            var lang = json["language"]?.GetValue<string>();
+            return (Topics.All.Contains(topic) ? topic! : "Other", json["heated"]?.GetValue<bool>() ?? false,
+                lang is { Length: 2 } && Languages.All.Any(l => l.Code == lang.ToLowerInvariant()) ? lang.ToLowerInvariant() : null);
         }
         catch (Exception) { return null; }
     }

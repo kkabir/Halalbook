@@ -87,12 +87,15 @@ window.halalbook = {
             v.closest('a')?.addEventListener('mouseleave', () => v.pause());
         });
     }),
+    // Reads a button's data-text in data-lang; called straight from onclick so phones allow it.
+    speakEl: (button) => window.halalbook.speak(button.dataset.text, button.dataset.lang),
     // ---------- Read aloud ----------
     // Speaks text with the phone's own voice for that language; tapping Listen again stops it.
     speak: (text, lang) => {
         const s = window.speechSynthesis;
-        if (!s) return;
-        if (s.speaking) { s.cancel(); return; }
+        if (!s || !window.SpeechSynthesisUtterance) { alert('Reading aloud isn\'t supported in this browser.'); return; }
+        if (s.speaking || s.pending) { s.cancel(); return; }
+        s.resume(); // Chrome can leave the speech queue paused after a page has been in the background
         const u = new SpeechSynthesisUtterance(text);
         u.lang = lang || document.documentElement.lang || 'en';
         const voice = s.getVoices().find(v => v.lang?.toLowerCase().startsWith(u.lang.toLowerCase()));
