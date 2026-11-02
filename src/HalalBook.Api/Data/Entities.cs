@@ -157,6 +157,62 @@ public class Listing
     public string Photos { get; set; } = "[]";
     public ListingStatus Status { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    /// <summary>The price before the latest reduction, shown crossed out.</summary>
+    public decimal? WasPrice { get; set; }
+    /// <summary>AI's estimate of a fair price range for the item.</summary>
+    public decimal? FairLow { get; set; }
+    public decimal? FairHigh { get; set; }
+    public int Views { get; set; }
+}
+
+/// <summary>A listing someone saved; they hear about price drops.</summary>
+public class SavedListing
+{
+    public Guid UserId { get; set; }
+    public Guid ListingId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class ListingOffer
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ListingId { get; set; }
+    public Listing Listing { get; set; } = null!;
+    public Guid BuyerId { get; set; }
+    public User Buyer { get; set; } = null!;
+    public decimal Amount { get; set; }
+    public string? Note { get; set; }
+    public OfferStatus Status { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>A buyer's rating of a seller after an accepted offer (one per listing).</summary>
+public class SellerReview
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ListingId { get; set; }
+    public Guid SellerId { get; set; }
+    public Guid ReviewerId { get; set; }
+    public User Reviewer { get; set; } = null!;
+    public int Stars { get; set; }
+    public string? Text { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>"Tell me when someone lists…": matched against every new listing.</summary>
+public class SearchAlert
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public string? Query { get; set; }
+    public string? Category { get; set; }
+    public decimal? MaxPrice { get; set; }
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    public double? RadiusKm { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public class PollOption

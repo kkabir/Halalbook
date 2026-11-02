@@ -16,6 +16,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<MutedUser> MutedUsers => Set<MutedUser>();
     public DbSet<PollOption> PollOptions => Set<PollOption>();
     public DbSet<Listing> Listings => Set<Listing>();
+    public DbSet<SavedListing> SavedListings => Set<SavedListing>();
+    public DbSet<ListingOffer> ListingOffers => Set<ListingOffer>();
+    public DbSet<SellerReview> SellerReviews => Set<SellerReview>();
+    public DbSet<SearchAlert> SearchAlerts => Set<SearchAlert>();
     public DbSet<PollVote> PollVotes => Set<PollVote>();
     public DbSet<Post> Posts => Set<Post>();
     public DbSet<PostMedia> PostMedia => Set<PostMedia>();
@@ -56,11 +60,37 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Title).HasMaxLength(100);
             e.Property(x => x.Description).HasMaxLength(3000);
             e.Property(x => x.Price).HasPrecision(14, 2);
+            e.Property(x => x.WasPrice).HasPrecision(14, 2);
+            e.Property(x => x.FairLow).HasPrecision(14, 2);
+            e.Property(x => x.FairHigh).HasPrecision(14, 2);
             e.Property(x => x.Currency).HasMaxLength(3);
             e.Property(x => x.Category).HasMaxLength(40);
             e.Property(x => x.Condition).HasMaxLength(30);
             e.Property(x => x.Location).HasMaxLength(120);
             e.HasOne(x => x.Seller).WithMany().HasForeignKey(x => x.SellerId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<SavedListing>(e => { e.HasKey(x => new { x.UserId, x.ListingId }); e.HasIndex(x => x.ListingId); });
+        b.Entity<ListingOffer>(e =>
+        {
+            e.HasIndex(x => new { x.ListingId, x.Status });
+            e.Property(x => x.Amount).HasPrecision(14, 2);
+            e.Property(x => x.Note).HasMaxLength(300);
+            e.HasOne(x => x.Listing).WithMany().HasForeignKey(x => x.ListingId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Buyer).WithMany().HasForeignKey(x => x.BuyerId).OnDelete(DeleteBehavior.NoAction);
+        });
+        b.Entity<SellerReview>(e =>
+        {
+            e.HasIndex(x => new { x.ListingId, x.ReviewerId }).IsUnique();
+            e.HasIndex(x => x.SellerId);
+            e.Property(x => x.Text).HasMaxLength(500);
+            e.HasOne(x => x.Reviewer).WithMany().HasForeignKey(x => x.ReviewerId).OnDelete(DeleteBehavior.NoAction);
+        });
+        b.Entity<SearchAlert>(e =>
+        {
+            e.HasIndex(x => x.UserId);
+            e.Property(x => x.Query).HasMaxLength(100);
+            e.Property(x => x.Category).HasMaxLength(40);
+            e.Property(x => x.MaxPrice).HasPrecision(14, 2);
         });
         b.Entity<PollOption>(e => { e.HasIndex(x => x.PostId); e.Property(x => x.Text).HasMaxLength(120); });
         b.Entity<PollVote>(e => { e.HasKey(x => new { x.PostId, x.UserId }); e.HasIndex(x => x.OptionId); });

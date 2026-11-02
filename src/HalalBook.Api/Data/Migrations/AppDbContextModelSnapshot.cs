@@ -677,9 +677,23 @@ namespace HalalBook.Api.Data.Migrations
                         .HasMaxLength(3000)
                         .HasColumnType("nvarchar(3000)");
 
+                    b.Property<decimal?>("FairHigh")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)");
+
+                    b.Property<decimal?>("FairLow")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
                     b.Property<string>("Location")
                         .HasMaxLength(120)
                         .HasColumnType("nvarchar(120)");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
 
                     b.Property<string>("Photos")
                         .IsRequired()
@@ -700,6 +714,13 @@ namespace HalalBook.Api.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int>("Views")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("WasPrice")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("SellerId");
@@ -707,6 +728,41 @@ namespace HalalBook.Api.Data.Migrations
                     b.HasIndex("Status", "CreatedAt");
 
                     b.ToTable("Listings");
+                });
+
+            modelBuilder.Entity("HalalBook.Api.Data.ListingOffer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("ListingId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuyerId");
+
+                    b.HasIndex("ListingId", "Status");
+
+                    b.ToTable("ListingOffers");
                 });
 
             modelBuilder.Entity("HalalBook.Api.Data.LiveSession", b =>
@@ -1287,6 +1343,101 @@ namespace HalalBook.Api.Data.Migrations
                     b.ToTable("Reports");
                 });
 
+            modelBuilder.Entity("HalalBook.Api.Data.SavedListing", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ListingId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("UserId", "ListingId");
+
+                    b.HasIndex("ListingId");
+
+                    b.ToTable("SavedListings");
+                });
+
+            modelBuilder.Entity("HalalBook.Api.Data.SearchAlert", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
+
+                    b.Property<decimal?>("MaxPrice")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)");
+
+                    b.Property<string>("Query")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<double?>("RadiusKm")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("SearchAlerts");
+                });
+
+            modelBuilder.Entity("HalalBook.Api.Data.SellerReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("ListingId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ReviewerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SellerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Stars")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Text")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewerId");
+
+                    b.HasIndex("SellerId");
+
+                    b.HasIndex("ListingId", "ReviewerId")
+                        .IsUnique();
+
+                    b.ToTable("SellerReviews");
+                });
+
             modelBuilder.Entity("HalalBook.Api.Data.SiteVisit", b =>
                 {
                     b.Property<long>("Id")
@@ -1750,6 +1901,25 @@ namespace HalalBook.Api.Data.Migrations
                     b.Navigation("Seller");
                 });
 
+            modelBuilder.Entity("HalalBook.Api.Data.ListingOffer", b =>
+                {
+                    b.HasOne("HalalBook.Api.Data.User", "Buyer")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("HalalBook.Api.Data.Listing", "Listing")
+                        .WithMany()
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Buyer");
+
+                    b.Navigation("Listing");
+                });
+
             modelBuilder.Entity("HalalBook.Api.Data.LiveSession", b =>
                 {
                     b.HasOne("HalalBook.Api.Data.Group", "Group")
@@ -1890,6 +2060,17 @@ namespace HalalBook.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Reporter");
+                });
+
+            modelBuilder.Entity("HalalBook.Api.Data.SellerReview", b =>
+                {
+                    b.HasOne("HalalBook.Api.Data.User", "Reviewer")
+                        .WithMany()
+                        .HasForeignKey("ReviewerId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Reviewer");
                 });
 
             modelBuilder.Entity("HalalBook.Api.Data.Story", b =>

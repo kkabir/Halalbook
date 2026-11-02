@@ -920,4 +920,44 @@ public class ApiFlowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.True(week.Posts >= 1);
         Assert.False(string.IsNullOrWhiteSpace(week.Summary));
     }
+
+    [Fact]
+    public async Task Marketplace_SaveDropOfferRateAndAlert()
+    {
+        var (seller, sellerId) = await SignUpWithId("mSeller");
+        var (buyer, _) = await SignUpWithId("mBuyer");
+        var (watcher, _) = await SignUpWithId("mWatcher");
+        var photo = "https://example.test/uploads/pram.jpg";
+
+        // The watcher asks to hear about prams up to 200.
+        (await watcher.PostAsJsonAsync("/api/market/alerts", new SearchAlertRequest("pram", null, 200, null, null, null), Json)).EnsureSuccessStatusCode();
+
+        var item = (await (await seller.PostAsJsonAsync("/api/market", new CreateListingRequest("Baby pram, folding", "Light and clean", 150, "USD", "Kids & baby",
+            "Good", "Dhaka", [photo], 23.78, 90.40, 100, 160), Json)).Content.ReadFromJsonAsync<ListingDto>(Json))!;
+        Assert.Contains("pram", await watcher.GetStringAsync("/api/notifications"));
+
+        // Near me: distance is filled in, and cheapest-first sorting works.
+        var near = (await buyer.GetFromJsonAsync<PagedResult<ListingDto>>("/api/market?sort=near&lat=23.79&lng=90.41&q=pram", Json))!;
+        Assert.NotNull(near.Items.First(l => l.Id == item.Id).DistanceKm);
+
+        // Save, then a price drop notifies the saver.
+        (await buyer.PostAsync($"/api/market/{item.Id}/save", null)).EnsureSuccessStatusCode();
+        Assert.True((await buyer.GetFromJsonAsync<PagedResult<ListingDto>>("/api/market?saved=true", Json))!.Items.Single(l => l.Id == item.Id).IsSaved);
+        var edited = (await (await seller.PutAsJsonAsync($"/api/market/{item.Id}", new CreateListingRequest("Baby pram, folding", "Light and clean", 120, "USD",
+            "Kids & baby", "Good", "Dhaka", [photo]), Json)).Content.ReadFromJsonAsync<ListingDto>(Json))!;
+        Assert.Equal(150, edited.WasPrice);
+        Assert.Contains("Price drop", await buyer.GetStringAsync("/api/notifications"));
+
+        // Offer, accept (item sold), then the buyer rates the seller.
+        var offer = (await (await buyer.PostAsJsonAsync($"/api/market/{item.Id}/offers", new MakeOfferRequest(110, "Can collect today"), Json)).Content.ReadFromJsonAsync<OfferDto>(Json))!;
+        Assert.Equal(HttpStatusCode.Forbidden, (await buyer.PutAsJsonAsync($"/api/market/offers/{offer.Id}", new OfferDecisionRequest(OfferStatus.Accepted), Json)).StatusCode);
+        (await seller.PutAsJsonAsync($"/api/market/offers/{offer.Id}", new OfferDecisionRequest(OfferStatus.Accepted), Json)).EnsureSuccessStatusCode();
+        Assert.Equal(ListingStatus.Sold, (await buyer.GetFromJsonAsync<ListingDto>($"/api/market/{item.Id}", Json))!.Status);
+        Assert.Equal(HttpStatusCode.Forbidden, (await watcher.PostAsJsonAsync($"/api/market/{item.Id}/review", new ReviewSellerRequest(5, "spam"), Json)).StatusCode);
+        (await buyer.PostAsJsonAsync($"/api/market/{item.Id}/review", new ReviewSellerRequest(5, "Lovely seller"), Json)).EnsureSuccessStatusCode();
+        var trust = (await buyer.GetFromJsonAsync<ListingDto>($"/api/market/{item.Id}", Json))!.SellerTrust!;
+        Assert.Equal(5, trust.Rating);
+        Assert.Equal(1, trust.Sold);
+        Assert.Single((await buyer.GetFromJsonAsync<List<SellerReviewDto>>($"/api/market/sellers/{sellerId}/reviews", Json))!);
+    }
 }

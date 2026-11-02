@@ -128,6 +128,10 @@
                                 <a class="chat-post" href="/post/@sp.PostId">@if (sp.ImageUrl is { } im) {<img src="@im" alt="" />}<b>@sp.AuthorName</b><span>@sp.Text</span></a>
                             }
                             @if (!string.IsNullOrEmpty(m.Content)) { <span dir="auto">@(translated ?? m.Content)</span> }
+                            @if (!mine && LooksRisky(translated ?? m.Content))
+                            {
+                                <div class="scam-warning">🛡️ @T("Careful: never pay in advance, by gift card, wire transfer or crypto, and never share a code sent to your phone. Meet in person and check the item first.")</div>
+                            }
                             <div class="bubble-meta">
                                 @if (translated is not null)
                                 {
@@ -251,6 +255,14 @@
 
     private Guid? lastMineId => messages.LastOrDefault(x => x.Sender.Id == Session.User?.Id)?.Id;
     private string? MyReaction(MessageDto m) => m.Reactions?.FirstOrDefault(r => r.UserId == Session.User?.Id)?.Emoji;
+    /// <summary>Scam shield: phrases that often come up in buying and selling scams.</summary>
+    private static readonly System.Text.RegularExpressions.Regex Risky = new(
+        @"gift ?cards?|itunes|google play card|steam card|western union|moneygram|wire (the )?(money|transfer)|pay (me )?(first|in advance|upfront)|advance payment|" +
+        @"deposit (first|before)|bitcoin|crypto|usdt|verification code|send (me )?(the )?(code|otp)|\botp\b|courier fee|shipping fee first",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static bool LooksRisky(string? text) => !string.IsNullOrEmpty(text) && Risky.IsMatch(text);
+
     private static bool IsAudio(string url) =>
         new[] { ".webm", ".m4a", ".ogg", ".mp4" }.Any(e => url.Split('?')[0].EndsWith(e, StringComparison.OrdinalIgnoreCase));
 

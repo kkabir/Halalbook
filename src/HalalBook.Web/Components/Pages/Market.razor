@@ -5,7 +5,7 @@
 @inject MediaGuard Guard
 @inject Toasts Toasts
 @inject NavigationManager Nav
-@inject ClientClock Clock
+@inject IJSRuntime JS
 
 <PageTitle>@(item?.Title ?? T("Marketplace")) · HalalBook</PageTitle>
 
@@ -14,29 +14,60 @@
     <div class="market-page">
         <div class="page-hero row spread wrap">
             <div><h1>🛍️ @T("Marketplace")</h1><p>@T("Buy and sell with people near you. Halal items only.")</p></div>
-            <button class="btn btn-gold" @onclick="() => selling = true">＋ @T("Sell something")</button>
+            <button class="btn btn-gold" @onclick="OpenSell">📸 @T("Sell something")</button>
         </div>
-        <div class="row wrap mt" style="gap:.5rem">
+
+        <div class="market-search mt">
             <input class="input grow" placeholder="🔍 @T("Search the marketplace")" @bind="query" @bind:after="Reload" />
-            <button class="chip @(mine ? "active" : "")" @onclick="ToggleMine">📦 @T("My listings")</button>
+            <select class="input" value="@sort" @onchange="e => SetSort(e.Value?.ToString())">
+                <option value="new" selected="@(sort == "new")">@T("Newest")</option>
+                <option value="near" selected="@(sort == "near")">📍 @T("Nearest")</option>
+                <option value="price" selected="@(sort == "price")">@T("Price: low to high")</option>
+                <option value="price_desc" selected="@(sort == "price_desc")">@T("Price: high to low")</option>
+            </select>
+        </div>
+        <div class="market-filters">
+            <input class="input" type="number" min="0" placeholder="@T("Min")" @bind="minPrice" @bind:after="Reload" />
+            <input class="input" type="number" min="0" placeholder="@T("Max")" @bind="maxPrice" @bind:after="Reload" />
+            <button class="chip @(freeOnly ? "active" : "")" @onclick="() => Flip(() => freeOnly = !freeOnly)">🎁 @T("Free")</button>
+            <button class="chip @(savedOnly ? "active" : "")" @onclick="() => Flip(() => savedOnly = !savedOnly)">❤️ @T("Saved")</button>
+            <button class="chip @(mine ? "active" : "")" @onclick="() => Flip(() => mine = !mine)">📦 @T("My listings")</button>
+            <button class="chip" @onclick="CreateAlert" title="@T("Get notified when a matching item is listed")">🔔 @T("Alert me")</button>
         </div>
         <div class="market-cats">
             <button class="chip @(category is null ? "active" : "")" @onclick="() => Filter(null)">@T("All")</button>
             @foreach (var c in categories) { <button class="chip @(category == c ? "active" : "")" @onclick="() => Filter(c)">@T(c)</button> }
         </div>
+        @if (alerts is { Count: > 0 })
+        {
+            <div class="market-alerts">
+                🔔 @foreach (var a in alerts)
+                {
+                    <span class="chip">@(a.Query ?? T(a.Category ?? ""))@(a.MaxPrice is { } mp ? $" ≤ {mp:N0}" : "") <button @onclick="() => DeleteAlert(a)">✕</button></span>
+                }
+            </div>
+        }
+
         @if (listings is null) { <div class="spinner"></div> }
-        else if (listings.Count == 0) { <div class="card mt"><Empty Title="Nothing here yet" Text="Be the first to list something in this category." /></div> }
+        else if (listings.Count == 0) { <div class="card mt"><Empty Title="Nothing here yet" Text="Try other filters, or tap 🔔 Alert me and we'll tell you when one is listed." /></div> }
         else
         {
             <div class="market-grid">
                 @foreach (var l in listings)
                 {
-                    <a class="market-card" href="/market/@l.Id">
-                        <div class="market-photo"><img src="@l.Photos.FirstOrDefault()" alt="" loading="lazy" />@if (l.Status == ListingStatus.Sold) { <span class="sold-badge">@T("Sold")</span> }</div>
-                        <b class="market-price">@Price(l)</b>
-                        <span class="market-title">@l.Title</span>
-                        <small class="subtle">@(l.Location ?? l.Seller.DisplayName)</small>
-                    </a>
+                    <div class="market-card">
+                        <a class="market-photo" href="/market/@l.Id">
+                            <img src="@l.Photos.FirstOrDefault()" alt="" loading="lazy" />
+                            @if (l.Status == ListingStatus.Sold) { <span class="sold-badge">@T("Sold")</span> }
+                            else if (Deal(l) is { } deal) { <span class="deal-badge @deal.Css">@T(deal.Label)</span> }
+                        </a>
+                        <button class="save-heart @(l.IsSaved ? "on" : "")" title="@T("Save")" @onclick="() => ToggleSave(l)">@(l.IsSaved ? "❤️" : "🤍")</button>
+                        <a href="/market/@l.Id" class="market-card-text">
+                            <b class="market-price">@Price(l.Price, l.Currency)@if (l.WasPrice is { } was) { <s>@Price(was, l.Currency)</s> }</b>
+                            <span class="market-title">@l.Title</span>
+                            <small class="subtle">@(l.DistanceKm is { } km ? $"📍 {Km(km)}" : l.Location ?? l.Seller.DisplayName)</small>
+                        </a>
+                    </div>
                 }
             </div>
             @if (more) { <button class="btn btn-ghost btn-block mt" @onclick="LoadMore">@T("Show more")</button> }
@@ -45,6 +76,7 @@
 }
 else if (item is { } l)
 {
+    var deal = Deal(l);
     <div class="feed-column">
         <a href="/market" class="subtle">← @T("Marketplace")</a>
         <div class="card market-detail mt">
@@ -54,24 +86,118 @@ else if (item is { } l)
             <div style="padding:1rem">
                 @if (l.Status == ListingStatus.Sold) { <span class="sold-badge static">@T("Sold")</span> }
                 <h1>@l.Title</h1>
-                <div class="market-price big">@Price(l)</div>
-                <div class="subtle">@T(l.Category)@(l.Condition is { } c ? $" · {T(c)}" : "")@(l.Location is { } loc ? $" · 📍 {loc}" : "") · @Ui.TimeAgo(l.CreatedAt)</div>
+                <div class="market-price big">@Price(l.Price, l.Currency)@if (l.WasPrice is { } was) { <s>@Price(was, l.Currency)</s> <span class="drop">💸 @T("Price dropped")</span> }</div>
+                @if (l.FairLow is { } lo && l.FairHigh is { } hi)
+                {
+                    <div class="fair-box @(deal?.Css)">✨ @T("AI fair price"): <b>@Price(lo, l.Currency) – @Price(hi, l.Currency)</b>@if (deal is { } d) { <span> · @T(d.Label)</span> }</div>
+                }
+                <div class="subtle">@T(l.Category)@(l.Condition is { } c ? $" · {T(c)}" : "")@(l.Location is { } loc ? $" · 📍 {loc}" : "")@(l.DistanceKm is { } km ? $" ({Km(km)})" : "") · @Ui.TimeAgo(l.CreatedAt) · 👁 @l.Views · ❤️ @l.Saves</div>
                 @if (!string.IsNullOrWhiteSpace(l.Description)) { <p style="white-space:pre-wrap" dir="auto">@l.Description</p> }
-                <div class="row mt" style="gap:.6rem;align-items:center">
-                    <Avatar User="l.Seller" Size="44" />
-                    <div class="grow"><b>@l.Seller.DisplayName</b><div class="subtle">@T("Seller")</div></div>
+
+                <div class="seller-card">
+                    <Avatar User="l.Seller" Size="48" />
+                    <div class="grow">
+                        <b>@l.Seller.DisplayName @if (l.SellerTrust?.Verified == true) { <span title="@T("Verified email")">✅</span> }</b>
+                        @if (l.SellerTrust is { } t)
+                        {
+                            <div class="subtle">
+                                @if (t.Rating is { } r) { <span>⭐ @r.ToString("0.0") (@t.Reviews) · </span> }
+                                @t.Sold @T("sold") · @T("Member since") @t.MemberSince.ToString("MMM yyyy")
+                            </div>
+                            @if (t.Reviews > 0) { <a href="javascript:void(0)" @onclick="LoadReviews">@T("See reviews")</a> }
+                        }
+                    </div>
                 </div>
+                @if (reviews is not null)
+                {
+                    <div class="reviews">
+                        @foreach (var rv in reviews)
+                        {
+                            <div class="review"><b>@(new string('★', rv.Stars))@(new string('☆', 5 - rv.Stars))</b> <span class="subtle">@rv.Reviewer.DisplayName · @rv.ListingTitle</span>@if (rv.Text is { Length: > 0 } tx) { <div>@tx</div> }</div>
+                        }
+                    </div>
+                }
+
                 <div class="row mt" style="gap:.5rem;flex-wrap:wrap">
                     @if (l.IsMine)
                     {
-                        @if (l.Status == ListingStatus.Active) { <button class="btn btn-primary" @onclick="() => SetStatus(ListingStatus.Sold)">✓ @T("Mark as sold")</button> }
+                        <button class="btn btn-primary" @onclick="OpenEdit">✏️ @T("Edit or lower price")</button>
+                        @if (l.Status == ListingStatus.Active) { <button class="btn btn-ghost" @onclick="() => SetStatus(ListingStatus.Sold)">✓ @T("Mark as sold")</button> }
                         else if (l.Status == ListingStatus.Sold) { <button class="btn btn-ghost" @onclick="() => SetStatus(ListingStatus.Active)">↺ @T("Available again")</button> }
                         <button class="btn btn-ghost" @onclick="() => SetStatus(ListingStatus.Removed)">🗑️ @T("Remove")</button>
                     }
-                    else if (l.Status == ListingStatus.Active)
+                    else
                     {
-                        <button class="btn btn-primary" disabled="@busy" @onclick="MessageSeller">💬 @T("Message seller")</button>
+                        @if (l.Status == ListingStatus.Active)
+                        {
+                            <button class="btn btn-primary" disabled="@busy" @onclick="MessageSeller">💬 @T("Message seller")</button>
+                            <button class="btn btn-gold" @onclick="() => offering = !offering">🤝 @T("Make an offer")</button>
+                        }
+                        <button class="btn btn-ghost" @onclick="() => ToggleSave(l)">@(l.IsSaved ? "❤️ " + T("Saved") : "🤍 " + T("Save"))</button>
                     }
+                    <button class="btn btn-ghost" data-url="@($"{Nav.BaseUri}market/{l.Id}")" onclick="halalbook.copyLink(this)"><span data-label>🔗 @T("Copy link")</span></button>
+                </div>
+
+                @if (offering && !l.IsMine)
+                {
+                    <div class="offer-box">
+                        <div class="row" style="gap:.5rem">
+                            <input class="input" type="number" min="1" placeholder="@T("Your offer")" @bind="offerAmount" />
+                            <span class="subtle">@l.Currency</span>
+                        </div>
+                        <div class="row wrap" style="gap:.35rem">
+                            @foreach (var pct in new[] { 0.9m, 0.8m, 0.7m })
+                            {
+                                var amt = Math.Round(l.Price * pct);
+                                <button class="chip" @onclick="() => offerAmount = amt">@Price(amt, l.Currency)</button>
+                            }
+                        </div>
+                        <input class="input" maxlength="300" placeholder="@T("Add a note (optional), e.g. I can collect today")" @bind="offerNote" />
+                        <button class="btn btn-primary" disabled="@(busy || offerAmount is null or <= 0)" @onclick="SendOffer">@T("Send offer")</button>
+                    </div>
+                }
+
+                @if (offers is { Count: > 0 })
+                {
+                    <div class="offers">
+                        <div class="card-title">🤝 @(l.IsMine ? T("Offers") : T("Your offer"))</div>
+                        @foreach (var o in offers)
+                        {
+                            <div class="offer-row">
+                                @if (l.IsMine) { <Avatar User="o.Buyer" Size="34" /> }
+                                <div class="grow">
+                                    <b>@Price(o.Amount, o.Currency)</b> @if (l.IsMine) { <span class="subtle">· @o.Buyer.DisplayName</span> }
+                                    @if (o.Note is { Length: > 0 } n) { <div class="subtle">“@n”</div> }
+                                </div>
+                                @if (o.Status == OfferStatus.Pending && l.IsMine)
+                                {
+                                    <button class="btn btn-primary btn-sm" @onclick="() => Decide(o, OfferStatus.Accepted)">@T("Accept")</button>
+                                    <button class="btn btn-ghost btn-sm" @onclick="() => Decide(o, OfferStatus.Declined)">@T("Decline")</button>
+                                }
+                                else if (o.Status == OfferStatus.Pending) { <span class="subtle">⏳ @T("Waiting")</span> <button class="btn btn-ghost btn-sm" @onclick="() => Decide(o, OfferStatus.Withdrawn)">@T("Withdraw")</button> }
+                                else { <span class="offer-status @o.Status.ToString().ToLowerInvariant()">@T(o.Status.ToString())</span> }
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (!l.IsMine && offers?.Any(o => o.Status == OfferStatus.Accepted) == true)
+                {
+                    <div class="rate-box">
+                        <b>⭐ @T("How was buying from") @l.Seller.DisplayName.Split(' ')[0]?</b>
+                        <div class="stars">@for (var s = 1; s <= 5; s++) { var n = s; <button class="@(stars >= n ? "on" : "")" @onclick="() => stars = n">★</button> }</div>
+                        <input class="input" maxlength="500" placeholder="@T("A few words for other buyers (optional)")" @bind="reviewText" />
+                        <button class="btn btn-gold btn-sm" disabled="@(stars == 0)" @onclick="Rate">@T("Rate seller")</button>
+                    </div>
+                }
+
+                <div class="safety-tips">
+                    <b>🛡️ @T("Stay safe")</b>
+                    <ul>
+                        <li>@T("Meet in a busy public place, like a masjid car park, and bring someone along.")</li>
+                        <li>@T("Check the item before paying. Never pay in advance, by gift card or wire transfer.")</li>
+                        <li>@T("Keep chats on HalalBook, and report anything suspicious.")</li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -82,7 +208,7 @@ else if (item is { } l)
 {
     <div class="overlay" @onclick="() => selling = false">
         <div class="modal" @onclick:stopPropagation>
-            <div class="row spread"><h2 style="margin:0">🛍️ @T("Sell something")</h2><button class="icon-btn" @onclick="() => selling = false">✕</button></div>
+            <div class="row spread"><h2 style="margin:0">@(editingId is null ? "📸 " + T("Sell something") : "✏️ " + T("Edit listing"))</h2><button class="icon-btn" @onclick="() => selling = false">✕</button></div>
             <div class="stack mt">
                 <div class="market-photos-edit">
                     @foreach (var ph in photos) { <div><img src="@ph" alt="" /><button @onclick="() => photos.Remove(ph)">✕</button></div> }
@@ -91,11 +217,15 @@ else if (item is { } l)
                         <label class="market-add-photo">@(uploading ? "…" : "📷 " + T("Add photos"))<InputFile OnChange="AddPhotos" multiple accept="image/*" style="display:none" /></label>
                     }
                 </div>
+                @if (drafting) { <div class="ai-note">✨ @T("Looking at your photo and writing the listing…")</div> }
+                else if (drafted) { <div class="ai-note">✨ @T("Filled in by AI from your photo. Check and edit anything.")</div> }
+                else if (editingId is null && photos.Count == 0) { <div class="subtle">@T("Tip: start with a photo, and AI will write the title, description and a fair price for you.")</div> }
                 <input class="input" maxlength="100" placeholder="@T("What are you selling?")" @bind="form.Title" />
                 <div class="row" style="gap:.5rem">
                     <input class="input grow" type="number" min="0" step="any" placeholder="@T("Price (0 = free)")" @bind="form.Price" />
                     <input class="input" style="width:90px" maxlength="3" placeholder="USD" @bind="form.Currency" />
                 </div>
+                @if (form.FairLow is { } flo && form.FairHigh is { } fhi) { <div class="fair-box">✨ @T("AI fair price"): <b>@Price(flo, form.Currency ?? "USD") – @Price(fhi, form.Currency ?? "USD")</b></div> }
                 <select class="input" @bind="form.Category">
                     <option value="">@T("Category")</option>
                     @foreach (var c in categories) { <option value="@c">@T(c)</option> }
@@ -104,10 +234,13 @@ else if (item is { } l)
                     <option value="">@T("Condition (optional)")</option>
                     @foreach (var c in new[] { "New", "Like new", "Good", "Fair" }) { <option value="@c">@T(c)</option> }
                 </select>
-                <input class="input" maxlength="120" placeholder="📍 @T("Area or city")" @bind="form.Location" />
+                <div class="row" style="gap:.5rem">
+                    <input class="input grow" maxlength="120" placeholder="📍 @T("Area or city")" @bind="form.Location" />
+                    <button class="btn btn-ghost btn-sm" @onclick="UseMyLocation">@(form.Lat is null ? "📍 " + T("Use my location") : "✓ " + T("Location added"))</button>
+                </div>
                 <textarea class="input" rows="4" maxlength="3000" placeholder="@T("Describe it: size, colour, why you're selling, pickup or delivery…")" @bind="form.Description"></textarea>
                 <small class="subtle">@T("Halal items only: no alcohol, pork, weapons, tobacco, gambling or adult items.")</small>
-                <button class="btn btn-gold" disabled="@(busy || uploading)" @onclick="Publish">@(busy ? T("Publishing…") : T("Publish listing"))</button>
+                <button class="btn btn-gold" disabled="@(busy || uploading || drafting)" @onclick="Publish">@(busy ? T("Saving…") : editingId is null ? T("Publish listing") : T("Save changes"))</button>
             </div>
         </div>
     </div>
@@ -117,10 +250,17 @@ else if (item is { } l)
     [Parameter] public Guid? Id { get; set; }
     private List<ListingDto>? listings;
     private ListingDto? item;
+    private List<OfferDto>? offers;
+    private List<SellerReviewDto>? reviews;
+    private List<SearchAlertDto>? alerts;
     private List<string> categories = [];
-    private string? query, category;
-    private bool mine, more, selling, busy, uploading;
-    private int page = 1;
+    private string? query, category, offerNote, reviewText;
+    private string sort = "new";
+    private decimal? minPrice, maxPrice, offerAmount;
+    private bool mine, savedOnly, freeOnly, more, selling, busy, uploading, drafting, drafted, offering;
+    private int page = 1, stars;
+    private double? lat, lng;
+    private Guid? editingId;
     private readonly List<string> photos = [];
     private ListingForm form = new();
 
@@ -128,22 +268,61 @@ else if (item is { } l)
     {
         public string? Title, Description, Category = "", Condition = "", Location, Currency;
         public decimal Price;
+        public decimal? FairLow, FairHigh;
+        public double? Lat, Lng;
     }
 
-    private static string Price(ListingDto l) => l.Price == 0 ? "Free" : $"{l.Price:N0} {l.Currency}";
+    private record DealLabel(string Label, string Css);
+
+    /// <summary>How the price compares with the AI's fair range.</summary>
+    private static DealLabel? Deal(ListingDto l) =>
+        l.Price == 0 ? new("Free", "free")
+        : l.FairLow is not { } lo || l.FairHigh is not { } hi ? null
+        : l.Price < lo ? new("Great deal", "great")
+        : l.Price <= hi ? new("Fair price", "fair")
+        : l.Price > hi * 1.15m ? new("Above typical", "high") : null;
+
+    private string Price(decimal p, string currency) => p == 0 ? T("Free") : $"{p:N0} {currency}";
+    private static string Km(double km) => km < 1 ? $"{km * 1000:0} m" : $"{km:0.#} km";
 
     protected override async Task OnParametersSetAsync()
     {
+        offers = null; reviews = null; offering = false; stars = 0;
         try
         {
             if (categories.Count == 0) categories = await Api.GetAsync<List<string>>("api/market/categories");
-            if (Id is Guid id) item = await Api.GetAsync<ListingDto>($"api/market/{id}");
-            else { item = null; await Reload(); }
+            if (Id is Guid id)
+            {
+                item = await Api.GetAsync<ListingDto>($"api/market/{id}{Where("?")}");
+                offers = await Api.GetAsync<List<OfferDto>>($"api/market/{id}/offers");
+            }
+            else { item = null; await Reload(); alerts = await Api.GetAsync<List<SearchAlertDto>>("api/market/alerts"); }
         }
         catch (Exception ex) { Toasts.Error(ex); }
     }
 
-    private string Url => $"api/market?page={page}{(string.IsNullOrWhiteSpace(query) ? "" : $"&q={Uri.EscapeDataString(query)}")}{(category is null ? "" : $"&category={Uri.EscapeDataString(category)}")}{(mine ? $"&seller={Session.User?.Id}" : "")}";
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || lat is not null) return;
+        // Distance needs the buyer's location; if they allow it, refresh with distances shown.
+        try
+        {
+            var c = await JS.InvokeAsync<PrayerWidget.Coords?>("halalbook.getLocation");
+            if (c is null) return;
+            (lat, lng) = (c.Latitude, c.Longitude);
+            await OnParametersSetAsync();
+            StateHasChanged();
+        }
+        catch (JSException) { }
+    }
+
+    private string Where(string sep) => lat is null ? "" : FormattableString.Invariant($"{sep}lat={lat}&lng={lng}");
+
+    private string Url => $"api/market?page={page}&sort={sort}"
+        + (string.IsNullOrWhiteSpace(query) ? "" : $"&q={Uri.EscapeDataString(query)}")
+        + (category is null ? "" : $"&category={Uri.EscapeDataString(category)}")
+        + (mine ? $"&seller={Session.User?.Id}" : "") + (savedOnly ? "&saved=true" : "") + (freeOnly ? "&free=true" : "")
+        + (minPrice is { } mn ? $"&minPrice={mn}" : "") + (maxPrice is { } mx ? $"&maxPrice={mx}" : "") + Where("&");
 
     private async Task Reload()
     {
@@ -160,13 +339,91 @@ else if (item is { } l)
     }
 
     private async Task Filter(string? c) { category = c; await Reload(); }
-    private async Task ToggleMine() { mine = !mine; await Reload(); }
+    private async Task Flip(Action change) { change(); await Reload(); }
+    private async Task SetSort(string? s)
+    {
+        sort = s ?? "new";
+        if (sort == "near" && lat is null) Toasts.Show(T("Allow location access to sort by distance."), true);
+        await Reload();
+    }
+
+    private async Task ToggleSave(ListingDto l)
+    {
+        try
+        {
+            if (l.IsSaved) await Api.DeleteAsync($"api/market/{l.Id}/save"); else await Api.PostAsync($"api/market/{l.Id}/save");
+            var updated = l with { IsSaved = !l.IsSaved, Saves = l.Saves + (l.IsSaved ? -1 : 1) };
+            if (listings?.FindIndex(x => x.Id == l.Id) is int i and >= 0) listings[i] = updated;
+            if (item?.Id == l.Id) item = updated;
+            if (updated.IsSaved) Toasts.Show(T("Saved. We'll tell you if the price drops 💸"));
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task CreateAlert()
+    {
+        if (string.IsNullOrWhiteSpace(query) && category is null) { Toasts.Show(T("Search for something or pick a category first, then tap Alert me."), true); return; }
+        try
+        {
+            var a = await Api.PostAsync<SearchAlertDto>("api/market/alerts", new SearchAlertRequest(query, category, maxPrice, lat, lng, lat is null ? null : 25));
+            (alerts ??= []).Insert(0, a);
+            Toasts.Show(T("Alert set 🔔 We'll notify you when a matching item is listed."));
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task DeleteAlert(SearchAlertDto a)
+    {
+        try { await Api.DeleteAsync($"api/market/alerts/{a.Id}"); alerts?.Remove(a); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private void OpenSell() { editingId = null; form = new() { Currency = "USD" }; photos.Clear(); drafted = false; selling = true; }
+
+    private void OpenEdit()
+    {
+        var l = item!;
+        editingId = l.Id;
+        form = new ListingForm { Title = l.Title, Description = l.Description, Category = l.Category, Condition = l.Condition ?? "", Location = l.Location,
+            Currency = l.Currency, Price = l.Price, FairLow = l.FairLow, FairHigh = l.FairHigh };
+        photos.Clear(); photos.AddRange(l.Photos); drafted = false; selling = true;
+    }
 
     private async Task AddPhotos(InputFileChangeEventArgs e)
     {
         uploading = true;
+        var first = photos.Count == 0;
         try { photos.AddRange((await Guard.UploadAsync(e.GetMultipleFiles(8 - photos.Count), "post")).Select(u => u.Url)); }
         finally { uploading = false; }
+        // The first photo of a new listing: let the AI draft the rest.
+        if (first && editingId is null && photos.Count > 0 && string.IsNullOrWhiteSpace(form.Title))
+        {
+            drafting = true; StateHasChanged();
+            try
+            {
+                var d = await Api.PostAsync<ListingDraftDto>("api/market/ai-draft", new ListingDraftRequest(photos[0], form.Currency));
+                if (d.UsedAi)
+                {
+                    form.Title = d.Title; form.Description = d.Description; form.Category = d.Category; form.Condition = d.Condition ?? "";
+                    (form.FairLow, form.FairHigh) = (d.FairLow, d.FairHigh);
+                    if (form.Price == 0 && d.FairLow is { } lo && d.FairHigh is { } hi) form.Price = Math.Round((lo + hi) / 2);
+                    drafted = true;
+                }
+            }
+            catch (Exception) { }
+            finally { drafting = false; }
+        }
+    }
+
+    private async Task UseMyLocation()
+    {
+        try
+        {
+            var c = await JS.InvokeAsync<PrayerWidget.Coords?>("halalbook.getLocation");
+            if (c is null) { Toasts.Show(T("Allow location access so buyers nearby can find your item."), true); return; }
+            (form.Lat, form.Lng) = (c.Latitude, c.Longitude);
+        }
+        catch (JSException) { }
     }
 
     private async Task Publish()
@@ -174,11 +431,13 @@ else if (item is { } l)
         busy = true;
         try
         {
-            var l = await Api.PostAsync<ListingDto>("api/market", new CreateListingRequest(form.Title ?? "", form.Description, form.Price,
-                string.IsNullOrWhiteSpace(form.Currency) ? "USD" : form.Currency, form.Category ?? "", string.IsNullOrEmpty(form.Condition) ? null : form.Condition,
-                form.Location, photos.ToList()));
+            var req = new CreateListingRequest(form.Title ?? "", form.Description, form.Price, string.IsNullOrWhiteSpace(form.Currency) ? "USD" : form.Currency,
+                form.Category ?? "", string.IsNullOrEmpty(form.Condition) ? null : form.Condition, form.Location, photos.ToList(),
+                form.Lat, form.Lng, form.FairLow, form.FairHigh);
+            var l = editingId is Guid id ? await Api.PutAsync<ListingDto>($"api/market/{id}", req) : await Api.PostAsync<ListingDto>("api/market", req);
             selling = false; photos.Clear(); form = new();
-            Nav.NavigateTo($"/market/{l.Id}");
+            if (editingId is not null) { item = l; Toasts.Show(T("Saved. If you lowered the price, people who saved it have been told.")); }
+            else Nav.NavigateTo($"/market/{l.Id}");
         }
         catch (Exception ex) { Toasts.Error(ex); }
         finally { busy = false; }
@@ -201,10 +460,53 @@ else if (item is { } l)
         {
             var chat = await Api.PostAsync<ConversationDto>("api/conversations", new StartConversationRequest([item!.Seller.Id], null));
             await Api.PostAsync<MessageDto>($"api/conversations/{chat.Id}/messages",
-                new SendMessageRequest($"Assalamu alaikum! Is \"{item.Title}\" ({Price(item)}) still available? {Nav.BaseUri}market/{item.Id}", null));
+                new SendMessageRequest($"Assalamu alaikum! Is \"{item.Title}\" ({Price(item.Price, item.Currency)}) still available? {Nav.BaseUri}market/{item.Id}", null));
             Nav.NavigateTo($"/messages/{chat.Id}");
         }
         catch (Exception ex) { Toasts.Error(ex); }
         finally { busy = false; }
+    }
+
+    private async Task SendOffer()
+    {
+        busy = true;
+        try
+        {
+            var o = await Api.PostAsync<OfferDto>($"api/market/{item!.Id}/offers", new MakeOfferRequest(offerAmount!.Value, offerNote));
+            offers = [o, .. (offers ?? []).Where(x => x.Status != OfferStatus.Pending)];
+            offering = false; offerAmount = null; offerNote = null;
+            Toasts.Show(T("Offer sent 🤝 We'll tell you when the seller answers."));
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task Decide(OfferDto o, OfferStatus s)
+    {
+        try
+        {
+            await Api.PutAsync<OfferDto>($"api/market/offers/{o.Id}", new OfferDecisionRequest(s));
+            await OnParametersSetAsync();
+            if (s == OfferStatus.Accepted) Toasts.Show(T("Accepted 🎉 The item is marked sold, and the buyer has been told."));
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task LoadReviews()
+    {
+        try { reviews = await Api.GetAsync<List<SellerReviewDto>>($"api/market/sellers/{item!.Seller.Id}/reviews"); }
+        catch (Exception ex) { Toasts.Error(ex); }
+    }
+
+    private async Task Rate()
+    {
+        try
+        {
+            await Api.PostAsync($"api/market/{item!.Id}/review", new ReviewSellerRequest(stars, reviewText));
+            Toasts.Show(T("Thank you! Your rating helps other buyers ⭐"));
+            stars = 0; reviewText = null;
+            item = await Api.GetAsync<ListingDto>($"api/market/{item.Id}{Where("?")}");
+        }
+        catch (Exception ex) { Toasts.Error(ex); }
     }
 }

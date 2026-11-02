@@ -261,9 +261,24 @@ public record PlaceDto(string Name, string Type, double Latitude, double Longitu
 // ---------- Marketplace ----------
 public enum ListingStatus { Active, Sold, Removed }
 public record ListingDto(Guid Id, UserSummaryDto Seller, string Title, string Description, decimal Price, string Currency, string Category,
-    string? Condition, string? Location, List<string> Photos, ListingStatus Status, DateTime CreatedAt, bool IsMine);
+    string? Condition, string? Location, List<string> Photos, ListingStatus Status, DateTime CreatedAt, bool IsMine,
+    bool IsSaved = false, decimal? WasPrice = null, decimal? FairLow = null, decimal? FairHigh = null, double? DistanceKm = null,
+    int Views = 0, int Saves = 0, SellerTrustDto? SellerTrust = null);
+/// <summary>Why buyers can trust a seller: items sold, ratings and how long they have been a member.</summary>
+public record SellerTrustDto(int Sold, double? Rating, int Reviews, DateTime MemberSince, bool Verified);
 public record CreateListingRequest(string Title, string? Description, decimal Price, string? Currency, string Category, string? Condition,
-    string? Location, List<string>? Photos);
+    string? Location, List<string>? Photos, double? Latitude = null, double? Longitude = null, decimal? FairLow = null, decimal? FairHigh = null);
+/// <summary>What the AI suggests from a photo of the item.</summary>
+public record ListingDraftRequest(string PhotoUrl, string? Currency);
+public record ListingDraftDto(string Title, string Description, string Category, string? Condition, decimal? FairLow, decimal? FairHigh, string Currency, bool UsedAi);
+public enum OfferStatus { Pending, Accepted, Declined, Withdrawn }
+public record MakeOfferRequest(decimal Amount, string? Note);
+public record OfferDto(Guid Id, Guid ListingId, UserSummaryDto Buyer, decimal Amount, string Currency, string? Note, OfferStatus Status, DateTime CreatedAt);
+public record OfferDecisionRequest(OfferStatus Status);
+public record ReviewSellerRequest(int Stars, string? Text);
+public record SellerReviewDto(UserSummaryDto Reviewer, int Stars, string? Text, DateTime CreatedAt, string ListingTitle);
+public record SearchAlertRequest(string? Query, string? Category, decimal? MaxPrice, double? Latitude, double? Longitude, double? RadiusKm);
+public record SearchAlertDto(Guid Id, string? Query, string? Category, decimal? MaxPrice, double? RadiusKm, DateTime CreatedAt);
 public record ListingStatusRequest(ListingStatus Status);
 
 // ---------- Quran khatm together ----------

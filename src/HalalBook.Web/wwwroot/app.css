@@ -1228,3 +1228,42 @@ input.switch:focus-visible { outline: 2px solid var(--gold-500); outline-offset:
 .dictate-btn.listening { background: #e74c3c; animation: hbBlink 1s infinite; }
 [dir="rtl"] .dictate-btn { right: auto; left: .35rem; }
 [dir="rtl"] .dictate-host textarea, [dir="rtl"] .dictate-host .input { padding-right: .9rem; padding-left: 2.6rem; }
+
+/* ---------- Marketplace v2 ---------- */
+.market-search { display: flex; gap: .5rem; }
+.market-search select { width: auto; }
+.market-filters { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; margin-top: .5rem; }
+.market-filters .input { width: 90px; }
+.market-alerts { display: flex; gap: .35rem; flex-wrap: wrap; align-items: center; margin: .3rem 0 .6rem; font-size: .85rem; }
+.market-alerts .chip button { border: 0; background: none; cursor: pointer; margin-left: .2rem; }
+.market-card { position: relative; }
+.market-card-text { display: flex; flex-direction: column; gap: .1rem; color: var(--text); text-decoration: none !important; margin-top: .3rem; }
+.market-price s { font-weight: 400; color: var(--text-3); margin-left: .4rem; font-size: .85em; }
+.market-price .drop { font-size: .75rem; font-weight: 700; color: #c0392b; margin-left: .4rem; }
+.save-heart { position: absolute; top: .45rem; right: .45rem; width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(255,255,255,.92);
+    cursor: pointer; font-size: 1rem; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+.deal-badge { position: absolute; left: .5rem; bottom: .5rem; font-size: .72rem; font-weight: 800; padding: .15rem .55rem; border-radius: 999px; color: #fff; }
+.deal-badge.great { background: #1e8e4a; } .deal-badge.fair { background: var(--emerald-700, #0f5c45); } .deal-badge.high { background: #b9770e; } .deal-badge.free { background: #8e44ad; }
+.fair-box { margin: .4rem 0; padding: .5rem .75rem; border-radius: 12px; background: var(--emerald-50, #eef7f3); font-size: .9rem; }
+.fair-box.great { background: #e3f7ea; } .fair-box.high { background: #fdf2e0; }
+.seller-card { display: flex; gap: .7rem; align-items: center; margin-top: 1rem; padding: .7rem; border-radius: 14px; background: var(--bg); }
+.reviews { margin-top: .5rem; display: flex; flex-direction: column; gap: .4rem; }
+.review { padding: .5rem .7rem; border-radius: 10px; background: var(--bg); font-size: .88rem; }
+.review b { color: var(--gold-600, #a8811c); letter-spacing: 1px; }
+.offer-box, .rate-box { display: flex; flex-direction: column; gap: .5rem; margin-top: .8rem; padding: .8rem; border-radius: 14px; border: 1.5px dashed var(--gold-300); background: var(--gold-100, #fbf3da); }
+.offers { margin-top: 1rem; }
+.offer-row { display: flex; align-items: center; gap: .6rem; padding: .5rem 0; border-top: 1px solid var(--border); }
+.offer-status { font-size: .8rem; font-weight: 700; padding: .15rem .55rem; border-radius: 999px; background: var(--bg); }
+.offer-status.accepted { background: #e3f7ea; color: #1e8e4a; } .offer-status.declined { background: #fdecea; color: #c0392b; }
+.stars button { border: 0; background: none; font-size: 1.8rem; cursor: pointer; color: var(--border); padding: 0 .1rem; }
+.stars button.on { color: var(--gold-500); }
+.safety-tips { margin-top: 1rem; padding: .7rem .9rem; border-radius: 14px; background: #fff7e6; border: 1px solid #f5d79a; font-size: .85rem; }
+.safety-tips ul { margin: .3rem 0 0; padding-left: 1.1rem; }
+.ai-note { padding: .5rem .75rem; border-radius: 10px; background: linear-gradient(135deg, var(--gold-100, #fbf3da), var(--surface)); border: 1px solid var(--gold-300); font-size: .88rem; font-weight: 600; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .safety-tips { background: var(--surface-2); border-color: #6b4a1f; } }
+:root[data-theme="dark"] .safety-tips { background: var(--surface-2); border-color: #6b4a1f; }
+
+.scam-warning { margin-top: .35rem; padding: .4rem .55rem; border-radius: 10px; background: #fff3cd; color: #7a4f00; font-size: .78rem; line-height: 1.35; border: 1px solid #f5d79a; }
+.market-search .input.grow { flex: 1; min-width: 0; }
+.market-search select.input { flex: none; width: auto; max-width: 44%; }
+.market-filters .input { flex: none; width: 78px !important; }
